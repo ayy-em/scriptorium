@@ -1,14 +1,14 @@
+"""Script runner with timing middleware for CLI and programmatic dispatch."""
+
+from collections.abc import Callable
 import sys
 import time
-from collections.abc import Callable
-from typing import Any, TypeVar
+from typing import Any
 
 from core.registry import discover
 
-T = TypeVar("T")
 
-
-def _timed(label: str, fn: Callable[..., T], /, *args: Any, **kwargs: Any) -> T:
+def _timed[T](label: str, fn: Callable[..., T], /, *args: Any, **kwargs: Any) -> T:
     t0 = time.perf_counter()
     try:
         result = fn(*args, **kwargs)
@@ -25,6 +25,7 @@ def _timed(label: str, fn: Callable[..., T], /, *args: Any, **kwargs: Any) -> T:
 
 
 def run(script_key: str) -> None:
+    """Dispatch a script by key, applying timing middleware."""
     scripts = discover()
     if script_key not in scripts:
         available = ", ".join(sorted(scripts)) or "none"
@@ -33,7 +34,7 @@ def run(script_key: str) -> None:
     _timed(script_key, scripts[script_key].run)
 
 
-def run_fn(fn: Callable[..., T], /, *args: Any, **kwargs: Any) -> T:
+def run_fn[T](fn: Callable[..., T], /, *args: Any, **kwargs: Any) -> T:
     """Programmatic entry point. Same middleware as CLI run() but takes a typed callable."""
     label = fn.__module__.removeprefix("scripts.") + "::" + fn.__qualname__
     return _timed(label, fn, *args, **kwargs)

@@ -1,0 +1,80 @@
+"""CLI and programmatic interface for splitting media files into segments."""
+
+import argparse
+from pathlib import Path
+import sys
+
+from scripts.av._utils import av_outputs_dir, run_ffmpeg
+
+TITLE = "Split media file"
+DESCRIPTION = "Split a media file at one or more timestamp breakpoints into numbered segments."
+
+
+def split(input: Path, timestamps: list[str], outputs_dir: Path) -> list[Path]:
+    """Split a media file at given timestamps into N+1 numbered segments.
+
+    Segments are stream-copied (no re-encoding) and named
+    <stem>_001.<ext>, <stem>_002.<ext>, etc.
+
+    Args:
+        input: Source media file.
+        timestamps: One or more split points as HH:MM:SS or seconds strings.
+        outputs_dir: Directory where segments are written.
+
+    Returns:
+        List of output segment paths in order.
+
+    Raises:
+        subprocess.CalledProcessError: If ffmpeg fails on any segment.
+    """
+    outputs_dir.mkdir(parents=True, exist_ok=True)
+    breakpoints: list[str | None] = [None, *timestamps, None]
+    segments: list[Path] = []
+
+    for i in range(len(breakpoints) - 1):
+        start = breakpoints[i]
+        end = breakpoints[i + 1]
+        output = outputs_dir / f"{input.stem}_{i + 1:03d}{input.suffix}"
+        segments.append(output)
+
+        args = ["-i", str(input)]
+        if start is not None:
+            args += ["-ss", start]
+        if end is not None:
+            args += ["-to", end]
+        args += ["-c", "copy", str(output)]
+
+        run_ffmpeg(args)
+
+    return segments
+
+
+def run() -> None:
+    """CLI entrypoint. Parse arguments and dispatch to split()."""
+    parser = argparse.ArgumentParser(description=DESCRIPTION)
+    parser.add_argument("input", type=Path, help="Source media file")
+    parser.add_argument(
+        "timestamps",
+        nargs="+",
+        metavar="TIME",
+        help="Split timestamps (HH:MM:SS or seconds); produces N+1 segments",
+    )
+    parser.add_argument(
+        "--outputs",
+        type=Path,
+        default=None,
+        metavar="DIR",
+        help="Output directory (default: av/outputs/)",
+    )
+    args = parser.parse_args()
+
+    outputs_dir = args.outputs or av_outputs_dir()
+
+    try:
+        segments = split(args.input, args.timestamps, outputs_dir)
+        for s in segments:
+            print(s)
+        sys.exit(0)
+    except Exception as e:
+        print(f"error: {e}", file=sys.stderr)
+        sys.exit(1)

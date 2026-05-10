@@ -9,16 +9,64 @@ dependencies = [
     "pyyaml>=6.0",
 ]
 
+[dependency-groups]
+dev = [
+    "pytest>=9.0.3",
+    "ruff>=0.15.12",
+]
+
 [project.optional-dependencies]
 av      = ["ffmpeg-python>=0.2"]
 photo   = ["Pillow>=11.0"]
 tabular = ["pandas>=2.2", "openpyxl>=3.1"]
 web     = ["fastapi>=0.115", "uvicorn[standard]>=0.30"]
-dev     = ["ruff>=0.9", "pytest>=8.0"]
 
 [tool.ruff]
 target-version = "py314"
-line-length = 100
+line-length = 120
+exclude = [
+    ".venv",
+    ".cursor",
+    ".claude",
+    "worktree/",
+    "__pycache__",
+]
 
 [tool.ruff.lint]
-select = ["E", "F", "I"]
+select = [
+    "E",    # pycodestyle (whitespace, line breaks)
+    "F",    # pyflakes (unused imports/vars)
+    "I",    # isort (import sorting)
+    "W",    # warning-level style issues
+    "N",    # pep8-naming (snake_case, UpperCamelCase)
+    "D",    # pydocstyle (docstring formatting)
+    "Q",    # quotes
+    "ERA",  # eradicate (commented-out code)
+    "PL",   # pylint rules
+    "UP",   # pyupgrade (e.g., modern syntax for 3.12)
+    "BLE",  # flake8-bugbear (blind except)
+]
+ignore = [
+    "F841",   # unused variable (common in CDK constructs)
+    "D401",   # docstrings styling
+    "BLE001", # blind except Exception - acceptable for graceful degradation in type casting
+]
+fixable = ["ALL"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = [
+    "D101",  # test classes don't need docstrings — method names describe intent
+    "D102",  # test methods don't need docstrings
+    "D103",  # test functions don't need docstrings
+]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"
+
+[tool.ruff.lint.isort]
+force-sort-within-sections = true
+
+[tool.ruff.lint.pydocstyle]
+convention = "pep257"

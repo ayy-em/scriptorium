@@ -1,8 +1,10 @@
+"""LoRA dataset caption import script."""
+
 import argparse
 import json
+from pathlib import Path
 import re
 import sys
-from pathlib import Path
 
 TITLE = "Import captions from JSON"
 DESCRIPTION = "Read a captions.json and write individual img_NNN.txt files to outputs/generated_captions/."
@@ -49,6 +51,7 @@ def _validate(raw: object) -> dict[str, str]:
 
 
 def import_captions(source: Path, output_dir: Path) -> None:
+    """Import captions from a JSON file into a dataset directory as .txt files."""
     if not source.is_file():
         print(f"error: captions file not found: {source}")
         sys.exit(1)
@@ -69,6 +72,7 @@ def import_captions(source: Path, output_dir: Path) -> None:
 
 
 def run() -> None:
+    """CLI entrypoint. Parse arguments and dispatch to import_captions()."""
     parser = argparse.ArgumentParser(description=DESCRIPTION)
     parser.add_argument(
         "--input",

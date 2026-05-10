@@ -1,6 +1,8 @@
+"""LoRA dataset validation script."""
+
 import argparse
-import sys
 from pathlib import Path
+import sys
 
 from scripts.lora._dataset import IMG_NAME_RE, find_captions, find_images
 
@@ -9,6 +11,7 @@ DESCRIPTION = "Check that images follow img_NNN naming and each has a matching c
 
 
 def validate(directory: Path) -> bool:
+    """Validate images and captions in a LoRA dataset directory."""
     if not directory.is_dir():
         print(f"error: inputs directory not found: {directory}", file=sys.stderr)
         return False
@@ -45,6 +48,7 @@ def validate(directory: Path) -> bool:
 
 
 def run() -> None:
+    """CLI entrypoint. Parse arguments and dispatch to validate()."""
     parser = argparse.ArgumentParser(description=DESCRIPTION)
     parser.add_argument(
         "--inputs",

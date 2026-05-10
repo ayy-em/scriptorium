@@ -1,11 +1,16 @@
+"""CLI entrypoint for scriptorium — lists and dispatches themed utility scripts."""
+
 import sys
 
 from core.registry import discover
 from core.runner import run
 
+_MIN_ARGS = 2
+
 
 def main() -> None:
-    if len(sys.argv) < 2:
+    """Parse the script key from argv and dispatch, or list all available scripts."""
+    if len(sys.argv) < _MIN_ARGS:
         _list()
         return
     run(sys.argv[1])

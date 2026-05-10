@@ -1,7 +1,9 @@
+"""LoRA dataset caption export script."""
+
 import argparse
 import json
-import sys
 from pathlib import Path
+import sys
 
 from scripts.lora._dataset import find_captions
 
@@ -19,6 +21,7 @@ def _resolve_output(name: str | None) -> Path | None:
 
 
 def export(directory: Path, output: Path | None) -> None:
+    """Export caption text files in directory to a JSON file or stdout."""
     if not directory.is_dir():
         print(f"error: inputs directory not found: {directory}", file=sys.stderr)
         sys.exit(1)
@@ -36,6 +39,7 @@ def export(directory: Path, output: Path | None) -> None:
 
 
 def run() -> None:
+    """CLI entrypoint. Parse arguments and dispatch to export()."""
     parser = argparse.ArgumentParser(description=DESCRIPTION)
     parser.add_argument(
         "--inputs",

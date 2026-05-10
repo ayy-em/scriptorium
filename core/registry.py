@@ -1,3 +1,5 @@
+"""Auto-discovery of script modules that expose TITLE, DESCRIPTION, and run()."""
+
 import importlib
 import pkgutil
 from types import ModuleType

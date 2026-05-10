@@ -1,6 +1,8 @@
+"""LoRA dataset image renumbering script."""
+
 import argparse
-import sys
 from pathlib import Path
+import sys
 
 from scripts.lora._dataset import find_images
 
@@ -9,6 +11,7 @@ DESCRIPTION = "Rename all images (and paired captions) to sequential img_001, im
 
 
 def renumber(directory: Path, *, dry_run: bool) -> None:
+    """Rename images in directory to sequential img_NNN naming."""
     if not directory.is_dir():
         print(f"error: inputs directory not found: {directory}", file=sys.stderr)
         sys.exit(1)
@@ -48,6 +51,7 @@ def renumber(directory: Path, *, dry_run: bool) -> None:
 
 
 def run() -> None:
+    """CLI entrypoint. Parse arguments and dispatch to renumber()."""
     parser = argparse.ArgumentParser(description=DESCRIPTION)
     parser.add_argument(
         "--inputs",
