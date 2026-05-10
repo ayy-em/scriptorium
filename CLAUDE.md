@@ -1,1 +1,0 @@
-D:/Python/ayy-claude-skills/CLAUDE.md

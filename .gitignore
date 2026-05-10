@@ -5,7 +5,10 @@ build/
 dist/
 wheels/
 *.egg-info
+
+# LLMs
 .claude
+CLAUDE.md
 
 # Virtual environments
 .venv
