@@ -13,3 +13,9 @@ wheels/
 # sensitive files
 .env
 creds.json
+
+# artifacts of any sorts
+inputs/
+outputs/
+past_inputs/
+*.json
