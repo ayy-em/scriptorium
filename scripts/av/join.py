@@ -119,9 +119,21 @@ def _assert_compatible(files: list[Path]) -> None:
         )
 
 
+_EXAMPLES = """
+examples:
+  uv run main.py av.join
+  uv run main.py av.join --inputs path/to/clips/ --outputs path/to/out/
+"""
+
+
 def run() -> None:
     """CLI entrypoint. Parse arguments and dispatch to join()."""
-    parser = argparse.ArgumentParser(description=DESCRIPTION)
+    parser = argparse.ArgumentParser(
+        description=DESCRIPTION,
+        prog="uv run main.py av.join",
+        epilog=_EXAMPLES,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     parser.add_argument(
         "--inputs",
         type=Path,

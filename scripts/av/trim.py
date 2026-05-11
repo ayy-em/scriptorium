@@ -49,9 +49,22 @@ def trim(
     run_ffmpeg(args)
 
 
+_EXAMPLES = """
+examples:
+  uv run main.py av.trim input.mp4 output.mp4 --start 00:00:10 --end 00:00:30
+  uv run main.py av.trim input.mp4 output.mp4 --end 1:45
+  uv run main.py av.trim podcast.mp3 clip.mp3 --seconds 60
+"""
+
+
 def run() -> None:
     """CLI entrypoint. Parse arguments and dispatch to trim()."""
-    parser = argparse.ArgumentParser(description=DESCRIPTION)
+    parser = argparse.ArgumentParser(
+        description=DESCRIPTION,
+        prog="uv run main.py av.trim",
+        epilog=_EXAMPLES,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     parser.add_argument("input", type=Path, help="Source media file")
     parser.add_argument("output", type=Path, help="Destination file")
     parser.add_argument(

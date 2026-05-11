@@ -98,13 +98,19 @@ def run() -> None:
     """CLI entrypoint. Parse arguments and dispatch to adjust_volume()."""
     parser = argparse.ArgumentParser(
         description=DESCRIPTION,
+        prog="uv run main.py av.volume",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
             "Filter order (always applied in this sequence, regardless of flag order):\n"
             "  1. --amplify\n"
             "  2. --normalize\n"
             "  3. --fade-in\n"
-            "  4. --fade-out"
+            "  4. --fade-out\n"
+            "\n"
+            "examples:\n"
+            "  uv run main.py av.volume input.mp3 output.mp3 --amplify 3\n"
+            "  uv run main.py av.volume input.mp3 --normalize --fade-in 2 --fade-out 3\n"
+            "  uv run main.py av.volume input.mp4 output.mp4 --amplify -6 --fade-out 5"
         ),
     )
     parser.add_argument("input", type=Path, help="Source media file")

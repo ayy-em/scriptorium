@@ -49,9 +49,22 @@ def split(input: Path, timestamps: list[str], outputs_dir: Path) -> list[Path]:
     return segments
 
 
+_EXAMPLES = """
+examples:
+  uv run main.py av.split video.mp4 00:01:00
+  uv run main.py av.split video.mp4 00:01:00 00:02:00 00:03:00
+  uv run main.py av.split podcast.mp3 30:00 60:00 --outputs path/to/out/
+"""
+
+
 def run() -> None:
     """CLI entrypoint. Parse arguments and dispatch to split()."""
-    parser = argparse.ArgumentParser(description=DESCRIPTION)
+    parser = argparse.ArgumentParser(
+        description=DESCRIPTION,
+        prog="uv run main.py av.split",
+        epilog=_EXAMPLES,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     parser.add_argument("input", type=Path, help="Source media file")
     parser.add_argument(
         "timestamps",

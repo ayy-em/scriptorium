@@ -145,9 +145,22 @@ def _convert_batch(directory: Path, ext: str, outputs_dir: Path, quality: str) -
     return successes
 
 
+_EXAMPLES = """
+examples:
+  uv run main.py av.convert video.avi --to mp4
+  uv run main.py av.convert clips/ --to mp4 --quality high
+  uv run main.py av.convert podcast.mp4 --to mp3 --quality medium
+"""
+
+
 def run() -> None:
     """CLI entrypoint. Parse arguments and dispatch to convert()."""
-    parser = argparse.ArgumentParser(description=DESCRIPTION)
+    parser = argparse.ArgumentParser(
+        description=DESCRIPTION,
+        prog="uv run main.py av.convert",
+        epilog=_EXAMPLES,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     parser.add_argument("source", type=Path, help="Source file or directory")
     parser.add_argument(
         "--to",

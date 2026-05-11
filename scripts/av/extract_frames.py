@@ -97,9 +97,22 @@ def _get_video_duration(file: Path) -> float:
     return float(duration)
 
 
+_EXAMPLES = """
+examples:
+  uv run main.py av.extract_frames video.mp4 --count 5
+  uv run main.py av.extract_frames clips/ --count 1
+  uv run main.py av.extract_frames video.mp4 --count 10 --outputs path/to/out/
+"""
+
+
 def run() -> None:
     """CLI entrypoint. Parse arguments and dispatch to extract_frames()."""
-    parser = argparse.ArgumentParser(description=DESCRIPTION)
+    parser = argparse.ArgumentParser(
+        description=DESCRIPTION,
+        prog="uv run main.py av.extract_frames",
+        epilog=_EXAMPLES,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     parser.add_argument("source", type=Path, help="Video file or directory of videos")
     parser.add_argument(
         "--count",

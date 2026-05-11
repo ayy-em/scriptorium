@@ -102,9 +102,22 @@ def write_tags(  # noqa: PLR0913
     run_ffmpeg(args)
 
 
+_EXAMPLES = """
+examples:
+  uv run main.py av.tag video.mp4                                      # print current tags
+  uv run main.py av.tag video.mp4 --title "My Title" --artist "Artist"
+  uv run main.py av.tag audio.mp3 --cover cover.jpg --in-place
+"""
+
+
 def run() -> None:
     """CLI entrypoint. Parse arguments and dispatch to get_tags() or write_tags()."""
-    parser = argparse.ArgumentParser(description=DESCRIPTION)
+    parser = argparse.ArgumentParser(
+        description=DESCRIPTION,
+        prog="uv run main.py av.tag",
+        epilog=_EXAMPLES,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     parser.add_argument("input", type=Path, help="Source media file")
     parser.add_argument("--title", help="Title tag")
     parser.add_argument("--artist", help="Artist tag")

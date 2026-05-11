@@ -66,9 +66,21 @@ def dump_frames(video: Path, start: str, end: str, outputs_dir: Path) -> list[Pa
     return sorted(frame_dir.glob("*.jpg"))
 
 
+_EXAMPLES = """
+examples:
+  uv run main.py av.dump_frames video.mp4 1m30s 2m0s
+  uv run main.py av.dump_frames video.mp4 0m0s 0m10s --outputs path/to/out/
+"""
+
+
 def run() -> None:
     """CLI entrypoint. Parse arguments and dispatch to dump_frames()."""
-    parser = argparse.ArgumentParser(description=DESCRIPTION)
+    parser = argparse.ArgumentParser(
+        description=DESCRIPTION,
+        prog="uv run main.py av.dump_frames",
+        epilog=_EXAMPLES,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     parser.add_argument("video", type=Path, help="Source video file")
     parser.add_argument("start", metavar="START", help="Start timestamp (NmNs, e.g. 1m30s)")
     parser.add_argument("end", metavar="END", help="End timestamp (NmNs, e.g. 2m45s)")
