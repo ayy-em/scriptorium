@@ -71,9 +71,21 @@ def import_captions(source: Path, output_dir: Path) -> None:
     print(f"wrote {len(data)} caption file(s) to {output_dir}")
 
 
+_EXAMPLES = """
+examples:
+  uv run main.py lora.import_captions
+  uv run main.py lora.import_captions --input path/to/captions.json
+"""
+
+
 def run() -> None:
     """CLI entrypoint. Parse arguments and dispatch to import_captions()."""
-    parser = argparse.ArgumentParser(description=DESCRIPTION)
+    parser = argparse.ArgumentParser(
+        description=DESCRIPTION,
+        prog="uv run main.py lora.import_captions",
+        epilog=_EXAMPLES,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     parser.add_argument(
         "--input",
         type=Path,

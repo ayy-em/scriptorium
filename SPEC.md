@@ -70,6 +70,10 @@ Every file the registry picks up must expose three names at module level:
 - Calls the script's public function(s) with resolved arguments
 - Calls `sys.exit(0/1)` to signal success or failure
 - Contains no business logic
+- `ArgumentParser` must always be constructed with:
+  - `prog="uv run main.py <theme>.<script>"` — fixes the usage line shown in `--help`
+  - `formatter_class=argparse.RawDescriptionHelpFormatter` — preserves epilog formatting
+  - `epilog=_EXAMPLES` — a module-level constant with 2–4 concrete example invocations
 
 ### Public functions — programmatic API
 
@@ -142,5 +146,11 @@ from scripts.lora._dataset import find_images
 2. Define `TITLE`, `DESCRIPTION`, and `run()` at module level
 3. Put all logic in one or more typed public functions; `run()` only parses and
    dispatches
-4. Verify it appears in `uv run main.py`
-5. Verify `uv run main.py <theme>.<script> --help` shows correct usage
+4. Add a module-level `_EXAMPLES` string with 2–4 concrete invocations (include
+   all positional args so the reader can copy-paste)
+5. Construct `ArgumentParser` with `prog="uv run main.py <theme>.<script>"`,
+   `epilog=_EXAMPLES`, and `formatter_class=argparse.RawDescriptionHelpFormatter`
+6. Verify it appears in `uv run main.py`
+7. Verify `uv run main.py <theme> --help` lists the script
+8. Verify `uv run main.py <theme>.<script> --help` shows correct usage line and
+   examples

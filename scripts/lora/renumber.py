@@ -50,9 +50,22 @@ def renumber(directory: Path, *, dry_run: bool) -> None:
     print(f"\n{len(renames)} file(s) renamed.")
 
 
+_EXAMPLES = """
+examples:
+  uv run main.py lora.renumber                              # dry-run preview
+  uv run main.py lora.renumber --apply
+  uv run main.py lora.renumber --inputs path/to/dataset/ --apply
+"""
+
+
 def run() -> None:
     """CLI entrypoint. Parse arguments and dispatch to renumber()."""
-    parser = argparse.ArgumentParser(description=DESCRIPTION)
+    parser = argparse.ArgumentParser(
+        description=DESCRIPTION,
+        prog="uv run main.py lora.renumber",
+        epilog=_EXAMPLES,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     parser.add_argument(
         "--inputs",
         type=Path,

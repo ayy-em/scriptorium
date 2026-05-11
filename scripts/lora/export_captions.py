@@ -38,9 +38,22 @@ def export(directory: Path, output: Path | None) -> None:
         print(f"wrote {len(data)} caption(s) to {output}")
 
 
+_EXAMPLES = """
+examples:
+  uv run main.py lora.export_captions
+  uv run main.py lora.export_captions --output captions
+  uv run main.py lora.export_captions --inputs path/to/dataset/ --output my_captions
+"""
+
+
 def run() -> None:
     """CLI entrypoint. Parse arguments and dispatch to export()."""
-    parser = argparse.ArgumentParser(description=DESCRIPTION)
+    parser = argparse.ArgumentParser(
+        description=DESCRIPTION,
+        prog="uv run main.py lora.export_captions",
+        epilog=_EXAMPLES,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     parser.add_argument(
         "--inputs",
         type=Path,

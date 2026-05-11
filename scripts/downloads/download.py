@@ -78,9 +78,23 @@ def download(
         return prepared.with_suffix(output_ext)
 
 
+_EXAMPLES = """
+examples:
+  uv run main.py downloads.download <url>
+  uv run main.py downloads.download <url> --filename my_video
+  uv run main.py downloads.download <url> --audio
+  uv run main.py downloads.download <url> --audio --filename soundtrack
+"""
+
+
 def run() -> None:
     """CLI entrypoint. Parse arguments and dispatch to download()."""
-    parser = argparse.ArgumentParser(description=DESCRIPTION)
+    parser = argparse.ArgumentParser(
+        description=DESCRIPTION,
+        prog="uv run main.py downloads.download",
+        epilog=_EXAMPLES,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     parser.add_argument("url", help="URL of the media to download")
     parser.add_argument(
         "--filename",

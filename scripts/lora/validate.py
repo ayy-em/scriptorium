@@ -47,9 +47,21 @@ def validate(directory: Path) -> bool:
     return True
 
 
+_EXAMPLES = """
+examples:
+  uv run main.py lora.validate
+  uv run main.py lora.validate --inputs path/to/dataset/
+"""
+
+
 def run() -> None:
     """CLI entrypoint. Parse arguments and dispatch to validate()."""
-    parser = argparse.ArgumentParser(description=DESCRIPTION)
+    parser = argparse.ArgumentParser(
+        description=DESCRIPTION,
+        prog="uv run main.py lora.validate",
+        epilog=_EXAMPLES,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     parser.add_argument(
         "--inputs",
         type=Path,
