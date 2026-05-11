@@ -23,6 +23,7 @@ def to_anim(
     fps: int = 15,
     width: int | None = None,
     speed: float = 1.0,
+    loop: int = 0,
     filename: str | None = None,
 ) -> Path:
     """Convert a video segment to an animated GIF or WebP.
@@ -46,6 +47,7 @@ def to_anim(
         fps: Frame rate of the output animation. Defaults to 15.
         width: Output width in pixels; height is auto-scaled. Defaults to original width.
         speed: Playback speed multiplier. 2.0 = twice as fast, 0.5 = half speed. Defaults to 1.0.
+        loop: Number of times to loop. 0 = infinite. Defaults to 0.
         filename: Output file stem (no extension). Defaults to the source file stem.
 
     Returns:
@@ -75,14 +77,14 @@ def to_anim(
     vf_base = ",".join(filters)
 
     if fmt == "gif":
-        _make_gif(source, start, end, output, vf_base)
+        _make_gif(source, start, end, output, vf_base, loop)
     else:
-        _make_webp(source, start, end, output, vf_base)
+        _make_webp(source, start, end, output, vf_base, loop)
 
     return output
 
 
-def _make_gif(source: Path, start: str, end: str, output: Path, vf_base: str) -> None:
+def _make_gif(source: Path, start: str, end: str, output: Path, vf_base: str, loop: int) -> None:
     """Generate a GIF via two-pass palette encoding.
 
     Pass 1 builds an optimised palette from the source frames; pass 2 uses it
@@ -95,6 +97,7 @@ def _make_gif(source: Path, start: str, end: str, output: Path, vf_base: str) ->
         end: Segment end timestamp.
         output: Destination GIF path.
         vf_base: Base video filter (fps + optional scale).
+        loop: Number of times to loop; 0 = infinite.
     """
     with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
         palette = Path(tmp.name)
@@ -113,6 +116,8 @@ def _make_gif(source: Path, start: str, end: str, output: Path, vf_base: str) ->
                 str(palette),
                 "-filter_complex",
                 f"{vf_base} [x]; [x][1:v] paletteuse",
+                "-loop",
+                str(loop),
                 str(output),
             ]
         )
@@ -120,7 +125,7 @@ def _make_gif(source: Path, start: str, end: str, output: Path, vf_base: str) ->
         palette.unlink(missing_ok=True)
 
 
-def _make_webp(source: Path, start: str, end: str, output: Path, vf_base: str) -> None:
+def _make_webp(source: Path, start: str, end: str, output: Path, vf_base: str, loop: int) -> None:
     """Generate an animated WebP.
 
     Args:
@@ -129,9 +134,24 @@ def _make_webp(source: Path, start: str, end: str, output: Path, vf_base: str) -
         end: Segment end timestamp.
         output: Destination WebP path.
         vf_base: Base video filter (fps + optional scale).
+        loop: Number of times to loop; 0 = infinite.
     """
     run_ffmpeg(
-        ["-ss", start, "-to", end, "-i", str(source), "-vf", vf_base, "-vcodec", "libwebp", "-loop", "0", str(output)]
+        [
+            "-ss",
+            start,
+            "-to",
+            end,
+            "-i",
+            str(source),
+            "-vf",
+            vf_base,
+            "-vcodec",
+            "libwebp",
+            "-loop",
+            str(loop),
+            str(output),
+        ]
     )
 
 
@@ -142,6 +162,7 @@ examples:
   uv run main.py av.to_anim clip.mp4 0 5 --fps 24 --filename result
   uv run main.py av.to_anim clip.mp4 0 10 --speed 2.0
   uv run main.py av.to_anim clip.mp4 0 5 --speed 0.5
+  uv run main.py av.to_anim clip.mp4 0 5 --loop 3
 """
 
 
@@ -174,6 +195,13 @@ def run() -> None:
         metavar="X",
         help="Playback speed multiplier: 2.0 = twice as fast, 0.5 = half speed (default: 1.0)",
     )
+    parser.add_argument(
+        "--loop",
+        type=int,
+        default=0,
+        metavar="N",
+        help="Number of times to loop; 0 = infinite (default: 0)",
+    )
     parser.add_argument("--filename", default=None, metavar="NAME", help="Output file stem (defaults to source stem)")
     parser.add_argument(
         "--outputs", type=Path, default=None, metavar="DIR", help="Output directory (default: av/outputs/)"
@@ -192,6 +220,7 @@ def run() -> None:
             fps=args.fps,
             width=args.width,
             speed=args.speed,
+            loop=args.loop,
             filename=args.filename,
         )
         print(output)

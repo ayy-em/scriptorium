@@ -176,3 +176,32 @@ def test_invalid_speed_raises(tmp_path):
     src.touch()
     with pytest.raises(ValueError, match="speed"):
         to_anim(src, "0", "5", tmp_path, speed=0.0)
+
+
+def test_gif_passes_loop_to_ffmpeg(tmp_path):
+    src = tmp_path / "clip.mp4"
+    src.touch()
+    with patch("scripts.av.to_anim.run_ffmpeg") as mock_ff:
+        to_anim(src, "0", "5", tmp_path, loop=3)
+    second_call_args = mock_ff.call_args_list[1][0][0]
+    assert "-loop" in second_call_args
+    assert second_call_args[second_call_args.index("-loop") + 1] == "3"
+
+
+def test_webp_passes_loop_to_ffmpeg(tmp_path):
+    src = tmp_path / "clip.mp4"
+    src.touch()
+    with patch("scripts.av.to_anim.run_ffmpeg") as mock_ff:
+        to_anim(src, "0", "5", tmp_path, fmt="webp", loop=2)
+    args = mock_ff.call_args[0][0]
+    assert "-loop" in args
+    assert args[args.index("-loop") + 1] == "2"
+
+
+def test_default_loop_is_zero(tmp_path):
+    src = tmp_path / "clip.mp4"
+    src.touch()
+    with patch("scripts.av.to_anim.run_ffmpeg") as mock_ff:
+        to_anim(src, "0", "5", tmp_path)
+    second_call_args = mock_ff.call_args_list[1][0][0]
+    assert second_call_args[second_call_args.index("-loop") + 1] == "0"
