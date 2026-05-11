@@ -7,7 +7,7 @@ import shutil
 import sys
 import tempfile
 
-from scripts.av._utils import COVER_SUPPORTED_EXTS, av_outputs_dir, read_tags, run_ffmpeg
+from scripts.av._utils import COVER_SUPPORTED_EXTS, av_inputs_dir, av_outputs_dir, read_tags, run_ffmpeg
 
 TITLE = "Read/write media metadata tags"
 DESCRIPTION = (
@@ -118,7 +118,7 @@ def run() -> None:
         epilog=_EXAMPLES,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    parser.add_argument("input", type=Path, help="Source media file")
+    parser.add_argument("input", type=Path, help="Source media file (bare name resolves to av/inputs/)")
     parser.add_argument("--title", help="Title tag")
     parser.add_argument("--artist", help="Artist tag")
     parser.add_argument("--album", help="Album tag")
@@ -145,11 +145,15 @@ def run() -> None:
     )
     args = parser.parse_args()
 
+    input_file = args.input
+    if input_file.parent == Path("."):
+        input_file = av_inputs_dir() / input_file.name
+
     has_write_flags = any([args.title, args.artist, args.album, args.date, args.comment, args.cover])
 
     if not has_write_flags:
         try:
-            tags = get_tags(args.input)
+            tags = get_tags(input_file)
             if not tags:
                 print("(no tags found)")
             else:
@@ -161,12 +165,12 @@ def run() -> None:
             sys.exit(1)
 
     if args.in_place:
-        fd, tmp_name = tempfile.mkstemp(suffix=args.input.suffix, dir=args.input.parent)
+        fd, tmp_name = tempfile.mkstemp(suffix=input_file.suffix, dir=input_file.parent)
         os.close(fd)
         tmp = Path(tmp_name)
         try:
             write_tags(
-                args.input,
+                input_file,
                 tmp,
                 title=args.title,
                 artist=args.artist,
@@ -176,8 +180,8 @@ def run() -> None:
                 cover=args.cover,
                 force=args.force,
             )
-            shutil.move(str(tmp), args.input)
-            print(f"Updated: {args.input}")
+            shutil.move(str(tmp), input_file)
+            print(f"Updated: {input_file}")
             sys.exit(0)
         except Exception as e:
             tmp.unlink(missing_ok=True)
@@ -185,10 +189,10 @@ def run() -> None:
             sys.exit(1)
 
     outputs_dir = args.outputs or av_outputs_dir()
-    output = outputs_dir / args.input.name
+    output = outputs_dir / input_file.name
     try:
         write_tags(
-            args.input,
+            input_file,
             output,
             title=args.title,
             artist=args.artist,

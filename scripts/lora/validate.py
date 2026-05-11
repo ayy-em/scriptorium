@@ -7,6 +7,7 @@ import sys
 from scripts.lora._dataset import IMG_NAME_RE, find_captions, find_images
 
 TITLE = "Validate LoRA dataset"
+_INPUTS_DIR = Path(__file__).parent / "inputs"
 DESCRIPTION = "Check that images follow img_NNN naming and each has a matching caption .txt file."
 
 
@@ -65,9 +66,12 @@ def run() -> None:
     parser.add_argument(
         "--inputs",
         type=Path,
-        default=Path(__file__).parent / "inputs",
+        default=_INPUTS_DIR,
         metavar="DIR",
-        help="dataset directory (default: inputs/ next to this script)",
+        help="dataset directory (default: lora/inputs/; bare name resolves to lora/inputs/)",
     )
     args = parser.parse_args()
-    sys.exit(0 if validate(args.inputs) else 1)
+    inputs = args.inputs
+    if inputs.parent == Path("."):
+        inputs = _INPUTS_DIR / inputs.name
+    sys.exit(0 if validate(inputs) else 1)

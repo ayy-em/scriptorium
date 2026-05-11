@@ -4,7 +4,7 @@ import argparse
 from pathlib import Path
 import sys
 
-from scripts.av._utils import run_ffmpeg
+from scripts.av._utils import av_inputs_dir, run_ffmpeg
 
 TITLE = "Trim media file"
 DESCRIPTION = "Cut a video or audio file to a start/end timestamp, or trim the first N seconds."
@@ -65,7 +65,7 @@ def run() -> None:
         epilog=_EXAMPLES,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    parser.add_argument("input", type=Path, help="Source media file")
+    parser.add_argument("input", type=Path, help="Source media file (bare name resolves to av/inputs/)")
     parser.add_argument("output", type=Path, help="Destination file")
     parser.add_argument(
         "--start",
@@ -78,8 +78,12 @@ def run() -> None:
     group.add_argument("--seconds", type=float, metavar="N", help="Trim the first N seconds")
     args = parser.parse_args()
 
+    input_file = args.input
+    if input_file.parent == Path("."):
+        input_file = av_inputs_dir() / input_file.name
+
     try:
-        trim(args.input, args.output, start=args.start, end=args.end, seconds=args.seconds)
+        trim(input_file, args.output, start=args.start, end=args.end, seconds=args.seconds)
         sys.exit(0)
     except Exception as e:
         print(f"error: {e}", file=sys.stderr)

@@ -7,6 +7,7 @@ import sys
 from scripts.lora._dataset import find_images
 
 TITLE = "Renumber LoRA dataset images"
+_INPUTS_DIR = Path(__file__).parent / "inputs"
 DESCRIPTION = "Rename all images (and paired captions) to sequential img_001, img_002, ... naming."
 
 
@@ -69,9 +70,9 @@ def run() -> None:
     parser.add_argument(
         "--inputs",
         type=Path,
-        default=Path(__file__).parent / "inputs",
+        default=_INPUTS_DIR,
         metavar="DIR",
-        help="dataset directory (default: inputs/ next to this script)",
+        help="dataset directory (default: lora/inputs/; bare name resolves to lora/inputs/)",
     )
     parser.add_argument(
         "--apply",
@@ -79,4 +80,7 @@ def run() -> None:
         help="actually rename files (default is dry-run preview)",
     )
     args = parser.parse_args()
-    renumber(args.inputs, dry_run=not args.apply)
+    inputs = args.inputs
+    if inputs.parent == Path("."):
+        inputs = _INPUTS_DIR / inputs.name
+    renumber(inputs, dry_run=not args.apply)

@@ -4,7 +4,7 @@ import argparse
 from pathlib import Path
 import sys
 
-from scripts.av._utils import av_outputs_dir, run_ffmpeg
+from scripts.av._utils import av_inputs_dir, av_outputs_dir, run_ffmpeg
 
 TITLE = "Split media file"
 DESCRIPTION = "Split a media file at one or more timestamp breakpoints into numbered segments."
@@ -65,7 +65,7 @@ def run() -> None:
         epilog=_EXAMPLES,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    parser.add_argument("input", type=Path, help="Source media file")
+    parser.add_argument("input", type=Path, help="Source media file (bare name resolves to av/inputs/)")
     parser.add_argument(
         "timestamps",
         nargs="+",
@@ -81,10 +81,14 @@ def run() -> None:
     )
     args = parser.parse_args()
 
+    input_file = args.input
+    if input_file.parent == Path("."):
+        input_file = av_inputs_dir() / input_file.name
+
     outputs_dir = args.outputs or av_outputs_dir()
 
     try:
-        segments = split(args.input, args.timestamps, outputs_dir)
+        segments = split(input_file, args.timestamps, outputs_dir)
         for s in segments:
             print(s)
         sys.exit(0)

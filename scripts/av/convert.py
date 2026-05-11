@@ -4,7 +4,7 @@ import argparse
 from pathlib import Path
 import sys
 
-from scripts.av._utils import AUDIO_ONLY_EXTS, av_outputs_dir, find_media_files, run_ffmpeg
+from scripts.av._utils import AUDIO_ONLY_EXTS, av_inputs_dir, av_outputs_dir, find_media_files, run_ffmpeg
 
 TITLE = "Convert media file"
 DESCRIPTION = "Transcode a file (or directory of files) to a target container/codec."
@@ -161,7 +161,7 @@ def run() -> None:
         epilog=_EXAMPLES,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    parser.add_argument("source", type=Path, help="Source file or directory")
+    parser.add_argument("source", type=Path, help="Source file or directory (bare name resolves to av/inputs/)")
     parser.add_argument(
         "--to",
         required=True,
@@ -184,10 +184,14 @@ def run() -> None:
     )
     args = parser.parse_args()
 
+    source = args.source
+    if source.parent == Path("."):
+        source = av_inputs_dir() / source.name
+
     outputs_dir = args.outputs or av_outputs_dir()
 
     try:
-        outputs = convert(args.source, args.to_format, outputs_dir, quality=args.quality)
+        outputs = convert(source, args.to_format, outputs_dir, quality=args.quality)
         for o in outputs:
             print(o)
         sys.exit(0)

@@ -5,7 +5,7 @@ from pathlib import Path
 import re
 import sys
 
-from scripts.av._utils import av_outputs_dir, run_ffmpeg
+from scripts.av._utils import av_inputs_dir, av_outputs_dir, run_ffmpeg
 
 TITLE = "Dump all frames from a video clip"
 DESCRIPTION = (
@@ -81,7 +81,7 @@ def run() -> None:
         epilog=_EXAMPLES,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    parser.add_argument("video", type=Path, help="Source video file")
+    parser.add_argument("video", type=Path, help="Source video file (bare name resolves to av/inputs/)")
     parser.add_argument("start", metavar="START", help="Start timestamp (NmNs, e.g. 1m30s)")
     parser.add_argument("end", metavar="END", help="End timestamp (NmNs, e.g. 2m45s)")
     parser.add_argument(
@@ -93,10 +93,14 @@ def run() -> None:
     )
     args = parser.parse_args()
 
+    video = args.video
+    if video.parent == Path("."):
+        video = av_inputs_dir() / video.name
+
     outputs_dir = args.outputs or av_outputs_dir()
 
     try:
-        frames = dump_frames(args.video, args.start, args.end, outputs_dir)
+        frames = dump_frames(video, args.start, args.end, outputs_dir)
         dest = frames[0].parent if frames else outputs_dir
         print(f"{len(frames)} frame(s) written to {dest}")
         sys.exit(0)

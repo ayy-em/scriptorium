@@ -10,6 +10,7 @@ from scripts.lora._dataset import find_captions
 TITLE = "Export captions to JSON"
 DESCRIPTION = "Collect all .txt caption files in the dataset and write {filename: text} as JSON."
 
+_INPUTS_DIR = Path(__file__).parent / "inputs"
 _OUTPUTS_DIR = Path(__file__).parent / "outputs"
 
 
@@ -57,9 +58,9 @@ def run() -> None:
     parser.add_argument(
         "--inputs",
         type=Path,
-        default=Path(__file__).parent / "inputs",
+        default=_INPUTS_DIR,
         metavar="DIR",
-        help="dataset directory (default: inputs/ next to this script)",
+        help="dataset directory (default: lora/inputs/; bare name resolves to lora/inputs/)",
     )
     parser.add_argument(
         "--output",
@@ -71,4 +72,7 @@ def run() -> None:
         help="write to outputs/NAME.json (default name: captions); omit flag entirely for stdout",
     )
     args = parser.parse_args()
-    export(args.inputs, _resolve_output(args.output))
+    inputs = args.inputs
+    if inputs.parent == Path("."):
+        inputs = _INPUTS_DIR / inputs.name
+    export(inputs, _resolve_output(args.output))

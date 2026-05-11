@@ -70,6 +70,10 @@ Every file the registry picks up must expose three names at module level:
 - Calls the script's public function(s) with resolved arguments
 - Calls `sys.exit(0/1)` to signal success or failure
 - Contains no business logic
+- Any file/directory input whose `Path.parent == Path(".")` (bare name, no directory
+  component) is resolved to `<theme>/inputs/<name>` before being passed to the
+  public function. This lets users type just a filename instead of the full path
+  when the file lives in the conventional inputs directory.
 - `ArgumentParser` must always be constructed with:
   - `prog="uv run main.py <theme>.<script>"` — fixes the usage line shown in `--help`
   - `formatter_class=argparse.RawDescriptionHelpFormatter` — preserves epilog formatting

@@ -4,7 +4,7 @@ import argparse
 from pathlib import Path
 import sys
 
-from scripts.av._utils import av_outputs_dir, probe_streams, run_ffmpeg, run_ffprobe
+from scripts.av._utils import av_inputs_dir, av_outputs_dir, probe_streams, run_ffmpeg, run_ffprobe
 
 TITLE = "Adjust audio volume"
 DESCRIPTION = "Apply composable volume operations in a single ffmpeg pass: amplify -> normalize -> fade-in -> fade-out."
@@ -113,7 +113,7 @@ def run() -> None:
             "  uv run main.py av.volume input.mp4 output.mp4 --amplify -6 --fade-out 5"
         ),
     )
-    parser.add_argument("input", type=Path, help="Source media file")
+    parser.add_argument("input", type=Path, help="Source media file (bare name resolves to av/inputs/)")
     parser.add_argument(
         "output",
         type=Path,
@@ -137,11 +137,15 @@ def run() -> None:
     parser.add_argument("--fade-out", type=float, metavar="S", dest="fade_out", help="Fade-out duration in seconds")
     args = parser.parse_args()
 
-    output = args.output or (av_outputs_dir() / args.input.name)
+    input_file = args.input
+    if input_file.parent == Path("."):
+        input_file = av_inputs_dir() / input_file.name
+
+    output = args.output or (av_outputs_dir() / input_file.name)
 
     try:
         adjust_volume(
-            args.input,
+            input_file,
             output,
             normalize=args.normalize,
             amplify_db=args.amplify_db,

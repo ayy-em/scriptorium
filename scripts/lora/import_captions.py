@@ -91,7 +91,10 @@ def run() -> None:
         type=Path,
         default=_INPUTS_DIR / "captions.json",
         metavar="FILE",
-        help="source JSON file (default: inputs/captions.json)",
+        help="source JSON file (default: lora/inputs/captions.json; bare name resolves to lora/inputs/)",
     )
     args = parser.parse_args()
-    import_captions(args.input, _OUTPUTS_DIR)
+    input_file = args.input
+    if input_file.parent == Path("."):
+        input_file = _INPUTS_DIR / input_file.name
+    import_captions(input_file, _OUTPUTS_DIR)

@@ -4,7 +4,7 @@ import argparse
 from pathlib import Path
 import sys
 
-from scripts.av._utils import av_outputs_dir, run_ffmpeg, run_ffprobe
+from scripts.av._utils import av_inputs_dir, av_outputs_dir, run_ffmpeg, run_ffprobe
 
 TITLE = "Extract frames from video"
 DESCRIPTION = "Extract N evenly-distributed frames from a video (or directory of videos) as JPEG."
@@ -113,7 +113,9 @@ def run() -> None:
         epilog=_EXAMPLES,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    parser.add_argument("source", type=Path, help="Video file or directory of videos")
+    parser.add_argument(
+        "source", type=Path, help="Video file or directory of videos (bare name resolves to av/inputs/)"
+    )
     parser.add_argument(
         "--count",
         type=int,
@@ -130,10 +132,14 @@ def run() -> None:
     )
     args = parser.parse_args()
 
+    source = args.source
+    if source.parent == Path("."):
+        source = av_inputs_dir() / source.name
+
     outputs_dir = args.outputs or av_outputs_dir()
 
     try:
-        frames = extract_frames(args.source, args.count, outputs_dir)
+        frames = extract_frames(source, args.count, outputs_dir)
         for f in frames:
             print(f)
         sys.exit(0)
