@@ -23,3 +23,16 @@ def discover() -> dict[str, ModuleType]:
             if all(hasattr(mod, attr) for attr in _REQUIRED):
                 result[f"{theme.name}.{script.name}"] = mod
     return result
+
+
+def discover_themes() -> dict[str, dict[str, ModuleType]]:
+    """Return {theme: {script_name: module}} for all discovered scripts.
+
+    Returns:
+        Nested dict grouping script modules by their theme name.
+    """
+    grouped: dict[str, dict[str, ModuleType]] = {}
+    for key, mod in discover().items():
+        theme, script = key.split(".", 1)
+        grouped.setdefault(theme, {})[script] = mod
+    return grouped
