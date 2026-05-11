@@ -139,3 +139,40 @@ def test_timestamps_passed_to_ffmpeg(tmp_path):
     first_call_args = mock_ff.call_args_list[0][0][0]
     assert "00:00:10" in first_call_args
     assert "00:00:20" in first_call_args
+
+
+def test_speed_adds_setpts_filter(tmp_path):
+    src = tmp_path / "clip.mp4"
+    src.touch()
+    with patch("scripts.av.to_anim.run_ffmpeg") as mock_ff:
+        to_anim(src, "0", "5", tmp_path, speed=2.0)
+    first_call_args = mock_ff.call_args_list[0][0][0]
+    vf_value = first_call_args[first_call_args.index("-vf") + 1]
+    assert "setpts=0.5*PTS" in vf_value
+
+
+def test_speed_setpts_comes_before_fps(tmp_path):
+    src = tmp_path / "clip.mp4"
+    src.touch()
+    with patch("scripts.av.to_anim.run_ffmpeg") as mock_ff:
+        to_anim(src, "0", "5", tmp_path, speed=2.0)
+    first_call_args = mock_ff.call_args_list[0][0][0]
+    vf_value = first_call_args[first_call_args.index("-vf") + 1]
+    assert vf_value.index("setpts") < vf_value.index("fps")
+
+
+def test_default_speed_omits_setpts(tmp_path):
+    src = tmp_path / "clip.mp4"
+    src.touch()
+    with patch("scripts.av.to_anim.run_ffmpeg") as mock_ff:
+        to_anim(src, "0", "5", tmp_path)
+    first_call_args = mock_ff.call_args_list[0][0][0]
+    vf_value = first_call_args[first_call_args.index("-vf") + 1]
+    assert "setpts" not in vf_value
+
+
+def test_invalid_speed_raises(tmp_path):
+    src = tmp_path / "clip.mp4"
+    src.touch()
+    with pytest.raises(ValueError, match="speed"):
+        to_anim(src, "0", "5", tmp_path, speed=0.0)

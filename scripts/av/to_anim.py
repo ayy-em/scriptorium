@@ -22,6 +22,7 @@ def to_anim(
     fmt: str = "gif",
     fps: int = 15,
     width: int | None = None,
+    speed: float = 1.0,
     filename: str | None = None,
 ) -> Path:
     """Convert a video segment to an animated GIF or WebP.
@@ -33,6 +34,9 @@ def to_anim(
     Timestamps are passed directly to ffmpeg and accept any format it understands:
     HH:MM:SS, HH:MM:SS.ms, or bare seconds (e.g. "5", "1:30", "00:01:30.500").
 
+    Speed is applied via a setpts filter (setpts=(1/speed)*PTS) before the fps
+    filter, so --speed 2.0 plays back at 2x and --speed 0.5 plays at half speed.
+
     Args:
         source: Source video file.
         start: Start timestamp of the segment to extract.
@@ -41,27 +45,34 @@ def to_anim(
         fmt: Output format — "gif" or "webp". Defaults to "gif".
         fps: Frame rate of the output animation. Defaults to 15.
         width: Output width in pixels; height is auto-scaled. Defaults to original width.
+        speed: Playback speed multiplier. 2.0 = twice as fast, 0.5 = half speed. Defaults to 1.0.
         filename: Output file stem (no extension). Defaults to the source file stem.
 
     Returns:
         Path to the created output file.
 
     Raises:
-        ValueError: If fmt is not a recognised format.
+        ValueError: If fmt is not a recognised format, or speed is <= 0.
         subprocess.CalledProcessError: If ffmpeg fails.
         FileNotFoundError: If ffmpeg is not on PATH.
     """
     if fmt not in FORMATS:
         raise ValueError(f"Unknown format {fmt!r}. Choose from: {', '.join(FORMATS)}")
+    if speed <= 0:
+        raise ValueError(f"speed must be > 0, got {speed}")
 
     outputs_dir.mkdir(parents=True, exist_ok=True)
 
     stem = filename or source.stem
     output = outputs_dir / f"{stem}.{fmt}"
 
-    vf_base = f"fps={fps}"
+    filters: list[str] = []
+    if speed != 1.0:
+        filters.append(f"setpts={1.0 / speed:g}*PTS")
+    filters.append(f"fps={fps}")
     if width is not None:
-        vf_base += f",scale={width}:-1:flags=lanczos"
+        filters.append(f"scale={width}:-1:flags=lanczos")
+    vf_base = ",".join(filters)
 
     if fmt == "gif":
         _make_gif(source, start, end, output, vf_base)
@@ -129,6 +140,8 @@ examples:
   uv run main.py av.to_anim clip.mp4 00:00:05 00:00:10
   uv run main.py av.to_anim clip.mp4 1:30 1:45 --format webp --width 480
   uv run main.py av.to_anim clip.mp4 0 5 --fps 24 --filename result
+  uv run main.py av.to_anim clip.mp4 0 10 --speed 2.0
+  uv run main.py av.to_anim clip.mp4 0 5 --speed 0.5
 """
 
 
@@ -154,6 +167,13 @@ def run() -> None:
     parser.add_argument(
         "--width", type=int, default=None, metavar="PX", help="Output width in pixels (height auto-scaled)"
     )
+    parser.add_argument(
+        "--speed",
+        type=float,
+        default=1.0,
+        metavar="X",
+        help="Playback speed multiplier: 2.0 = twice as fast, 0.5 = half speed (default: 1.0)",
+    )
     parser.add_argument("--filename", default=None, metavar="NAME", help="Output file stem (defaults to source stem)")
     parser.add_argument(
         "--outputs", type=Path, default=None, metavar="DIR", help="Output directory (default: av/outputs/)"
@@ -171,6 +191,7 @@ def run() -> None:
             fmt=args.fmt,
             fps=args.fps,
             width=args.width,
+            speed=args.speed,
             filename=args.filename,
         )
         print(output)
