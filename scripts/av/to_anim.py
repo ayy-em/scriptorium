@@ -124,9 +124,22 @@ def _make_webp(source: Path, start: str, end: str, output: Path, vf_base: str) -
     )
 
 
+_EXAMPLES = """
+examples:
+  uv run main.py av.to_anim clip.mp4 00:00:05 00:00:10
+  uv run main.py av.to_anim clip.mp4 1:30 1:45 --format webp --width 480
+  uv run main.py av.to_anim clip.mp4 0 5 --fps 24 --filename result
+"""
+
+
 def run() -> None:
     """CLI entrypoint. Parse arguments and dispatch to to_anim()."""
-    parser = argparse.ArgumentParser(description=DESCRIPTION)
+    parser = argparse.ArgumentParser(
+        description=DESCRIPTION,
+        prog="uv run main.py av.to_anim",
+        epilog=_EXAMPLES,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     parser.add_argument("source", type=Path, help="Source video file")
     parser.add_argument("start", help="Start timestamp (e.g. 00:00:05, 1:30, or 5.0)")
     parser.add_argument("end", help="End timestamp")
