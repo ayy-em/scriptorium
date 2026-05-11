@@ -4,7 +4,64 @@ from unittest.mock import patch
 
 import pytest
 
-from scripts.av.to_anim import to_anim
+from scripts.av.to_anim import _cap_scale_filter, to_anim
+
+# ---------------------------------------------------------------------------
+# _cap_scale_filter unit tests (pure logic, no I/O)
+# ---------------------------------------------------------------------------
+
+
+def test_cap_scale_filter_landscape_oversized_downscales():
+    assert _cap_scale_filter(3840, 2160, None) == "scale=1920:-2:flags=lanczos"
+
+
+def test_cap_scale_filter_landscape_fits_returns_none():
+    assert _cap_scale_filter(1280, 720, None) is None
+
+
+def test_cap_scale_filter_portrait_oversized_downscales():
+    result = _cap_scale_filter(1080, 1920, None)
+    assert result is not None
+    assert "scale=" in result
+    assert ":-2:flags=lanczos" in result
+
+
+def test_cap_scale_filter_portrait_fits_returns_none():
+    assert _cap_scale_filter(720, 1280, None) is None
+
+
+def test_cap_scale_filter_user_width_honoured():
+    # 1280x720 fits within landscape cap but user wants 480px wide
+    result = _cap_scale_filter(1280, 720, 480)
+    assert result == "scale=480:-2:flags=lanczos"
+
+
+def test_cap_scale_filter_user_width_capped_by_landscape_limit():
+    # User asks for 2000px but landscape cap is 1920
+    result = _cap_scale_filter(3840, 2160, 2000)
+    assert result is not None
+    w = int(result.split("scale=")[1].split(":")[0])
+    assert w <= 1920
+
+
+def test_cap_scale_filter_output_width_is_even():
+    # Source that would produce a fractional width after scaling
+    result = _cap_scale_filter(1921, 1081, None)
+    assert result is not None
+    w = int(result.split("scale=")[1].split(":")[0])
+    assert w % 2 == 0
+
+
+# ---------------------------------------------------------------------------
+# to_anim integration tests (run_ffmpeg mocked; probe_streams mocked for scale)
+# ---------------------------------------------------------------------------
+
+
+def _patch_probe(w: int, h: int):
+    return patch(
+        "scripts.av.to_anim.probe_streams",
+        return_value=[{"codec_type": "video", "width": w, "height": h}],
+    )
 
 
 def test_gif_calls_run_ffmpeg_twice(tmp_path):
@@ -23,14 +80,14 @@ def test_webp_calls_run_ffmpeg_once(tmp_path):
     assert mock_ff.call_count == 1
 
 
-def test_gif_first_pass_uses_palettegen(tmp_path):
+def test_gif_first_pass_uses_palettegen_stats_mode_diff(tmp_path):
     src = tmp_path / "clip.mp4"
     src.touch()
     with patch("scripts.av.to_anim.run_ffmpeg") as mock_ff:
         to_anim(src, "0", "5", tmp_path)
     first_call_args = mock_ff.call_args_list[0][0][0]
     vf_value = first_call_args[first_call_args.index("-vf") + 1]
-    assert "palettegen" in vf_value
+    assert "palettegen=stats_mode=diff" in vf_value
 
 
 def test_gif_second_pass_uses_paletteuse(tmp_path):
@@ -49,8 +106,17 @@ def test_webp_uses_libwebp_codec(tmp_path):
     with patch("scripts.av.to_anim.run_ffmpeg") as mock_ff:
         to_anim(src, "0", "5", tmp_path, fmt="webp")
     args = mock_ff.call_args[0][0]
-    assert "-vcodec" in args
     assert args[args.index("-vcodec") + 1] == "libwebp"
+
+
+def test_webp_has_quality_and_compression_settings(tmp_path):
+    src = tmp_path / "clip.mp4"
+    src.touch()
+    with patch("scripts.av.to_anim.run_ffmpeg") as mock_ff:
+        to_anim(src, "0", "5", tmp_path, fmt="webp")
+    args = mock_ff.call_args[0][0]
+    assert "-quality" in args
+    assert "-compression_level" in args
 
 
 def test_fps_appears_in_filter(tmp_path):
@@ -70,14 +136,35 @@ def test_width_adds_scale_filter(tmp_path):
         to_anim(src, "0", "5", tmp_path, width=480)
     first_call_args = mock_ff.call_args_list[0][0][0]
     vf_value = first_call_args[first_call_args.index("-vf") + 1]
-    assert "scale=480:-1" in vf_value
+    assert "scale=480:-2" in vf_value
 
 
-def test_no_width_omits_scale_filter(tmp_path):
+def test_oversized_source_is_scaled_down(tmp_path):
     src = tmp_path / "clip.mp4"
     src.touch()
-    with patch("scripts.av.to_anim.run_ffmpeg") as mock_ff:
+    with _patch_probe(3840, 2160), patch("scripts.av.to_anim.run_ffmpeg") as mock_ff:
         to_anim(src, "0", "5", tmp_path)
+    first_call_args = mock_ff.call_args_list[0][0][0]
+    vf_value = first_call_args[first_call_args.index("-vf") + 1]
+    assert "scale=1920:-2" in vf_value
+
+
+def test_within_cap_source_has_no_scale_filter(tmp_path):
+    src = tmp_path / "clip.mp4"
+    src.touch()
+    with _patch_probe(1280, 720), patch("scripts.av.to_anim.run_ffmpeg") as mock_ff:
+        to_anim(src, "0", "5", tmp_path)
+    first_call_args = mock_ff.call_args_list[0][0][0]
+    vf_value = first_call_args[first_call_args.index("-vf") + 1]
+    assert "scale" not in vf_value
+
+
+def test_no_width_and_probe_fails_omits_scale(tmp_path):
+    src = tmp_path / "clip.mp4"
+    src.touch()
+    with patch("scripts.av.to_anim.probe_streams", side_effect=Exception("ffprobe unavailable")):
+        with patch("scripts.av.to_anim.run_ffmpeg") as mock_ff:
+            to_anim(src, "0", "5", tmp_path)
     first_call_args = mock_ff.call_args_list[0][0][0]
     vf_value = first_call_args[first_call_args.index("-vf") + 1]
     assert "scale" not in vf_value
@@ -184,7 +271,6 @@ def test_gif_passes_loop_to_ffmpeg(tmp_path):
     with patch("scripts.av.to_anim.run_ffmpeg") as mock_ff:
         to_anim(src, "0", "5", tmp_path, loop=3)
     second_call_args = mock_ff.call_args_list[1][0][0]
-    assert "-loop" in second_call_args
     assert second_call_args[second_call_args.index("-loop") + 1] == "3"
 
 
@@ -194,7 +280,6 @@ def test_webp_passes_loop_to_ffmpeg(tmp_path):
     with patch("scripts.av.to_anim.run_ffmpeg") as mock_ff:
         to_anim(src, "0", "5", tmp_path, fmt="webp", loop=2)
     args = mock_ff.call_args[0][0]
-    assert "-loop" in args
     assert args[args.index("-loop") + 1] == "2"
 
 

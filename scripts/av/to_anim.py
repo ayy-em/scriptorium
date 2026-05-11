@@ -5,15 +5,70 @@ from pathlib import Path
 import sys
 import tempfile
 
-from scripts.av._utils import av_outputs_dir, run_ffmpeg
+from scripts.av._utils import av_inputs_dir, av_outputs_dir, probe_streams, run_ffmpeg
 
 TITLE = "Video to animated GIF/WebP"
 DESCRIPTION = "Convert a video segment to an animated GIF or WebP given start/end timestamps."
 
 FORMATS = ("gif", "webp")
 
+# Maximum output dimensions, chosen by orientation.
+_LANDSCAPE_CAP = (1920, 1080)
+_PORTRAIT_CAP = (720, 1600)
 
-def to_anim(
+
+def _get_video_dims(source: Path) -> tuple[int, int] | None:
+    """Return (width, height) of the first video stream, or None if undetermined.
+
+    Args:
+        source: Video file to probe.
+
+    Returns:
+        (width, height) in pixels, or None if ffprobe fails or finds no video stream.
+    """
+    try:
+        for stream in probe_streams(source):
+            if stream.get("codec_type") == "video":
+                w, h = stream.get("width"), stream.get("height")
+                if w and h:
+                    return int(w), int(h)
+    except Exception:
+        pass
+    return None
+
+
+def _cap_scale_filter(src_w: int, src_h: int, user_width: int | None) -> str | None:
+    """Return an ffmpeg scale filter that fits output within the resolution cap.
+
+    Picks the cap based on orientation: 1920x1080 for landscape/square,
+    720x1600 for portrait. Never upscales. Uses -2 for height so ffmpeg
+    auto-rounds to the nearest even number.
+
+    Args:
+        src_w: Source video width in pixels.
+        src_h: Source video height in pixels.
+        user_width: User-requested output width, or None.
+
+    Returns:
+        Scale filter string (e.g. "scale=960:-2:flags=lanczos"), or None if
+        the source already fits within the effective bounds.
+    """
+    cap_w, cap_h = _PORTRAIT_CAP if src_h > src_w else _LANDSCAPE_CAP
+    max_w = min(user_width, cap_w) if user_width is not None else cap_w
+
+    fit_scale = min(max_w / src_w, cap_h / src_h)
+
+    if fit_scale >= 1.0:
+        if user_width is None or user_width >= src_w:
+            return None
+        out_w = (user_width // 2) * 2
+        return f"scale={out_w}:-2:flags=lanczos"
+
+    out_w = max(2, (int(src_w * fit_scale) // 2) * 2)
+    return f"scale={out_w}:-2:flags=lanczos"
+
+
+def to_anim(  # noqa: PLR0913
     source: Path,
     start: str,
     end: str,
@@ -32,6 +87,9 @@ def to_anim(
     significantly better colour quality than a single-pass encode. WebP is a
     single-pass encode with libwebp. Both formats require FFmpeg on PATH.
 
+    Output is automatically capped at 1920x1080 (landscape) or 720x1600 (portrait)
+    to keep file sizes manageable. Pass --width to constrain further.
+
     Timestamps are passed directly to ffmpeg and accept any format it understands:
     HH:MM:SS, HH:MM:SS.ms, or bare seconds (e.g. "5", "1:30", "00:01:30.500").
 
@@ -45,7 +103,7 @@ def to_anim(
         outputs_dir: Directory where the output file is written.
         fmt: Output format — "gif" or "webp". Defaults to "gif".
         fps: Frame rate of the output animation. Defaults to 15.
-        width: Output width in pixels; height is auto-scaled. Defaults to original width.
+        width: Max output width in pixels; subject to orientation cap. Defaults to cap.
         speed: Playback speed multiplier. 2.0 = twice as fast, 0.5 = half speed. Defaults to 1.0.
         loop: Number of times to loop. 0 = infinite. Defaults to 0.
         filename: Output file stem (no extension). Defaults to the source file stem.
@@ -72,8 +130,17 @@ def to_anim(
     if speed != 1.0:
         filters.append(f"setpts={1.0 / speed:g}*PTS")
     filters.append(f"fps={fps}")
-    if width is not None:
-        filters.append(f"scale={width}:-1:flags=lanczos")
+
+    dims = _get_video_dims(source)
+    if dims is not None:
+        scale = _cap_scale_filter(*dims, width)
+    elif width is not None:
+        scale = f"scale={width}:-2:flags=lanczos"
+    else:
+        scale = None
+    if scale:
+        filters.append(scale)
+
     vf_base = ",".join(filters)
 
     if fmt == "gif":
@@ -87,23 +154,25 @@ def to_anim(
 def _make_gif(source: Path, start: str, end: str, output: Path, vf_base: str, loop: int) -> None:
     """Generate a GIF via two-pass palette encoding.
 
-    Pass 1 builds an optimised palette from the source frames; pass 2 uses it
-    to dither the output, which eliminates the washed-out colours of a naive GIF
-    encode.
+    Pass 1 builds a palette with stats_mode=diff, which optimises colours for
+    frame-to-frame transitions rather than individual frames — this significantly
+    reduces banding in animated content. Pass 2 uses the palette to dither the output.
 
     Args:
         source: Input video file.
         start: Segment start timestamp.
         end: Segment end timestamp.
         output: Destination GIF path.
-        vf_base: Base video filter (fps + optional scale).
+        vf_base: Base video filter (speed + fps + optional scale).
         loop: Number of times to loop; 0 = infinite.
     """
     with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
         palette = Path(tmp.name)
 
     try:
-        run_ffmpeg(["-ss", start, "-to", end, "-i", str(source), "-vf", f"{vf_base},palettegen", str(palette)])
+        run_ffmpeg(
+            ["-ss", start, "-to", end, "-i", str(source), "-vf", f"{vf_base},palettegen=stats_mode=diff", str(palette)]
+        )
         run_ffmpeg(
             [
                 "-ss",
@@ -128,12 +197,16 @@ def _make_gif(source: Path, start: str, end: str, output: Path, vf_base: str, lo
 def _make_webp(source: Path, start: str, end: str, output: Path, vf_base: str, loop: int) -> None:
     """Generate an animated WebP.
 
+    Uses quality=80 and compression_level=6 for a good size/quality balance.
+    Lossless WebP at default quality produces files comparable in size to
+    unoptimised GIFs; these settings cut that substantially.
+
     Args:
         source: Input video file.
         start: Segment start timestamp.
         end: Segment end timestamp.
         output: Destination WebP path.
-        vf_base: Base video filter (fps + optional scale).
+        vf_base: Base video filter (speed + fps + optional scale).
         loop: Number of times to loop; 0 = infinite.
     """
     run_ffmpeg(
@@ -148,6 +221,10 @@ def _make_webp(source: Path, start: str, end: str, output: Path, vf_base: str, l
             vf_base,
             "-vcodec",
             "libwebp",
+            "-quality",
+            "80",
+            "-compression_level",
+            "6",
             "-loop",
             str(loop),
             str(output),
@@ -174,7 +251,7 @@ def run() -> None:
         epilog=_EXAMPLES,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    parser.add_argument("source", type=Path, help="Source video file")
+    parser.add_argument("source", type=Path, help="Source video file (bare filename resolves to av/inputs/)")
     parser.add_argument("start", help="Start timestamp (e.g. 00:00:05, 1:30, or 5.0)")
     parser.add_argument("end", help="End timestamp")
     parser.add_argument(
@@ -186,7 +263,11 @@ def run() -> None:
     )
     parser.add_argument("--fps", type=int, default=15, help="Frame rate (default: 15)")
     parser.add_argument(
-        "--width", type=int, default=None, metavar="PX", help="Output width in pixels (height auto-scaled)"
+        "--width",
+        type=int,
+        default=None,
+        metavar="PX",
+        help="Max output width in pixels; capped by orientation limit (default: cap)",
     )
     parser.add_argument(
         "--speed",
@@ -208,11 +289,15 @@ def run() -> None:
     )
     args = parser.parse_args()
 
+    source = args.source
+    if source.parent == Path("."):
+        source = av_inputs_dir() / source.name
+
     outputs_dir = args.outputs or av_outputs_dir()
 
     try:
         output = to_anim(
-            args.source,
+            source,
             args.start,
             args.end,
             outputs_dir,
