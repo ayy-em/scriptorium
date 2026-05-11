@@ -5,13 +5,23 @@ build/
 dist/
 wheels/
 *.egg-info
+.ruff_cache/
+
+# pytest
+.pytest_cache/
 
 # LLMs
 .claude
 CLAUDE.md
 
+# IDEs
+.cursor/
+.vscode/
+.idea/
+
 # Virtual environments
-.venv
+.venv/
+uv.lock
 
 # sensitive files
 .env
