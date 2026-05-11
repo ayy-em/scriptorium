@@ -68,7 +68,7 @@ def test_gif_calls_run_ffmpeg_twice(tmp_path):
     src = tmp_path / "clip.mp4"
     src.touch()
     with patch("scripts.av.to_anim.run_ffmpeg") as mock_ff:
-        to_anim(src, "0", "5", tmp_path)
+        to_anim(src, "0", "5", tmp_path, fmt="gif")
     assert mock_ff.call_count == 2
 
 
@@ -84,7 +84,7 @@ def test_gif_first_pass_uses_palettegen_stats_mode_diff(tmp_path):
     src = tmp_path / "clip.mp4"
     src.touch()
     with patch("scripts.av.to_anim.run_ffmpeg") as mock_ff:
-        to_anim(src, "0", "5", tmp_path)
+        to_anim(src, "0", "5", tmp_path, fmt="gif")
     first_call_args = mock_ff.call_args_list[0][0][0]
     vf_value = first_call_args[first_call_args.index("-vf") + 1]
     assert "palettegen=stats_mode=diff" in vf_value
@@ -94,7 +94,7 @@ def test_gif_second_pass_uses_paletteuse(tmp_path):
     src = tmp_path / "clip.mp4"
     src.touch()
     with patch("scripts.av.to_anim.run_ffmpeg") as mock_ff:
-        to_anim(src, "0", "5", tmp_path)
+        to_anim(src, "0", "5", tmp_path, fmt="gif")
     second_call_args = mock_ff.call_args_list[1][0][0]
     fc_value = second_call_args[second_call_args.index("-filter_complex") + 1]
     assert "paletteuse" in fc_value
@@ -170,12 +170,12 @@ def test_no_width_and_probe_fails_omits_scale(tmp_path):
     assert "scale" not in vf_value
 
 
-def test_returns_gif_path_by_default(tmp_path):
+def test_returns_webp_path_by_default(tmp_path):
     src = tmp_path / "clip.mp4"
     src.touch()
     with patch("scripts.av.to_anim.run_ffmpeg"):
         result = to_anim(src, "0", "5", tmp_path)
-    assert result.suffix == ".gif"
+    assert result.suffix == ".webp"
 
 
 def test_returns_webp_path_for_webp_format(tmp_path):
@@ -269,7 +269,7 @@ def test_gif_passes_loop_to_ffmpeg(tmp_path):
     src = tmp_path / "clip.mp4"
     src.touch()
     with patch("scripts.av.to_anim.run_ffmpeg") as mock_ff:
-        to_anim(src, "0", "5", tmp_path, loop=3)
+        to_anim(src, "0", "5", tmp_path, fmt="gif", loop=3)
     second_call_args = mock_ff.call_args_list[1][0][0]
     assert second_call_args[second_call_args.index("-loop") + 1] == "3"
 
@@ -287,6 +287,6 @@ def test_default_loop_is_zero(tmp_path):
     src = tmp_path / "clip.mp4"
     src.touch()
     with patch("scripts.av.to_anim.run_ffmpeg") as mock_ff:
-        to_anim(src, "0", "5", tmp_path)
+        to_anim(src, "0", "5", tmp_path, fmt="gif")
     second_call_args = mock_ff.call_args_list[1][0][0]
     assert second_call_args[second_call_args.index("-loop") + 1] == "0"

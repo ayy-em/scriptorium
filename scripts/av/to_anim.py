@@ -74,7 +74,7 @@ def to_anim(  # noqa: PLR0913
     end: str,
     outputs_dir: Path,
     *,
-    fmt: str = "gif",
+    fmt: str = "webp",
     fps: int = 15,
     width: int | None = None,
     speed: float = 1.0,
@@ -235,7 +235,7 @@ def _make_webp(source: Path, start: str, end: str, output: Path, vf_base: str, l
 _EXAMPLES = """
 examples:
   uv run main.py av.to_anim clip.mp4 00:00:05 00:00:10
-  uv run main.py av.to_anim clip.mp4 1:30 1:45 --format webp --width 480
+  uv run main.py av.to_anim clip.mp4 1:30 1:45 --format gif --width 480
   uv run main.py av.to_anim clip.mp4 0 5 --fps 24 --filename result
   uv run main.py av.to_anim clip.mp4 0 10 --speed 2.0
   uv run main.py av.to_anim clip.mp4 0 5 --speed 0.5
@@ -257,9 +257,9 @@ def run() -> None:
     parser.add_argument(
         "--format",
         dest="fmt",
-        default="gif",
+        default="webp",
         choices=FORMATS,
-        help="Output format (default: gif)",
+        help="Output format (default: webp)",
     )
     parser.add_argument("--fps", type=int, default=15, help="Frame rate (default: 15)")
     parser.add_argument(
