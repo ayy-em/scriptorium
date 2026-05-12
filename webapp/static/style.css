@@ -373,12 +373,29 @@ html.dark .sidebar-github-logo { filter: invert(1); opacity: 0.6; }
 /* ─── Sidebar status bar ─────────────────────────────────────────────────── */
 .sidebar-status {
   display: flex;
-  align-items: center;
-  gap: 0.5rem;
+  flex-direction: column;
+  gap: 0.3rem;
   padding: 0.625rem 1.25rem;
   border-top: 1px solid var(--border);
   margin-top: 0.75rem;
   transition: border-color 200ms ease;
+}
+
+.sidebar-status-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.sidebar-credit {
+  font-size: 0.68rem;
+  color: var(--text-faint);
+  text-decoration: none;
+  transition: color 120ms ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .sidebar-credit:hover { color: var(--text-muted); }
 }
 
 .status-dot {
