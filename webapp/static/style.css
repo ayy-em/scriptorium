@@ -20,6 +20,8 @@
   --radius:       8px;
   --ease-out:     cubic-bezier(0.23, 1, 0.32, 1);
   --ease-in-out:  cubic-bezier(0.77, 0, 0.175, 1);
+  --font-sans:    'Inter', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono:    'JetBrains Mono', ui-monospace, monospace;
 }
 
 html.dark {
@@ -52,7 +54,7 @@ html {
 }
 
 body {
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: var(--font-sans);
   background: var(--bg);
   color: var(--text);
   line-height: 1.5;
@@ -140,7 +142,7 @@ body {
   transform: translateY(-50%);
   font-size: 0.65rem;
   color: var(--text-faint);
-  font-family: ui-monospace, monospace;
+  font-family: var(--font-mono);
   background: var(--bg-panel);
   border: 1px solid var(--border);
   border-radius: 4px;
@@ -314,7 +316,7 @@ body {
 }
 
 .sidebar-cli code {
-  font-family: ui-monospace, "Cascadia Code", monospace;
+  font-family: var(--font-mono);
   font-size: 0.73rem;
   background: var(--bg-hover);
   color: var(--accent-text);
@@ -346,13 +348,13 @@ body {
   font-size: 0.72rem;
   font-weight: 600;
   color: var(--text-muted);
-  font-family: ui-monospace, monospace;
+  font-family: var(--font-mono);
 }
 
 .status-hash {
   font-size: 0.68rem;
   color: var(--text-faint);
-  font-family: ui-monospace, monospace;
+  font-family: var(--font-mono);
 }
 
 /* ─── Main content ───────────────────────────────────────────────────────── */
@@ -506,7 +508,7 @@ body {
 .row-num {
   font-size: 0.68rem;
   color: var(--text-faint);
-  font-family: ui-monospace, monospace;
+  font-family: var(--font-mono);
   width: 1.25rem;
   text-align: right;
   flex-shrink: 0;
@@ -514,7 +516,7 @@ body {
 }
 
 .row-key {
-  font-family: ui-monospace, "Cascadia Code", monospace;
+  font-family: var(--font-mono);
   font-size: 0.9rem;
   font-weight: 600;
   min-width: 170px;
@@ -744,7 +746,7 @@ textarea:focus {
 textarea {
   height: 72px;
   resize: vertical;
-  font-family: ui-monospace, monospace;
+  font-family: var(--font-mono);
 }
 
 .checkbox-row { display: flex; align-items: center; gap: 0.5rem; }
@@ -787,7 +789,7 @@ input[type=checkbox] { width: 15px; height: 15px; cursor: pointer; flex-shrink: 
 #output {
   background: #1a1a1a;
   color: #d4d4d4;
-  font-family: ui-monospace, monospace;
+  font-family: var(--font-mono);
   font-size: 0.8rem;
   line-height: 1.55;
   padding: 1rem 1.1rem;
