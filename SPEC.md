@@ -15,13 +15,20 @@ no `sys.exit` outside of `run()`.
 scriptorium/
 ├── main.py                  # CLI entrypoint
 ├── core/
-│   ├── registry.py          # auto-discovers scripts
+│   ├── registry.py          # auto-discovers scripts and themes
 │   └── runner.py            # dispatch + middleware (run, run_fn)
-└── scripts/
-    └── <theme>/
-        ├── __init__.py
-        ├── _helpers.py      # private shared code (ignored by registry)
-        └── <script>.py      # one script per file
+├── scripts/
+│   └── <theme>/
+│       ├── __init__.py      # LABEL, DESCRIPTION; gitignored inputs/ and outputs/
+│       ├── _helpers.py      # private shared code (ignored by registry)
+│       ├── <script>.py      # one script per file
+│       ├── inputs/          # gitignored — drop files here to process
+│       └── outputs/         # gitignored — results land here
+└── webapp/
+    ├── app.py               # FastAPI server
+    ├── _form.py             # argparse introspection for auto-generated forms
+    ├── static/              # CSS, logo
+    └── templates/           # Jinja2 templates (base, index, script detail)
 ```
 
 `inputs/`, `outputs/`, and `past_inputs/` directories are gitignored everywhere
@@ -34,11 +41,43 @@ in the repo and are the conventional locations for local data.
 ### CLI
 
 ```sh
-uv run main.py                          # list all available scripts
+uv run main.py                          # list all scripts across all themes
+uv run main.py <theme>                  # list scripts in one theme with descriptions
 uv run main.py <theme>.<script> [args]  # run a script
+uv run main.py <theme>.<script> --help  # show usage, arguments, and examples
 ```
 
 `uv run` is the only supported CLI invocation — use it on all platforms.
+
+#### Theme listing output format
+
+`uv run main.py <theme>` prints the theme's description first, then the script list:
+
+```
+Audio and video processing backed by ffmpeg
+
+Theme 'av' (9 script(s)):
+
+  av.convert                                Convert media file to a different format
+                                            Transcode a file (or directory of files) to a target container/codec.
+
+  av.trim                                   Trim media file
+                                            Cut a video or audio file to a start/end timestamp.
+  ...
+
+Run 'uv run main.py av.<script> --help' for usage details.
+```
+
+### Webapp
+
+```sh
+uv run main.py web.serve                # start the local web UI (default: http://127.0.0.1:8000)
+uv run main.py web.serve --port 9000    # custom port
+```
+
+The web UI lists all scripts grouped by theme, with live search and dark/light mode.
+Clicking a script opens a detail page with an auto-generated form (built from
+`get_parser()`). Submitting the form runs the script and streams its output via SSE.
 
 ### Programmatic
 
@@ -54,6 +93,66 @@ Use direct imports only in tests.
 
 ---
 
+## Theme package anatomy
+
+Each `scripts/<theme>/` directory is a Python package. Its `__init__.py` must define:
+
+| Name          | Type  | Purpose                                                             |
+|---------------|-------|---------------------------------------------------------------------|
+| `LABEL`       | `str` | Display name used in the web UI sidebar and CLI listings            |
+| `DESCRIPTION` | `str` | One-line tagline shown below the theme name in the web UI and at the top of `uv run main.py <theme>` output |
+
+The module docstring is conventional documentation — it is not used by the runtime.
+
+```python
+"""A/V manipulation scripts backed by ffmpeg."""
+
+LABEL = "A/V"
+DESCRIPTION = "Audio and video processing backed by ffmpeg"
+```
+
+`theme_labels()` and `theme_descriptions()` in `core/registry.py` read these
+attributes at runtime. Both fall back gracefully if an attribute is absent.
+
+---
+
+## inputs / outputs convention
+
+Every theme that reads or writes files uses the same layout:
+
+```
+scripts/<theme>/
+    inputs/     # gitignored; drop source files here
+    outputs/    # gitignored; processed results land here
+```
+
+Scripts resolve a bare filename (no directory component in the path) against the
+theme's `inputs/` directory automatically, so users can type just a filename:
+
+```sh
+uv run main.py av.convert clip.mp4 --to mp3   # resolves to av/inputs/clip.mp4
+```
+
+Each theme exposes helper functions (typically in a `_utils.py` or `_dataset.py`
+private module) that return the resolved `inputs/` and `outputs/` `Path` objects
+and create the directories on demand if they do not exist:
+
+```python
+_THEME_DIR = Path(__file__).parent
+
+def inputs_dir() -> Path:
+    d = _THEME_DIR / "inputs"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+def outputs_dir() -> Path:
+    d = _THEME_DIR / "outputs"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+```
+
+---
+
 ## Script anatomy
 
 Every file the registry picks up must expose three names at module level:
@@ -61,7 +160,7 @@ Every file the registry picks up must expose three names at module level:
 | Name          | Type       | Purpose                                      |
 |---------------|------------|----------------------------------------------|
 | `TITLE`       | `str`      | One-line label shown in `uv run main.py`     |
-| `DESCRIPTION` | `str`      | Sentence shown in `--help`                   |
+| `DESCRIPTION` | `str`      | Sentence shown in `--help` and theme listing |
 | `run()`       | `Callable` | CLI entrypoint — owns argparse + `sys.exit`  |
 
 ### Optional: `get_parser()`
@@ -72,7 +171,7 @@ Scripts may also expose:
 def get_parser() -> argparse.ArgumentParser: ...
 ```
 
-When present, the web UI (`web.serve`) uses it to auto-generate an argument form.
+When present, the web UI uses it to auto-generate an argument form.
 `run()` should call `get_parser().parse_args()` instead of constructing the parser
 inline, so the two stay in sync automatically.
 
@@ -112,16 +211,31 @@ from pathlib import Path
 TITLE = "Do a thing"
 DESCRIPTION = "Does the thing to a file."
 
+_EXAMPLES = """
+examples:
+  uv run main.py <theme>.do_thing file.txt
+  uv run main.py <theme>.do_thing file.txt --verbose
+"""
+
 
 def do_thing(path: Path) -> int:
     ...
     return count
 
 
-def run() -> None:
-    parser = argparse.ArgumentParser(description=DESCRIPTION)
+def get_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description=DESCRIPTION,
+        prog="uv run main.py <theme>.do_thing",
+        epilog=_EXAMPLES,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     parser.add_argument("path", type=Path)
-    args = parser.parse_args()
+    return parser
+
+
+def run() -> None:
+    args = get_parser().parse_args()
     count = do_thing(args.path)
     sys.exit(0 if count > 0 else 1)
 ```
@@ -150,9 +264,10 @@ constants or functions within a theme:
 
 ```
 scripts/lora/_dataset.py   # IMAGE_EXTS, find_images(), find_captions()
+scripts/av/_utils.py       # MEDIA_EXTS, run_ffmpeg(), av_inputs_dir(), …
 ```
 
-Import them with a relative or absolute path:
+Import them with an absolute path:
 
 ```python
 from scripts.lora._dataset import find_images
@@ -173,7 +288,26 @@ from scripts.lora._dataset import find_images
    `prog="uv run main.py <theme>.<script>"`, `epilog=_EXAMPLES`, and
    `formatter_class=argparse.RawDescriptionHelpFormatter`; `run()` calls
    `get_parser().parse_args()`
-7. Verify it appears in `uv run main.py`
-8. Verify `uv run main.py <theme> --help` lists the script
-9. Verify `uv run main.py <theme>.<script> --help` shows correct usage line and
-   examples
+7. Resolve bare filenames to `<theme>/inputs/<name>` inside `run()` before passing
+   to public functions; write outputs to `<theme>/outputs/` by default
+8. Verify it appears in `uv run main.py`
+9. Verify `uv run main.py <theme>` lists the script with its title and description
+10. Verify `uv run main.py <theme>.<script> --help` shows the correct usage line,
+    arguments, and examples
+
+---
+
+## Checklist for adding a theme
+
+1. Create `scripts/<theme>/` directory
+2. Add `scripts/<theme>/__init__.py` with:
+   - A module docstring (conventional, not used at runtime)
+   - `LABEL = "..."` — display name for the web UI sidebar and CLI listings
+   - `DESCRIPTION = "..."` — one-line tagline for the web UI header and `uv run main.py <theme>`
+3. Create `scripts/<theme>/inputs/` and `scripts/<theme>/outputs/` directories
+   (they are gitignored automatically via the root `.gitignore` pattern)
+4. Add a `_utils.py` (or equivalent) with `inputs_dir()` and `outputs_dir()` helpers
+   if the theme's scripts read from or write to local files
+5. Verify the theme appears in `uv run main.py` (top-level listing)
+6. Verify `uv run main.py <theme>` prints the description followed by the script list
+7. Verify the theme appears in the web UI sidebar with the correct label and description
