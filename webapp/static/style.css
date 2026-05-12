@@ -343,6 +343,29 @@ body {
   border: 1px solid color-mix(in oklch, var(--accent) 15%, transparent);
 }
 
+/* ─── Sidebar GitHub card ────────────────────────────────────────────────── */
+.sidebar-github {
+  margin-top: 0.5rem;
+  display: block;
+  text-decoration: none;
+  transition: border-color 150ms ease, background-color 120ms ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .sidebar-github:hover {
+    border-color: var(--accent);
+    background: var(--bg-hover);
+  }
+}
+
+.sidebar-github-logo {
+  display: block;
+  flex-shrink: 0;
+  opacity: 0.55;
+}
+
+html.dark .sidebar-github-logo { filter: invert(1); opacity: 0.6; }
+
 /* ─── Sidebar status bar ─────────────────────────────────────────────────── */
 .sidebar-status {
   display: flex;
