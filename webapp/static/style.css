@@ -450,8 +450,8 @@ body {
 
 .theme-header {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  flex-direction: column;
+  gap: 0.25rem;
   padding: 0.55rem 1rem;
   min-height: 40px;
   cursor: pointer;
@@ -465,9 +465,9 @@ body {
   .theme-header:hover { background: var(--bg-hover); }
 }
 
-.theme-header-left {
+.theme-header-top {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 0.45rem;
 }
 
@@ -475,29 +475,15 @@ body {
   color: var(--accent);
   opacity: 0.75;
   flex-shrink: 0;
-  margin-top: 2px;
 }
 
 .theme-chevron {
   color: var(--text-faint);
   transition: transform 200ms var(--ease-out);
   flex-shrink: 0;
-  margin-top: 3px;
 }
 
 .theme-chevron.collapsed { transform: rotate(-90deg); }
-
-.theme-header-meta {
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-}
-
-.theme-header-row {
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
-}
 
 .theme-name {
   font-size: 0.875em;

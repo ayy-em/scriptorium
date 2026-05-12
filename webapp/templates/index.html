@@ -27,23 +27,19 @@
              x-transition.duration.200ms>
 
       <div class="theme-header" @click="toggle('{{ theme }}')">
-        <div class="theme-header-left">
+        <div class="theme-header-top">
           <svg class="theme-chevron" :class="{ 'collapsed': isCollapsed('{{ theme }}') }"
                width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
             <path d="M2.5 4.5 6 8l3.5-3.5" stroke="currentColor" stroke-width="1.5"
                   stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
           <span class="theme-header-icon">{{ theme_icon(theme, 13) }}</span>
-          <div class="theme-header-meta">
-            <div class="theme-header-row">
-              <span class="theme-name">{{ labels[theme] }}</span>
-              <span class="theme-badge">{{ scripts | length }} script{{ 's' if scripts | length != 1 else '' }}</span>
-            </div>
-            {% if descriptions[theme] %}
-            <p class="theme-desc">{{ descriptions[theme] }}</p>
-            {% endif %}
-          </div>
+          <span class="theme-name">{{ labels[theme] }}</span>
+          <span class="theme-badge">{{ scripts | length }} script{{ 's' if scripts | length != 1 else '' }}</span>
         </div>
+        {% if descriptions[theme] %}
+        <p class="theme-desc">{{ descriptions[theme] }}</p>
+        {% endif %}
       </div>
 
       <div class="theme-rows" x-show="!isCollapsed('{{ theme }}')" x-transition.duration.150ms>
