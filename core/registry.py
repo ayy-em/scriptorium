@@ -55,4 +55,4 @@ def discover_themes() -> dict[str, dict[str, ModuleType]]:
     for key, mod in discover().items():
         theme, script = key.split(".", 1)
         grouped.setdefault(theme, {})[script] = mod
-    return grouped
+    return {theme: scripts for theme, scripts in grouped.items() if scripts}
