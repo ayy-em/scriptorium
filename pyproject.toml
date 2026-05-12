@@ -24,7 +24,7 @@ dev = [
 webapp = "webapp.app:run"
 
 [project.optional-dependencies]
-av        = ["ffmpeg-python>=0.2"]
+av        = ["ffmpeg-python>=0.2", "Pillow>=11.0"]
 downloads = ["yt-dlp>=2024.1.0"]
 photo     = ["Pillow>=11.0"]
 tabular   = ["pandas>=2.2", "openpyxl>=3.1"]
@@ -83,6 +83,9 @@ fixable = ["ALL"]
 ]
 "scripts/av/to_anim.py" = [
     "PLR0913", # to_anim legitimately needs source, start, end, outputs_dir + 4 optional knobs
+]
+"scripts/av/filmstrip.py" = [
+    "PLR0913", # filmstrip takes source + 5 optional layout/output knobs
 ]
 
 [tool.ruff.format]

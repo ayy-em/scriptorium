@@ -493,9 +493,12 @@ html.dark .sidebar-github-logo { filter: invert(1); opacity: 0.6; }
 }
 
 .theme-header {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto auto;
+  column-gap: 0.45rem;
+  row-gap: 0.15rem;
+  align-items: center;
   padding: 0.55rem 1rem;
   min-height: 40px;
   cursor: pointer;
@@ -509,7 +512,14 @@ html.dark .sidebar-github-logo { filter: invert(1); opacity: 0.6; }
   .theme-header:hover { background: var(--bg-hover); }
 }
 
-.theme-header-top {
+.theme-header-icons {
+  grid-row: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.theme-header-title {
   display: flex;
   align-items: center;
   gap: 0.45rem;
@@ -537,6 +547,7 @@ html.dark .sidebar-github-logo { filter: invert(1); opacity: 0.6; }
 }
 
 .theme-desc {
+  grid-column: 2;
   font-size: 0.74rem;
   color: var(--text-faint);
   line-height: 1.3;
