@@ -427,8 +427,9 @@ html.dark .sidebar-github-logo { filter: invert(1); opacity: 0.6; }
 }
 
 .content-wrap {
-  max-width: 860px;
+  max-width: 1080px;
   width: 100%;
+  margin: 0 auto;
 }
 
 /* ─── Page header ────────────────────────────────────────────────────────── */
@@ -542,6 +543,7 @@ html.dark .sidebar-github-logo { filter: invert(1); opacity: 0.6; }
 .theme-name {
   font-size: 0.875em;
   font-weight: 700;
+  text-transform: uppercase;
   letter-spacing: 0.1em;
   color: var(--text);
 }
@@ -938,6 +940,17 @@ input[type=checkbox] { width: 15px; height: 15px; cursor: pointer; flex-shrink: 
   #run-form          { animation: fadeSlideIn 240ms 130ms var(--ease-out) backwards; }
   .detail-no-args    { animation: fadeSlideIn 220ms  90ms var(--ease-out) backwards; }
   .detail-run-btn    { animation: fadeSlideIn 240ms 130ms var(--ease-out) backwards; }
+}
+
+/* ─── Utility classes (extracted from inline styles) ────────────────────── */
+.sidebar-cli-code {
+  display: inline-block;
+  margin-top: 0.3em;
+}
+
+.field-label-hint {
+  font-weight: 400;
+  color: var(--text-faint);
 }
 
 /* [x-cloak] hides Alpine-managed elements before Alpine initialises */

@@ -33,7 +33,7 @@
     {% elif spec.widget == "textarea" %}
     <label for="f_{{ spec.dest }}">
       {{ spec.label }}{% if spec.required %}<span class="req">*</span>{% endif %}
-      <span style="font-weight:400;color:var(--text-faint)"> — one value per line</span>
+      <span class="field-label-hint"> — one value per line</span>
     </label>
     <textarea id="f_{{ spec.dest }}" name="{{ spec.dest }}"{% if spec.required %} required{% endif %}>{{ spec.default or "" }}</textarea>
     {% elif spec.widget == "number" %}
@@ -72,10 +72,30 @@
   var runBtn = document.getElementById('run-btn');
   var runUrl = form ? form.dataset.runUrl : '/scripts/{{ key_path }}/run';
   var es;
+  var SAFE_CLASSES = ['stderr', 'exit-ok', 'exit-err'];
+
+  function safeParse(html) {
+    var frag = document.createDocumentFragment();
+    var doc = new DOMParser().parseFromString(html, 'text/html');
+    doc.body.childNodes.forEach(function (node) {
+      if (node.nodeType === 3) {
+        frag.appendChild(document.createTextNode(node.textContent));
+      } else if (node.nodeType === 1 && node.tagName === 'SPAN' &&
+                 SAFE_CLASSES.indexOf(node.className) !== -1) {
+        var span = document.createElement('span');
+        span.className = node.className;
+        span.textContent = node.textContent;
+        frag.appendChild(span);
+      } else {
+        frag.appendChild(document.createTextNode(node.textContent || ''));
+      }
+    });
+    return frag;
+  }
 
   function startRun(queryString) {
     if (es) { es.close(); }
-    output.innerHTML = '';
+    output.textContent = '';
     outputSection.classList.add('is-visible');
     runBtn.disabled = true;
     runBtn.classList.add('is-running');
@@ -85,7 +105,7 @@
 
     es.onmessage = function (e) {
       var div = document.createElement('div');
-      div.innerHTML = e.data;
+      div.appendChild(safeParse(e.data));
       output.appendChild(div);
       output.scrollTop = output.scrollHeight;
     };

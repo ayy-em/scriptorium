@@ -87,6 +87,7 @@ async def index(request: Request):
     themes = discover_themes()
     labels = theme_labels()
     descriptions = theme_descriptions()
+    total_scripts = sum(len(s) for s in themes.values())
     return templates.TemplateResponse(
         request,
         "index.html",
@@ -96,6 +97,7 @@ async def index(request: Request):
             "labels": labels,
             "descriptions": descriptions,
             "themes_data_json": _themes_search_json(themes),
+            "total_scripts": total_scripts,
             "version": _APP_VERSION,
             "git_hash": _GIT_HASH,
         },
