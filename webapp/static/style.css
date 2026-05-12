@@ -346,16 +346,20 @@ body {
 /* ─── Sidebar GitHub card ────────────────────────────────────────────────── */
 .sidebar-github {
   margin-top: 0.5rem;
-  display: block;
+}
+
+.sidebar-github-link {
+  display: inline-block;
+  margin-top: 0.4rem;
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--accent-text);
   text-decoration: none;
-  transition: border-color 150ms ease, background-color 120ms ease;
+  transition: opacity 120ms ease;
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .sidebar-github:hover {
-    border-color: var(--accent);
-    background: var(--bg-hover);
-  }
+  .sidebar-github-link:hover { opacity: 0.75; }
 }
 
 .sidebar-github-logo {
