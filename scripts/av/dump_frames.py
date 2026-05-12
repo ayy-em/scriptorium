@@ -8,27 +8,19 @@ import sys
 from scripts.av._utils import av_inputs_dir, av_outputs_dir, run_ffmpeg
 
 TITLE = "Dump all frames from a video clip"
-DESCRIPTION = (
-    "Extract every frame between two timestamps to JPEG files. Timestamps must be in NmNs format (e.g. 1m30s, 0m45s)."
-)
+DESCRIPTION = "Extract every frame between two timestamps to JPEG files."
 
 
-def parse_timestamp(ts: str) -> float:
-    """Parse a NmNs timestamp string to total seconds.
+def _normalize_timestamp(ts: str) -> str:
+    """Accept any ffmpeg-compatible timestamp, plus the legacy NmNs shorthand.
 
-    Args:
-        ts: Timestamp in NmNs format, e.g. "1m30s" or "0m45s".
-
-    Returns:
-        Total duration in seconds.
-
-    Raises:
-        ValueError: If the string does not match NmNs.
+    Supported formats: HH:MM:SS, MM:SS, bare seconds, NmNs (e.g. 1m30s).
+    Returns a string safe to pass directly to ffmpeg -ss/-to.
     """
     match = re.fullmatch(r"(\d+)m(\d+)s", ts)
-    if not match:
-        raise ValueError(f"Invalid timestamp {ts!r}. Expected NmNs format (e.g. 1m30s)")
-    return float(int(match.group(1)) * 60 + int(match.group(2)))
+    if match:
+        return str(int(match.group(1)) * 60 + int(match.group(2)))
+    return ts
 
 
 def dump_frames(video: Path, start: str, end: str, outputs_dir: Path) -> list[Path]:
@@ -36,40 +28,33 @@ def dump_frames(video: Path, start: str, end: str, outputs_dir: Path) -> list[Pa
 
     Uses frame-accurate seeking (-ss/-to after -i) so all frames in the range
     are captured without keyframe drift. Output files are named frame_00001.jpg,
-    frame_00002.jpg, … inside outputs_dir/frames/<video_stem>/<start>-<end>/.
+    frame_00002.jpg, ... inside outputs_dir/frames/<video_stem>/<start>-<end>/.
 
-    Args:
-        video: Source video file.
-        start: Start timestamp in NmNs format (e.g. "1m30s").
-        end: End timestamp in NmNs format (e.g. "2m45s").
-        outputs_dir: Root output directory.
+    Timestamps are passed directly to ffmpeg and accept any format it understands:
+    HH:MM:SS, MM:SS, bare seconds, or the legacy NmNs shorthand (e.g. 1m30s).
 
     Returns:
         Sorted list of extracted JPEG frame paths.
-
-    Raises:
-        ValueError: If timestamps are malformed or start >= end.
-        subprocess.CalledProcessError: If ffmpeg fails.
     """
-    start_secs = parse_timestamp(start)
-    end_secs = parse_timestamp(end)
+    ss = _normalize_timestamp(start)
+    to = _normalize_timestamp(end)
 
-    if start_secs >= end_secs:
-        raise ValueError(f"start ({start}) must be before end ({end})")
-
-    frame_dir = outputs_dir / "frames" / video.stem / f"{start}-{end}"
+    safe_label = f"{start}-{end}".replace(":", ".")
+    frame_dir = outputs_dir / "frames" / video.stem / safe_label
     frame_dir.mkdir(parents=True, exist_ok=True)
 
     pattern = str(frame_dir / "frame_%05d.jpg")
-    run_ffmpeg(["-i", str(video), "-ss", str(start_secs), "-to", str(end_secs), "-vsync", "0", pattern])
+    run_ffmpeg(["-i", str(video), "-ss", ss, "-to", to, "-vsync", "0", pattern])
 
     return sorted(frame_dir.glob("*.jpg"))
 
 
 _EXAMPLES = """
 examples:
+  uv run main.py av.dump_frames video.mp4 01:30 02:00
+  uv run main.py av.dump_frames video.mp4 0:00 0:10
   uv run main.py av.dump_frames video.mp4 1m30s 2m0s
-  uv run main.py av.dump_frames video.mp4 0m0s 0m10s --outputs path/to/out/
+  uv run main.py av.dump_frames video.mp4 90 120 --outputs path/to/out/
 """
 
 
@@ -82,8 +67,8 @@ def get_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument("video", type=Path, help="Source video file (bare name resolves to av/inputs/)")
-    parser.add_argument("start", metavar="START", help="Start timestamp (NmNs, e.g. 1m30s)")
-    parser.add_argument("end", metavar="END", help="End timestamp (NmNs, e.g. 2m45s)")
+    parser.add_argument("start", metavar="START", help="Start timestamp (e.g. 01:30, 1m30s, 90)")
+    parser.add_argument("end", metavar="END", help="End timestamp (e.g. 02:00, 2m0s, 120)")
     parser.add_argument(
         "--outputs",
         type=Path,

@@ -26,17 +26,20 @@ uv run main.py <theme>.<script> [args]  # run it
 
 | Script     | Description                     |
 |------------|---------------------------------|
-| av.join    | Join multiple media files into a single file |
-| av.trim    | Trim media files |
-| av.split   | Split media files into multiple segments |
-| av.convert | Convert a media file to a target format |
-| av.tag     | Read/write metadata or EXIF tags |
-| av.volume  | Adjust or normalize volume, or apply fades to audio files |
-| av.extract_frames | Extract evenly-spaced frames from a video |
+| av.convert | Convert media file to a different format |
+| av.dump_frames | Dump all frames from a video clip between two timestamps |
+| av.filmstrip | Extract frames and arrange them on a filmstrip sheet (PDF/PNG) |
+| av.join    | Join multiple media files |
+| av.split   | Split media file into multiple segments |
+| av.tag     | Read/write media metadata tags |
+| av.to_anim | Convert a video segment to an animated GIF/WebP |
+| av.trim    | Trim a media file to a time range |
+| av.volume  | Adjust audio volume, normalize, or apply fade-in/out |
+| downloads.download | Download media from a URL (YouTube, Vimeo, etc.) |
+| lora.export_captions | Export captions to JSON |
+| lora.import_captions | Import captions from JSON |
+| lora.renumber | Renumber LoRA dataset images |
 | lora.validate | Validate a LoRA training dataset |
-| lora.export_captions | Export image captions from a directory to a JSON file |
-| lora.import_captions | Import image captions from a JSON file to a directory |
-| lora.renumber | Renumber dataset images to sequential img_NNN naming |
 
 
 ## How To Use: CLI Examples
