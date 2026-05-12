@@ -14,7 +14,7 @@ from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from core.registry import discover, discover_themes, theme_labels
+from core.registry import discover, discover_themes, theme_descriptions, theme_labels
 from webapp._form import build_argv, fields_from_parser
 
 _REPO_ROOT = Path(__file__).parent.parent
@@ -86,6 +86,7 @@ async def index(request: Request):
     """List all available scripts grouped by theme."""
     themes = discover_themes()
     labels = theme_labels()
+    descriptions = theme_descriptions()
     return templates.TemplateResponse(
         request,
         "index.html",
@@ -93,6 +94,7 @@ async def index(request: Request):
             "themes": themes,
             "all_themes": themes,
             "labels": labels,
+            "descriptions": descriptions,
             "themes_data_json": _themes_search_json(themes),
             "version": _APP_VERSION,
             "git_hash": _GIT_HASH,

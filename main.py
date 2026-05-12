@@ -2,7 +2,7 @@
 
 import sys
 
-from core.registry import discover, discover_themes
+from core.registry import discover, discover_themes, theme_descriptions
 from core.runner import run
 
 _MIN_ARGS = 2
@@ -39,6 +39,10 @@ def _list_theme(theme: str) -> None:
         available = ", ".join(sorted(all_themes))
         print(f"Unknown theme '{theme}'. Available: {available}", file=sys.stderr)
         sys.exit(1)
+    desc = theme_descriptions().get(theme, "")
+    if desc:
+        print(desc)
+        print()
     scripts = all_themes[theme]
     print(f"Theme '{theme}' ({len(scripts)} script(s)):\n")
     for name, mod in sorted(scripts.items()):

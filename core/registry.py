@@ -45,6 +45,23 @@ def theme_labels() -> dict[str, str]:
     return result
 
 
+def theme_descriptions() -> dict[str, str]:
+    """Return {theme_key: description} for each discovered theme.
+
+    Reads the DESCRIPTION module attribute; falls back to an empty string if absent.
+
+    Returns:
+        Mapping of theme key to short description string.
+    """
+    result: dict[str, str] = {}
+    for theme in pkgutil.iter_modules(_scripts_pkg.__path__):
+        if theme.name.startswith("_"):
+            continue
+        mod = importlib.import_module(f"scripts.{theme.name}")
+        result[theme.name] = getattr(mod, "DESCRIPTION", "")
+    return result
+
+
 def discover_themes() -> dict[str, dict[str, ModuleType]]:
     """Return {theme: {script_name: module}} for all discovered scripts.
 

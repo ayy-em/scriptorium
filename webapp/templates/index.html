@@ -34,8 +34,15 @@
                   stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
           <span class="theme-header-icon">{{ theme_icon(theme, 13) }}</span>
-          <span class="theme-name">{{ labels[theme] }}</span>
-          <span class="theme-badge">{{ scripts | length }} script{{ 's' if scripts | length != 1 else '' }}</span>
+          <div class="theme-header-meta">
+            <div class="theme-header-row">
+              <span class="theme-name">{{ labels[theme] }}</span>
+              <span class="theme-badge">{{ scripts | length }} script{{ 's' if scripts | length != 1 else '' }}</span>
+            </div>
+            {% if descriptions[theme] %}
+            <p class="theme-desc">{{ descriptions[theme] }}</p>
+            {% endif %}
+          </div>
         </div>
       </div>
 
