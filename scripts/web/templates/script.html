@@ -1,0 +1,180 @@
+{% extends "base.html" %}
+{% block title %}{{ key }} — Scriptorium{% endblock %}
+{% block content %}
+<h1>{{ mod.TITLE }}</h1>
+<p style="font-size:0.9rem;color:#555;margin-top:0.3rem;margin-bottom:1.75rem">{{ mod.DESCRIPTION }}</p>
+
+<style>
+  .field { margin-bottom: 1.1rem; }
+  .field label {
+    display: block;
+    font-size: 0.84rem;
+    font-weight: 600;
+    margin-bottom: 0.3rem;
+    color: #222;
+  }
+  .req { color: #dc2626; margin-left: 2px; }
+  .hint { font-size: 0.78rem; color: #777; margin-top: 0.25rem; }
+  input[type=text],
+  input[type=number],
+  select,
+  textarea {
+    width: 100%;
+    max-width: 460px;
+    padding: 0.4rem 0.65rem;
+    border: 1px solid #d1d5db;
+    border-radius: 5px;
+    font-size: 0.875rem;
+    font-family: inherit;
+    background: white;
+    color: #111;
+  }
+  input:focus, select:focus, textarea:focus {
+    outline: 2px solid #2563eb;
+    outline-offset: 1px;
+    border-color: transparent;
+  }
+  textarea { height: 72px; resize: vertical; font-family: ui-monospace, monospace; }
+  .checkbox-row { display: flex; align-items: center; gap: 0.5rem; }
+  .checkbox-row label { margin-bottom: 0; font-weight: 500; }
+  input[type=checkbox] { width: 15px; height: 15px; cursor: pointer; }
+  .run-btn {
+    margin-top: 0.75rem;
+    padding: 0.5rem 1.5rem;
+    background: #2563eb;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .run-btn:hover:not(:disabled) { background: #1d4ed8; }
+  .run-btn:disabled { background: #93c5fd; cursor: not-allowed; }
+  #output-section { margin-top: 1.75rem; display: none; }
+  #output-section h2 {
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: #888;
+    margin-bottom: 0.5rem;
+  }
+  #output {
+    background: #1a1a1a;
+    color: #d4d4d4;
+    font-family: ui-monospace, monospace;
+    font-size: 0.8rem;
+    line-height: 1.55;
+    padding: 1rem 1.1rem;
+    border-radius: 6px;
+    min-height: 64px;
+    max-height: 480px;
+    overflow-y: auto;
+  }
+  #output .stderr { color: #fbbf24; }
+  #output .exit-ok { color: #4ade80; font-weight: 600; }
+  #output .exit-err { color: #f87171; font-weight: 600; }
+</style>
+
+{% if field_specs %}
+<form id="run-form" data-run-url="/scripts/{{ key_path }}/run">
+  {% for spec in field_specs %}
+  <div class="field">
+    {% if spec.widget == "checkbox" %}
+    <div class="checkbox-row">
+      <input type="checkbox" id="f_{{ spec.dest }}" name="{{ spec.dest }}" value="on">
+      <label for="f_{{ spec.dest }}">{{ spec.label }}</label>
+    </div>
+    {% elif spec.widget == "select" %}
+    <label for="f_{{ spec.dest }}">{{ spec.label }}{% if spec.required %}<span class="req">*</span>{% endif %}</label>
+    <select id="f_{{ spec.dest }}" name="{{ spec.dest }}"{% if spec.required %} required{% endif %}>
+      {% if not spec.required %}<option value="">— optional —</option>{% endif %}
+      {% for c in spec.choices %}
+      <option value="{{ c }}"{% if spec.default == c %} selected{% endif %}>{{ c }}</option>
+      {% endfor %}
+    </select>
+    {% elif spec.widget == "textarea" %}
+    <label for="f_{{ spec.dest }}">
+      {{ spec.label }}{% if spec.required %}<span class="req">*</span>{% endif %}
+      <span style="font-weight:400;color:#999"> — one value per line</span>
+    </label>
+    <textarea id="f_{{ spec.dest }}" name="{{ spec.dest }}"{% if spec.required %} required{% endif %}>{{ spec.default or "" }}</textarea>
+    {% elif spec.widget == "number" %}
+    <label for="f_{{ spec.dest }}">{{ spec.label }}{% if spec.required %}<span class="req">*</span>{% endif %}</label>
+    <input type="number" id="f_{{ spec.dest }}" name="{{ spec.dest }}" step="any"
+      {% if spec.default %}value="{{ spec.default }}"{% endif %}
+      {% if spec.required %}required{% endif %}>
+    {% else %}
+    <label for="f_{{ spec.dest }}">{{ spec.label }}{% if spec.required %}<span class="req">*</span>{% endif %}</label>
+    <input type="text" id="f_{{ spec.dest }}" name="{{ spec.dest }}"
+      {% if spec.default %}value="{{ spec.default }}" placeholder="{{ spec.default }}"{% endif %}
+      {% if spec.required %}required{% endif %}>
+    {% endif %}
+    {% if spec.help %}
+    <div class="hint">{{ spec.help }}</div>
+    {% endif %}
+  </div>
+  {% endfor %}
+  <button type="submit" class="run-btn" id="run-btn">Run</button>
+</form>
+{% else %}
+<p style="color:#888;font-style:italic;margin-bottom:1rem">This script takes no arguments.</p>
+<button class="run-btn" id="run-btn">Run</button>
+{% endif %}
+
+<div id="output-section">
+  <h2>Output</h2>
+  <div id="output"></div>
+</div>
+
+<script>
+(function () {
+  var form = document.getElementById('run-form');
+  var outputSection = document.getElementById('output-section');
+  var output = document.getElementById('output');
+  var runBtn = document.getElementById('run-btn');
+  var runUrl = form ? form.dataset.runUrl : '/scripts/{{ key_path }}/run';
+  var es;
+
+  function startRun(queryString) {
+    if (es) { es.close(); }
+    output.innerHTML = '';
+    outputSection.style.display = 'block';
+    runBtn.disabled = true;
+    runBtn.textContent = 'Running…';
+
+    es = new EventSource(runUrl + (queryString ? '?' + queryString : ''));
+
+    es.onmessage = function (e) {
+      var div = document.createElement('div');
+      div.innerHTML = e.data;
+      output.appendChild(div);
+      output.scrollTop = output.scrollHeight;
+    };
+
+    es.addEventListener('done', function () {
+      es.close();
+      runBtn.disabled = false;
+      runBtn.textContent = 'Run';
+    });
+
+    es.onerror = function () {
+      es.close();
+      runBtn.disabled = false;
+      runBtn.textContent = 'Run';
+    };
+  }
+
+  if (form) {
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      startRun(new URLSearchParams(new FormData(form)).toString());
+    });
+  } else {
+    runBtn.addEventListener('click', function () { startRun(''); });
+  }
+}());
+</script>
+{% endblock %}

@@ -57,8 +57,8 @@ examples:
 """
 
 
-def run() -> None:
-    """CLI entrypoint. Parse arguments and dispatch to trim()."""
+def get_parser() -> argparse.ArgumentParser:
+    """Return the argument parser for this script."""
     parser = argparse.ArgumentParser(
         description=DESCRIPTION,
         prog="uv run main.py av.trim",
@@ -76,7 +76,12 @@ def run() -> None:
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--end", metavar="TIME", help="End time (HH:MM:SS or seconds)")
     group.add_argument("--seconds", type=float, metavar="N", help="Trim the first N seconds")
-    args = parser.parse_args()
+    return parser
+
+
+def run() -> None:
+    """CLI entrypoint. Parse arguments and dispatch to trim()."""
+    args = get_parser().parse_args()
 
     input_file = args.input
     if input_file.parent == Path("."):

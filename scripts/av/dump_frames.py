@@ -73,8 +73,8 @@ examples:
 """
 
 
-def run() -> None:
-    """CLI entrypoint. Parse arguments and dispatch to dump_frames()."""
+def get_parser() -> argparse.ArgumentParser:
+    """Return the argument parser for this script."""
     parser = argparse.ArgumentParser(
         description=DESCRIPTION,
         prog="uv run main.py av.dump_frames",
@@ -91,7 +91,12 @@ def run() -> None:
         metavar="DIR",
         help="Output root directory (default: av/outputs/); frames go into frames/<stem>/<start>-<end>/",
     )
-    args = parser.parse_args()
+    return parser
+
+
+def run() -> None:
+    """CLI entrypoint. Parse arguments and dispatch to dump_frames()."""
+    args = get_parser().parse_args()
 
     video = args.video
     if video.parent == Path("."):

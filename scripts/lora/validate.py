@@ -55,8 +55,8 @@ examples:
 """
 
 
-def run() -> None:
-    """CLI entrypoint. Parse arguments and dispatch to validate()."""
+def get_parser() -> argparse.ArgumentParser:
+    """Return the argument parser for this script."""
     parser = argparse.ArgumentParser(
         description=DESCRIPTION,
         prog="uv run main.py lora.validate",
@@ -70,7 +70,12 @@ def run() -> None:
         metavar="DIR",
         help="dataset directory (default: lora/inputs/; bare name resolves to lora/inputs/)",
     )
-    args = parser.parse_args()
+    return parser
+
+
+def run() -> None:
+    """CLI entrypoint. Parse arguments and dispatch to validate()."""
+    args = get_parser().parse_args()
     inputs = args.inputs
     if inputs.parent == Path("."):
         inputs = _INPUTS_DIR / inputs.name

@@ -153,8 +153,8 @@ examples:
 """
 
 
-def run() -> None:
-    """CLI entrypoint. Parse arguments and dispatch to convert()."""
+def get_parser() -> argparse.ArgumentParser:
+    """Return the argument parser for this script."""
     parser = argparse.ArgumentParser(
         description=DESCRIPTION,
         prog="uv run main.py av.convert",
@@ -182,7 +182,12 @@ def run() -> None:
         metavar="DIR",
         help="Output directory (default: av/outputs/)",
     )
-    args = parser.parse_args()
+    return parser
+
+
+def run() -> None:
+    """CLI entrypoint. Parse arguments and dispatch to convert()."""
+    args = get_parser().parse_args()
 
     source = args.source
     if source.parent == Path("."):

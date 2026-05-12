@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Scriptorium{% endblock %}</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 1.5rem 2rem 3rem;
+      color: #111;
+      background: #f9fafb;
+    }
+    nav {
+      margin-bottom: 1.75rem;
+      font-size: 0.85rem;
+      color: #666;
+    }
+    nav a { color: #2563eb; text-decoration: none; }
+    nav a:hover { text-decoration: underline; }
+    h1 { font-size: 1.35rem; font-weight: 600; margin-bottom: 0.3rem; }
+    a { color: #2563eb; }
+    a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <nav><a href="/">Scriptorium</a></nav>
+  {% block content %}{% endblock %}
+</body>
+</html>

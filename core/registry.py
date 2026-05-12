@@ -19,7 +19,10 @@ def discover() -> dict[str, ModuleType]:
         for script in pkgutil.iter_modules(theme_mod.__path__):
             if script.name.startswith("_"):
                 continue
-            mod = importlib.import_module(f"scripts.{theme.name}.{script.name}")
+            try:
+                mod = importlib.import_module(f"scripts.{theme.name}.{script.name}")
+            except ImportError:
+                continue
             if all(hasattr(mod, attr) for attr in _REQUIRED):
                 result[f"{theme.name}.{script.name}"] = mod
     return result

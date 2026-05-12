@@ -87,8 +87,8 @@ examples:
 """
 
 
-def run() -> None:
-    """CLI entrypoint. Parse arguments and dispatch to download()."""
+def get_parser() -> argparse.ArgumentParser:
+    """Return the argument parser for this script."""
     parser = argparse.ArgumentParser(
         description=DESCRIPTION,
         prog="uv run main.py downloads.download",
@@ -114,7 +114,12 @@ def run() -> None:
         metavar="DIR",
         help="Output directory (default: downloads/outputs/)",
     )
-    args = parser.parse_args()
+    return parser
+
+
+def run() -> None:
+    """CLI entrypoint. Parse arguments and dispatch to download()."""
+    args = get_parser().parse_args()
 
     out_dir = args.outputs or _outputs_dir()
 

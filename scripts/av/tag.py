@@ -110,8 +110,8 @@ examples:
 """
 
 
-def run() -> None:
-    """CLI entrypoint. Parse arguments and dispatch to get_tags() or write_tags()."""
+def get_parser() -> argparse.ArgumentParser:
+    """Return the argument parser for this script."""
     parser = argparse.ArgumentParser(
         description=DESCRIPTION,
         prog="uv run main.py av.tag",
@@ -143,7 +143,12 @@ def run() -> None:
         metavar="DIR",
         help="Output directory (default: av/outputs/)",
     )
-    args = parser.parse_args()
+    return parser
+
+
+def run() -> None:
+    """CLI entrypoint. Parse arguments and dispatch to get_tags() or write_tags()."""
+    args = get_parser().parse_args()
 
     input_file = args.input
     if input_file.parent == Path("."):

@@ -64,6 +64,22 @@ Every file the registry picks up must expose three names at module level:
 | `DESCRIPTION` | `str`      | Sentence shown in `--help`                   |
 | `run()`       | `Callable` | CLI entrypoint — owns argparse + `sys.exit`  |
 
+### Optional: `get_parser()`
+
+Scripts may also expose:
+
+```python
+def get_parser() -> argparse.ArgumentParser: ...
+```
+
+When present, the web UI (`web.serve`) uses it to auto-generate an argument form.
+`run()` should call `get_parser().parse_args()` instead of constructing the parser
+inline, so the two stay in sync automatically.
+
+| Name           | Type       | Purpose                                                  |
+|----------------|------------|----------------------------------------------------------|
+| `get_parser()` | `Callable` | Returns the script's `ArgumentParser` without parsing    |
+
 ### `run()` — CLI only
 
 - Parses `sys.argv` via `argparse`
@@ -152,9 +168,12 @@ from scripts.lora._dataset import find_images
    dispatches
 4. Add a module-level `_EXAMPLES` string with 2–4 concrete invocations (include
    all positional args so the reader can copy-paste)
-5. Construct `ArgumentParser` with `prog="uv run main.py <theme>.<script>"`,
-   `epilog=_EXAMPLES`, and `formatter_class=argparse.RawDescriptionHelpFormatter`
-6. Verify it appears in `uv run main.py`
-7. Verify `uv run main.py <theme> --help` lists the script
-8. Verify `uv run main.py <theme>.<script> --help` shows correct usage line and
+5. Define `get_parser() -> ArgumentParser` that constructs and returns the parser
+6. Construct `ArgumentParser` inside `get_parser()` with
+   `prog="uv run main.py <theme>.<script>"`, `epilog=_EXAMPLES`, and
+   `formatter_class=argparse.RawDescriptionHelpFormatter`; `run()` calls
+   `get_parser().parse_args()`
+7. Verify it appears in `uv run main.py`
+8. Verify `uv run main.py <theme> --help` lists the script
+9. Verify `uv run main.py <theme>.<script> --help` shows correct usage line and
    examples

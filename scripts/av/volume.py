@@ -94,8 +94,8 @@ def _get_duration(file: Path) -> float:
     return float(duration)
 
 
-def run() -> None:
-    """CLI entrypoint. Parse arguments and dispatch to adjust_volume()."""
+def get_parser() -> argparse.ArgumentParser:
+    """Return the argument parser for this script."""
     parser = argparse.ArgumentParser(
         description=DESCRIPTION,
         prog="uv run main.py av.volume",
@@ -135,7 +135,12 @@ def run() -> None:
     )
     parser.add_argument("--fade-in", type=float, metavar="S", dest="fade_in", help="Fade-in duration in seconds")
     parser.add_argument("--fade-out", type=float, metavar="S", dest="fade_out", help="Fade-out duration in seconds")
-    args = parser.parse_args()
+    return parser
+
+
+def run() -> None:
+    """CLI entrypoint. Parse arguments and dispatch to adjust_volume()."""
+    args = get_parser().parse_args()
 
     input_file = args.input
     if input_file.parent == Path("."):

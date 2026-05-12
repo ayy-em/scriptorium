@@ -11,7 +11,10 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "fastapi>=0.115",
+    "jinja2>=3.1",
     "pytest>=9.0.3",
+    "python-multipart>=0.0.9",
     "ruff>=0.15.12",
 ]
 
@@ -20,7 +23,13 @@ av        = ["ffmpeg-python>=0.2"]
 downloads = ["yt-dlp>=2024.1.0"]
 photo     = ["Pillow>=11.0"]
 tabular   = ["pandas>=2.2", "openpyxl>=3.1"]
-web       = ["fastapi>=0.115", "uvicorn[standard]>=0.30"]
+web       = [
+    "fastapi>=0.115",
+    "jinja2>=3.1",
+    "mangum>=0.19",
+    "python-multipart>=0.0.9",
+    "uvicorn[standard]>=0.30",
+]
 
 [tool.ruff]
 target-version = "py314"

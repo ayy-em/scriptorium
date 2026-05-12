@@ -78,8 +78,8 @@ examples:
 """
 
 
-def run() -> None:
-    """CLI entrypoint. Parse arguments and dispatch to import_captions()."""
+def get_parser() -> argparse.ArgumentParser:
+    """Return the argument parser for this script."""
     parser = argparse.ArgumentParser(
         description=DESCRIPTION,
         prog="uv run main.py lora.import_captions",
@@ -93,7 +93,12 @@ def run() -> None:
         metavar="FILE",
         help="source JSON file (default: lora/inputs/captions.json; bare name resolves to lora/inputs/)",
     )
-    args = parser.parse_args()
+    return parser
+
+
+def run() -> None:
+    """CLI entrypoint. Parse arguments and dispatch to import_captions()."""
+    args = get_parser().parse_args()
     input_file = args.input
     if input_file.parent == Path("."):
         input_file = _INPUTS_DIR / input_file.name
