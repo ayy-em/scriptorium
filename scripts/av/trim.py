@@ -6,7 +6,7 @@ import sys
 
 from scripts.av._utils import av_inputs_dir, run_ffmpeg
 
-TITLE = "Trim media file"
+TITLE = "Trim the media file that's just too damn long"
 DESCRIPTION = "Cut a video or audio file to a start/end timestamp, or trim the first N seconds."
 
 

@@ -1,4 +1,4 @@
 """File format conversion scripts."""
 
-LABEL = "Formats"
+LABEL = "File Formats"
 DESCRIPTION = "Convert files between common formats"
