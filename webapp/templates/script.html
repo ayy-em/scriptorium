@@ -55,8 +55,8 @@
   <button type="submit" class="run-btn" id="run-btn">Run</button>
 </form>
 {% else %}
-<p style="color:var(--text-muted);font-style:italic;margin-bottom:1rem">This script takes no arguments.</p>
-<button class="run-btn" id="run-btn">Run</button>
+<p class="detail-no-args">This script takes no arguments.</p>
+<button class="run-btn detail-run-btn" id="run-btn">Run</button>
 {% endif %}
 
 <div id="output-section">
@@ -76,8 +76,9 @@
   function startRun(queryString) {
     if (es) { es.close(); }
     output.innerHTML = '';
-    outputSection.style.display = 'block';
+    outputSection.classList.add('is-visible');
     runBtn.disabled = true;
+    runBtn.classList.add('is-running');
     runBtn.textContent = 'Running…';
 
     es = new EventSource(runUrl + (queryString ? '?' + queryString : ''));
@@ -92,12 +93,14 @@
     es.addEventListener('done', function () {
       es.close();
       runBtn.disabled = false;
+      runBtn.classList.remove('is-running');
       runBtn.textContent = 'Run';
     });
 
     es.onerror = function () {
       es.close();
       runBtn.disabled = false;
+      runBtn.classList.remove('is-running');
       runBtn.textContent = 'Run';
     };
   }

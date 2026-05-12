@@ -1,19 +1,19 @@
 /* ─── Custom properties ─────────────────────────────────────────────────── */
 :root {
-  --bg:           #f4f5f7;
-  --bg-panel:     #ffffff;
-  --bg-sidebar:   #ffffff;
-  --bg-hover:     #f5f3ff;
-  --bg-input:     #f3f4f6;
-  --text:         #111827;
-  --text-muted:   #6b7280;
-  --text-faint:   #9ca3af;
-  --border:       #e5e7eb;
-  --accent:       #7c3aed;
-  --accent-hover: #6d28d9;
-  --accent-bg:    rgba(124, 58, 237, 0.07);
-  --accent-text:  #6d28d9;
-  --red:          #dc2626;
+  --bg:           oklch(97% 0.004 264);
+  --bg-panel:     oklch(99.5% 0.003 280);
+  --bg-sidebar:   oklch(99.5% 0.003 280);
+  --bg-hover:     oklch(96.5% 0.018 290);
+  --bg-input:     oklch(96.5% 0.004 264);
+  --text:         oklch(16% 0.015 264);
+  --text-muted:   oklch(52% 0.008 264);
+  --text-faint:   oklch(68% 0.006 264);
+  --border:       oklch(92% 0.004 264);
+  --accent:       oklch(50% 0.230 293);
+  --accent-hover: oklch(44% 0.233 291);
+  --accent-bg:    oklch(50% 0.230 293 / 7%);
+  --accent-text:  oklch(44% 0.233 291);
+  --red:          oklch(55% 0.222 27);
   --shadow-card:  0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
   --sidebar-w:    224px;
   --topnav-h:     52px;
@@ -25,19 +25,19 @@
 }
 
 html.dark {
-  --bg:           #0d0f14;
-  --bg-panel:     #1a1d24;
-  --bg-sidebar:   #13161d;
-  --bg-hover:     #1e1a2e;
-  --bg-input:     #1e2128;
-  --text:         #f0f2f5;
-  --text-muted:   #8b9197;
-  --text-faint:   #4b5360;
-  --border:       #252a35;
-  --accent:       #8b5cf6;
-  --accent-hover: #7c3aed;
-  --accent-bg:    rgba(139, 92, 246, 0.12);
-  --accent-text:  #a78bfa;
+  --bg:           oklch(9% 0.010 264);
+  --bg-panel:     oklch(14% 0.010 264);
+  --bg-sidebar:   oklch(11% 0.010 264);
+  --bg-hover:     oklch(14% 0.022 285);
+  --bg-input:     oklch(15% 0.010 264);
+  --text:         oklch(96% 0.005 264);
+  --text-muted:   oklch(63% 0.006 264);
+  --text-faint:   oklch(40% 0.008 264);
+  --border:       oklch(20% 0.010 264);
+  --accent:       oklch(60% 0.196 293);
+  --accent-hover: oklch(50% 0.230 293);
+  --accent-bg:    oklch(60% 0.196 293 / 12%);
+  --accent-text:  oklch(70% 0.170 293);
   --shadow-card:  0 1px 3px rgba(0, 0, 0, 0.35), 0 1px 2px rgba(0, 0, 0, 0.25);
 }
 
@@ -51,6 +51,7 @@ input, select, textarea { font: inherit; }
 html {
   font-size: 16px;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 body {
@@ -132,7 +133,7 @@ body {
 .topnav-search input:focus {
   border-color: var(--accent);
   background: var(--bg-panel);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in oklch, var(--accent) 15%, transparent);
 }
 
 .search-kbd {
@@ -215,6 +216,12 @@ body {
   font-weight: 600;
 }
 
+.sidebar-link--stub {
+  opacity: 0.35;
+  pointer-events: none;
+  cursor: default;
+}
+
 .sidebar-link svg { flex-shrink: 0; opacity: 0.85; }
 .sidebar-link.active svg { opacity: 1; }
 
@@ -270,7 +277,7 @@ body {
   font-size: 0.68rem;
   padding: 0.05rem 0.4rem;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--accent) 10%, var(--bg-hover));
+  background: color-mix(in oklch, var(--accent) 10%, var(--bg-hover));
   color: var(--accent-text);
   font-weight: 600;
   transition: background-color 200ms ease;
@@ -278,7 +285,7 @@ body {
 }
 
 .sidebar-category.active .category-count {
-  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  background: color-mix(in oklch, var(--accent) 22%, transparent);
   color: var(--accent-text);
 }
 
@@ -333,7 +340,7 @@ body {
   color: var(--accent-text);
   padding: 0.1rem 0.3rem;
   border-radius: 4px;
-  border: 1px solid color-mix(in srgb, var(--accent) 15%, transparent);
+  border: 1px solid color-mix(in oklch, var(--accent) 15%, transparent);
 }
 
 /* ─── Sidebar status bar ─────────────────────────────────────────────────── */
@@ -351,7 +358,7 @@ body {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #22c55e;
+  background: oklch(74% 0.178 142);
   flex-shrink: 0;
 }
 
@@ -449,7 +456,7 @@ body {
   height: 40px;
   cursor: pointer;
   user-select: none;
-  background: color-mix(in srgb, var(--bg-hover) 70%, var(--bg-panel));
+  background: color-mix(in oklch, var(--bg-hover) 70%, var(--bg-panel));
   border-bottom: 1px solid var(--border);
   transition: background-color 150ms ease, border-color 200ms ease;
 }
@@ -490,7 +497,7 @@ body {
   font-weight: 600;
   padding: 0.05rem 0.4rem;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  background: color-mix(in oklch, var(--accent) 12%, transparent);
   color: var(--accent-text);
   transition: background-color 200ms ease;
 }
@@ -511,7 +518,7 @@ body {
 
 @media (hover: hover) and (pointer: fine) {
   .script-row:hover {
-    background: color-mix(in srgb, var(--accent) 4%, var(--bg-panel));
+    background: color-mix(in oklch, var(--accent) 4%, var(--bg-panel));
   }
 }
 
@@ -608,7 +615,7 @@ body {
     background: linear-gradient(
       90deg,
       transparent 0%,
-      color-mix(in srgb, var(--text) 4%, transparent) 50%,
+      color-mix(in oklch, var(--text) 4%, transparent) 50%,
       transparent 100%
     );
     animation: shimmer 1.6s infinite;
@@ -650,8 +657,8 @@ body {
     color: var(--text-muted);
   }
   .icon-btn.fav-btn:hover {
-    background: rgba(244, 63, 94, 0.08);
-    color: #f43f5e;
+    background: oklch(61% 0.234 11 / 8%);
+    color: oklch(61% 0.234 11);
   }
 }
 
@@ -659,6 +666,7 @@ body {
 
 /* ─── Dark mode toggle button ────────────────────────────────────────────── */
 .dark-toggle {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -677,6 +685,21 @@ body {
 }
 
 .dark-toggle:active { transform: scale(0.94); }
+
+/* Icon crossfade: always in DOM, CSS controls visibility */
+.dark-toggle svg {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  transition: opacity 150ms ease-out;
+  pointer-events: none;
+}
+
+.icon-sun  { opacity: 0; }
+.icon-moon { opacity: 1; }
+html.dark .icon-sun  { opacity: 1; }
+html.dark .icon-moon { opacity: 0; }
 
 /* ─── Focus states ───────────────────────────────────────────────────────── */
 :focus-visible {
@@ -728,6 +751,7 @@ a:focus-visible, button:focus-visible { outline-offset: 3px; }
 
 .req { color: var(--red); margin-left: 2px; }
 .hint { font-size: 0.78rem; color: var(--text-faint); margin-top: 0.25rem; }
+.detail-no-args { color: var(--text-muted); font-style: italic; margin-bottom: 1rem; }
 
 input[type=text],
 input[type=number],
@@ -750,7 +774,7 @@ input[type=number]:focus,
 select:focus,
 textarea:focus {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in oklch, var(--accent) 15%, transparent);
 }
 
 textarea {
@@ -784,8 +808,22 @@ input[type=checkbox] { width: 15px; height: 15px; cursor: pointer; flex-shrink: 
 .run-btn:active:not(:disabled) { transform: scale(0.97); }
 .run-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
+@keyframes pulseSoft {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .run-btn.is-running { animation: pulseSoft 1.5s ease-in-out infinite; }
+}
+
 /* ─── Output console ─────────────────────────────────────────────────────── */
-#output-section { margin-top: 1.75rem; display: none; }
+#output-section { margin-top: 1.75rem; }
+#output-section:not(.is-visible) { display: none; }
+
+@media (prefers-reduced-motion: no-preference) {
+  #output-section.is-visible { animation: fadeSlideIn 240ms var(--ease-out) backwards; }
+}
 
 #output-section h2 {
   font-size: 0.75rem;
@@ -797,8 +835,8 @@ input[type=checkbox] { width: 15px; height: 15px; cursor: pointer; flex-shrink: 
 }
 
 #output {
-  background: #1a1a1a;
-  color: #d4d4d4;
+  background: oklch(12% 0.006 264);
+  color: oklch(85% 0.004 264);
   font-family: var(--font-mono);
   font-size: 0.8rem;
   line-height: 1.55;
@@ -809,9 +847,9 @@ input[type=checkbox] { width: 15px; height: 15px; cursor: pointer; flex-shrink: 
   overflow-y: auto;
 }
 
-#output .stderr  { color: #fbbf24; }
-#output .exit-ok { color: #4ade80; font-weight: 600; }
-#output .exit-err { color: #f87171; font-weight: 600; }
+#output .stderr  { color: oklch(82% 0.152 85); }
+#output .exit-ok { color: oklch(79% 0.171 142); font-weight: 600; }
+#output .exit-err { color: oklch(70% 0.178 27); font-weight: 600; }
 
 /* ─── Animations ─────────────────────────────────────────────────────────── */
 @keyframes fadeSlideIn {
@@ -829,6 +867,14 @@ input[type=checkbox] { width: 15px; height: 15px; cursor: pointer; flex-shrink: 
   .theme-section:nth-child(4) { animation-delay: 165ms; }
   .theme-section:nth-child(5) { animation-delay: 220ms; }
   .theme-section:nth-child(n+6) { animation-delay: 260ms; }
+
+  /* Detail page entrance stagger */
+  .detail-breadcrumb { animation: fadeSlideIn 200ms var(--ease-out) backwards; }
+  .detail-title      { animation: fadeSlideIn 220ms  50ms var(--ease-out) backwards; }
+  .detail-desc       { animation: fadeSlideIn 220ms  90ms var(--ease-out) backwards; }
+  #run-form          { animation: fadeSlideIn 240ms 130ms var(--ease-out) backwards; }
+  .detail-no-args    { animation: fadeSlideIn 220ms  90ms var(--ease-out) backwards; }
+  .detail-run-btn    { animation: fadeSlideIn 240ms 130ms var(--ease-out) backwards; }
 }
 
 /* [x-cloak] hides Alpine-managed elements before Alpine initialises */

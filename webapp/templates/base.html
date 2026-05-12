@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Themed one-off scripts with a future browser UI.">
-  <link rel="icon" href="/static/favicon.ico">
+  <link rel="icon" href="/static/logo.webp" type="image/webp">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
@@ -59,14 +59,12 @@
       <button class="dark-toggle"
               @click="$store.ui.toggleDark()"
               :aria-label="$store.ui.dark ? 'Switch to light mode' : 'Switch to dark mode'">
-        <!-- Sun icon (shown in dark mode) -->
-        <svg x-show="$store.ui.dark" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+        <svg class="icon-sun" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
           <circle cx="8" cy="8" r="3" stroke="currentColor" stroke-width="1.5"/>
           <path d="M8 1v1.5M8 13.5V15M1 8h1.5M13.5 8H15M3.05 3.05l1.06 1.06M11.89 11.89l1.06 1.06M3.05 12.95l1.06-1.06M11.89 4.11l1.06-1.06"
                 stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
         </svg>
-        <!-- Moon icon (shown in light mode) -->
-        <svg x-show="!$store.ui.dark" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+        <svg class="icon-moon" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
           <path d="M13.5 9.5A6 6 0 0 1 6.5 2.5a6 6 0 1 0 7 7Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
         </svg>
       </button>
