@@ -1,10 +1,11 @@
 """Tests for the Scriptorium web server routes."""
 
+import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from fastapi.testclient import TestClient
 
-from scripts.web.serve import app
+from webapp.app import _read_git_hash, _read_version, _themes_search_json, app
 
 client = TestClient(app)
 
@@ -25,6 +26,26 @@ class TestIndex:
     def test_contains_script_links(self):
         response = client.get("/")
         assert 'href="/scripts/av/convert"' in response.text
+
+    def test_includes_version(self):
+        response = client.get("/")
+        assert "v0." in response.text or "v—" in response.text or "v1." in response.text
+
+    def test_includes_themes_data_json(self):
+        response = client.get("/")
+        assert "__THEMES__" in response.text
+
+    def test_includes_sidebar(self):
+        response = client.get("/")
+        assert "sidebar" in response.text
+
+    def test_includes_alpine_cdn(self):
+        response = client.get("/")
+        assert "alpinejs" in response.text
+
+    def test_includes_static_css(self):
+        response = client.get("/")
+        assert "/static/style.css" in response.text
 
 
 class TestScriptDetail:
@@ -60,6 +81,18 @@ class TestScriptDetail:
     def test_store_true_renders_checkbox(self):
         response = client.get("/scripts/av/tag")
         assert 'type="checkbox"' in response.text
+
+    def test_includes_sidebar(self):
+        response = client.get("/scripts/av/convert")
+        assert "sidebar" in response.text
+
+    def test_includes_version(self):
+        response = client.get("/scripts/av/convert")
+        assert "status-version" in response.text
+
+    def test_includes_breadcrumb(self):
+        response = client.get("/scripts/av/convert")
+        assert "detail-breadcrumb" in response.text
 
 
 class TestRunEndpoint:
@@ -112,3 +145,32 @@ class TestRunEndpoint:
             response = client.get("/scripts/lora/validate/run")
 
         assert b"exit 0" in response.content
+
+
+class TestHelpers:
+    def test_read_version_returns_string(self):
+        v = _read_version()
+        assert isinstance(v, str)
+        assert len(v) > 0
+
+    def test_read_git_hash_returns_string(self):
+        h = _read_git_hash()
+        assert isinstance(h, str)
+        assert len(h) > 0
+
+    def test_read_git_hash_fallback_on_bad_cwd(self):
+        with patch("subprocess.run", side_effect=FileNotFoundError):
+            h = _read_git_hash()
+        assert h == "—"
+
+    def test_themes_search_json_structure(self):
+        themes = {"av": {"convert": MagicMock(TITLE="Convert media"), "trim": MagicMock(TITLE="Trim")}}
+        result = _themes_search_json(themes)
+        data = json.loads(result)
+        assert "av" in data
+        assert any("av.convert" in s for s in data["av"])
+
+    def test_themes_search_json_escapes_script_tag(self):
+        themes = {"av": {"x": MagicMock(TITLE="</script>evil")}}
+        result = _themes_search_json(themes)
+        assert "</script>" not in result

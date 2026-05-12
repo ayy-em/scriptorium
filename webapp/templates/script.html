@@ -1,82 +1,17 @@
 {% extends "base.html" %}
 {% block title %}{{ key }} — Scriptorium{% endblock %}
 {% block content %}
-<h1>{{ mod.TITLE }}</h1>
-<p style="font-size:0.9rem;color:#555;margin-top:0.3rem;margin-bottom:1.75rem">{{ mod.DESCRIPTION }}</p>
 
-<style>
-  .field { margin-bottom: 1.1rem; }
-  .field label {
-    display: block;
-    font-size: 0.84rem;
-    font-weight: 600;
-    margin-bottom: 0.3rem;
-    color: #222;
-  }
-  .req { color: #dc2626; margin-left: 2px; }
-  .hint { font-size: 0.78rem; color: #777; margin-top: 0.25rem; }
-  input[type=text],
-  input[type=number],
-  select,
-  textarea {
-    width: 100%;
-    max-width: 460px;
-    padding: 0.4rem 0.65rem;
-    border: 1px solid #d1d5db;
-    border-radius: 5px;
-    font-size: 0.875rem;
-    font-family: inherit;
-    background: white;
-    color: #111;
-  }
-  input:focus, select:focus, textarea:focus {
-    outline: 2px solid #2563eb;
-    outline-offset: 1px;
-    border-color: transparent;
-  }
-  textarea { height: 72px; resize: vertical; font-family: ui-monospace, monospace; }
-  .checkbox-row { display: flex; align-items: center; gap: 0.5rem; }
-  .checkbox-row label { margin-bottom: 0; font-weight: 500; }
-  input[type=checkbox] { width: 15px; height: 15px; cursor: pointer; }
-  .run-btn {
-    margin-top: 0.75rem;
-    padding: 0.5rem 1.5rem;
-    background: #2563eb;
-    color: white;
-    border: none;
-    border-radius: 5px;
-    font-size: 0.9rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: background 0.15s;
-  }
-  .run-btn:hover:not(:disabled) { background: #1d4ed8; }
-  .run-btn:disabled { background: #93c5fd; cursor: not-allowed; }
-  #output-section { margin-top: 1.75rem; display: none; }
-  #output-section h2 {
-    font-size: 0.78rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.07em;
-    color: #888;
-    margin-bottom: 0.5rem;
-  }
-  #output {
-    background: #1a1a1a;
-    color: #d4d4d4;
-    font-family: ui-monospace, monospace;
-    font-size: 0.8rem;
-    line-height: 1.55;
-    padding: 1rem 1.1rem;
-    border-radius: 6px;
-    min-height: 64px;
-    max-height: 480px;
-    overflow-y: auto;
-  }
-  #output .stderr { color: #fbbf24; }
-  #output .exit-ok { color: #4ade80; font-weight: 600; }
-  #output .exit-err { color: #f87171; font-weight: 600; }
-</style>
+<nav class="detail-breadcrumb" aria-label="Breadcrumb">
+  <a href="/">Scriptorium</a>
+  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+    <path d="M4.5 2.5 7.5 6l-3 3.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>
+  <span>{{ key }}</span>
+</nav>
+
+<h1 class="detail-title">{{ mod.TITLE }}</h1>
+<p class="detail-desc">{{ mod.DESCRIPTION }}</p>
 
 {% if field_specs %}
 <form id="run-form" data-run-url="/scripts/{{ key_path }}/run">
@@ -98,7 +33,7 @@
     {% elif spec.widget == "textarea" %}
     <label for="f_{{ spec.dest }}">
       {{ spec.label }}{% if spec.required %}<span class="req">*</span>{% endif %}
-      <span style="font-weight:400;color:#999"> — one value per line</span>
+      <span style="font-weight:400;color:var(--text-faint)"> — one value per line</span>
     </label>
     <textarea id="f_{{ spec.dest }}" name="{{ spec.dest }}"{% if spec.required %} required{% endif %}>{{ spec.default or "" }}</textarea>
     {% elif spec.widget == "number" %}
@@ -120,7 +55,7 @@
   <button type="submit" class="run-btn" id="run-btn">Run</button>
 </form>
 {% else %}
-<p style="color:#888;font-style:italic;margin-bottom:1rem">This script takes no arguments.</p>
+<p style="color:var(--text-muted);font-style:italic;margin-bottom:1rem">This script takes no arguments.</p>
 <button class="run-btn" id="run-btn">Run</button>
 {% endif %}
 

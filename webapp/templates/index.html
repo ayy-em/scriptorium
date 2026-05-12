@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block title %}Scriptorium{% endblock %}
+{% set active_page = "scripts" %}
+{% block content %}
+<script>
+  window.__THEMES__ = {{ themes_data_json | safe }};
+</script>
+
+<div x-data="scriptBrowser()" x-cloak>
+  <div class="page-header">
+    <h1>Scripts</h1>
+    <span class="sort-label">Sort A → Z</span>
+  </div>
+  <p class="page-subtitle">Utility scripts to handle media, datasets, and web tasks.</p>
+
+  <div class="script-list">
+    {% for theme, scripts in themes.items() %}
+    <section class="theme-section"
+             x-show="themeVisible('{{ theme }}')"
+             x-transition.duration.200ms>
+
+      <div class="theme-header" @click="toggle('{{ theme }}')">
+        <div class="theme-header-left">
+          <svg class="theme-chevron" :class="{ 'collapsed': isCollapsed('{{ theme }}') }"
+               width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+            <path d="M2.5 4.5 6 8l3.5-3.5" stroke="currentColor" stroke-width="1.5"
+                  stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span class="theme-name">{{ theme }}</span>
+          <span class="theme-badge">{{ scripts | length }}</span>
+        </div>
+      </div>
+
+      <div class="theme-rows" x-show="!isCollapsed('{{ theme }}')" x-transition.duration.150ms>
+        {% for name, mod in scripts.items() %}
+        <a class="script-row"
+           href="/scripts/{{ theme }}/{{ name }}"
+           data-theme="{{ theme }}"
+           data-search="{{ theme }}.{{ name }} {{ mod.TITLE | lower }}"
+           x-show="rowVisible($el)"
+           x-transition.duration.100ms>
+          <span class="row-num">{{ loop.index }}</span>
+          <span class="row-key">{{ theme }}.{{ name }}</span>
+          <span class="row-title">{{ mod.TITLE }}</span>
+          <div class="row-actions">
+            <button class="icon-btn fav-btn"
+                    title="Add to favourites"
+                    @click.stop.prevent
+                    aria-label="Add {{ theme }}.{{ name }} to favourites">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <path d="M8 13.5S2 10 2 5.5a3.5 3.5 0 0 1 6-2.43A3.5 3.5 0 0 1 14 5.5C14 10 8 13.5 8 13.5Z"
+                      stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+              </svg>
+            </button>
+          </div>
+        </a>
+        {% endfor %}
+      </div>
+
+    </section>
+    {% endfor %}
+
+    <p class="no-results" x-show="noResults()" x-transition>
+      No scripts match your search.
+    </p>
+  </div>
+</div>
+
+<script>
+  function scriptBrowser() {
+    return {
+      _collapsed: {},
+
+      isCollapsed(theme) {
+        return !!this._collapsed[theme];
+      },
+
+      toggle(theme) {
+        this._collapsed[theme] = !this._collapsed[theme];
+      },
+
+      themeVisible(theme) {
+        const { search: q, activeCategory: cat } = Alpine.store('ui');
+        if (cat && cat !== theme) return false;
+        const qLower = q.trim().toLowerCase();
+        if (!qLower) return true;
+        return (window.__THEMES__[theme] || []).some(s => s.includes(qLower));
+      },
+
+      rowVisible(el) {
+        const { search: q, activeCategory: cat } = Alpine.store('ui');
+        if (cat && cat !== el.dataset.theme) return false;
+        const qLower = q.trim().toLowerCase();
+        if (!qLower) return true;
+        return el.dataset.search.includes(qLower);
+      },
+
+      noResults() {
+        const { search: q, activeCategory: cat } = Alpine.store('ui');
+        if (!q.trim() && !cat) return false;
+        return Object.keys(window.__THEMES__).every(t => !this.themeVisible(t));
+      },
+    };
+  }
+</script>
+{% endblock %}

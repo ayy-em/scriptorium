@@ -3,7 +3,7 @@
 import argparse
 from pathlib import Path
 
-from scripts.web._form import FieldSpec, build_argv, fields_from_parser
+from webapp._form import FieldSpec, build_argv, fields_from_parser
 
 
 def _parser(**kwargs) -> argparse.ArgumentParser:

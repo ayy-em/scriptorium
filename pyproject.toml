@@ -16,7 +16,12 @@ dev = [
     "pytest>=9.0.3",
     "python-multipart>=0.0.9",
     "ruff>=0.15.12",
+    "uvicorn[standard]>=0.30",
+    "yt-dlp>=2024.1.0",
 ]
+
+[project.scripts]
+webapp = "webapp.app:run"
 
 [project.optional-dependencies]
 av        = ["ffmpeg-python>=0.2"]
@@ -30,6 +35,12 @@ web       = [
     "python-multipart>=0.0.9",
     "uvicorn[standard]>=0.30",
 ]
+
+[tool.uv]
+package = true
+
+[tool.setuptools.packages.find]
+include = ["core*", "scripts*", "webapp*"]
 
 [tool.ruff]
 target-version = "py314"
