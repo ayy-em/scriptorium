@@ -38,29 +38,31 @@
     </a>
 
     <div class="topnav-search">
-      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <svg class="topnav-search-icon" width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
         <circle cx="6.5" cy="6.5" r="4.5" stroke="currentColor" stroke-width="1.5"/>
         <path d="M10 10 14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
       </svg>
-      <input type="search"
+      <input id="search-input"
+             type="search"
              placeholder="Search scripts…"
              x-model="$store.ui.search"
              autocomplete="off"
              spellcheck="false"
              aria-label="Search scripts">
+      <span class="search-kbd" aria-hidden="true">Ctrl K</span>
     </div>
 
     <div class="topnav-actions">
       <button class="dark-toggle"
               @click="$store.ui.toggleDark()"
               :aria-label="$store.ui.dark ? 'Switch to light mode' : 'Switch to dark mode'">
-        <!-- Sun icon -->
+        <!-- Sun icon (shown in dark mode) -->
         <svg x-show="$store.ui.dark" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
           <circle cx="8" cy="8" r="3" stroke="currentColor" stroke-width="1.5"/>
           <path d="M8 1v1.5M8 13.5V15M1 8h1.5M13.5 8H15M3.05 3.05l1.06 1.06M11.89 11.89l1.06 1.06M3.05 12.95l1.06-1.06M11.89 4.11l1.06-1.06"
                 stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
         </svg>
-        <!-- Moon icon -->
+        <!-- Moon icon (shown in light mode) -->
         <svg x-show="!$store.ui.dark" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
           <path d="M13.5 9.5A6 6 0 0 1 6.5 2.5a6 6 0 1 0 7 7Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
         </svg>
@@ -72,8 +74,21 @@
   <div class="app-layout">
     {% include "_sidebar.html" %}
     <main class="main-content">
-      {% block content %}{% endblock %}
+      <div class="content-wrap">
+        {% block content %}{% endblock %}
+      </div>
     </main>
   </div>
+
+  <script>
+    /* Ctrl+K / Cmd+K focuses the search input */
+    document.addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        const input = document.getElementById('search-input');
+        if (input) { input.focus(); input.select(); }
+      }
+    });
+  </script>
 </body>
 </html>

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_macros.html" import theme_icon %}
 {% block title %}Scriptorium{% endblock %}
 {% set active_page = "scripts" %}
 {% block content %}
@@ -9,7 +10,13 @@
 <div x-data="scriptBrowser()" x-cloak>
   <div class="page-header">
     <h1>Scripts</h1>
-    <span class="sort-label">Sort A → Z</span>
+    <button class="sort-btn" title="Sort order">
+      <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+        <path d="M2 4h8M2 8h5M2 12h3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        <path d="M13 3v10M10.5 10.5L13 13l2.5-2.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      A → Z
+    </button>
   </div>
   <p class="page-subtitle">Utility scripts to handle media, datasets, and web tasks.</p>
 
@@ -26,6 +33,7 @@
             <path d="M2.5 4.5 6 8l3.5-3.5" stroke="currentColor" stroke-width="1.5"
                   stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
+          <span class="theme-header-icon">{{ theme_icon(theme, 13) }}</span>
           <span class="theme-name">{{ theme }}</span>
           <span class="theme-badge">{{ scripts | length }}</span>
         </div>
@@ -60,9 +68,15 @@
     </section>
     {% endfor %}
 
-    <p class="no-results" x-show="noResults()" x-transition>
-      No scripts match your search.
-    </p>
+    <div class="no-results" x-show="noResults()" x-transition>
+      <svg class="no-results-icon" viewBox="0 0 36 36" fill="none" aria-hidden="true">
+        <circle cx="16" cy="16" r="10" stroke="currentColor" stroke-width="2"/>
+        <path d="M23 23L31 31" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M12 16h8M16 12v8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+      <p class="no-results-title">No scripts found</p>
+      <p class="no-results-sub">Try a different search term or clear the category filter.</p>
+    </div>
   </div>
 </div>
 

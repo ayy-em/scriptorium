@@ -1,3 +1,4 @@
+{% from "_macros.html" import theme_icon %}
 <aside class="sidebar">
   <nav class="sidebar-nav">
     <a href="/"
@@ -30,7 +31,8 @@
     <button class="sidebar-category"
             :class="{ 'active': $store.ui.activeCategory === '{{ theme }}' }"
             @click="$store.ui.activeCategory = $store.ui.activeCategory === '{{ theme }}' ? null : '{{ theme }}'">
-      <span>{{ theme }}</span>
+      {{ theme_icon(theme, 14) }}
+      <span class="sidebar-category-name">{{ theme }}</span>
       <span class="category-count">{{ scripts | length }}</span>
     </button>
     {% endfor %}
@@ -39,11 +41,15 @@
   <div class="sidebar-spacer"></div>
 
   <div class="sidebar-cli">
-    <p>
-      <strong>Use from the CLI</strong>
-      Run any script with <code>uv run main.py &lt;key&gt;</code>.
-      Full docs coming soon.
-    </p>
+    <div class="sidebar-cli-header">
+      <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+        <rect x="1.5" y="2.5" width="13" height="11" rx="1.5" stroke="currentColor" stroke-width="1.4"/>
+        <path d="M4.5 6l2.5 2-2.5 2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M9 10h2.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+      </svg>
+      <span class="sidebar-cli-title">CLI usage</span>
+    </div>
+    <p>Run any script with <code>uv run main.py &lt;key&gt;</code>.</p>
   </div>
 
   <div class="sidebar-status">
