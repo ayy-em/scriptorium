@@ -6,7 +6,7 @@ import sys
 
 from scripts.av._utils import av_inputs_dir, av_outputs_dir, run_ffmpeg
 
-TITLE = "Split media file"
+TITLE = "Split media file in multiple segments"
 DESCRIPTION = "Split a media file at one or more timestamp breakpoints into numbered segments."
 
 

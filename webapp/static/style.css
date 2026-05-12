@@ -479,10 +479,8 @@ body {
 .theme-chevron.collapsed { transform: rotate(-90deg); }
 
 .theme-name {
-  font-family: var(--font-mono);
   font-size: 0.875em;
   font-weight: 700;
-  text-transform: uppercase;
   letter-spacing: 0.1em;
   color: var(--text);
 }

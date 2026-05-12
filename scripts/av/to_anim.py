@@ -7,7 +7,7 @@ import tempfile
 
 from scripts.av._utils import av_inputs_dir, av_outputs_dir, probe_streams, run_ffmpeg
 
-TITLE = "Video to animated GIF/WebP"
+TITLE = "Video segment to animated GIF/WebP"
 DESCRIPTION = "Convert a video segment to an animated GIF or WebP given start/end timestamps."
 
 FORMATS = ("gif", "webp")

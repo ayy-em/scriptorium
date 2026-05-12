@@ -15,7 +15,7 @@ from scripts.av._utils import (
     run_ffmpeg,
 )
 
-TITLE = "Join media files"
+TITLE = "Join multiple media files"
 DESCRIPTION = "Stitch all media files in inputs/ in sorted order and save to outputs/."
 
 

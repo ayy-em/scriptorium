@@ -6,8 +6,8 @@ import sys
 
 import yt_dlp
 
-TITLE = "Download media"
-DESCRIPTION = "Download video (or extract audio as MP3) from a URL using yt-dlp."
+TITLE = "Download media from a URL (YouTube, Vimeo, etc.)"
+DESCRIPTION = "Download a video (or extract audio as MP3) from a supported URL using yt-dlp."
 
 _DOWNLOADS_DIR = Path(__file__).parent
 

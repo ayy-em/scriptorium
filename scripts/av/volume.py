@@ -6,7 +6,7 @@ import sys
 
 from scripts.av._utils import av_inputs_dir, av_outputs_dir, probe_streams, run_ffmpeg, run_ffprobe
 
-TITLE = "Adjust audio volume"
+TITLE = "Adjust audio volume, normalize, or apply fade-in/out"
 DESCRIPTION = "Apply composable volume operations in a single ffmpeg pass: amplify -> normalize -> fade-in -> fade-out."
 
 

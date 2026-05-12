@@ -6,7 +6,7 @@ import sys
 
 from scripts.av._utils import AUDIO_ONLY_EXTS, av_inputs_dir, av_outputs_dir, find_media_files, run_ffmpeg
 
-TITLE = "Convert media file"
+TITLE = "Convert media file to a different format"
 DESCRIPTION = "Transcode a file (or directory of files) to a target container/codec."
 
 # Maps quality name to ffmpeg CRF (video) and audio bitrate.

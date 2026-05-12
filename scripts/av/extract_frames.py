@@ -6,7 +6,7 @@ import sys
 
 from scripts.av._utils import av_inputs_dir, av_outputs_dir, run_ffmpeg, run_ffprobe
 
-TITLE = "Extract frames from video"
+TITLE = "Extract frames from video(s)"
 DESCRIPTION = "Extract N evenly-distributed frames from a video (or directory of videos) as JPEG."
 
 _VIDEO_EXTS = frozenset({".mp4", ".mkv", ".mov", ".avi", ".webm", ".flv", ".m4v"})

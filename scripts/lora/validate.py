@@ -6,7 +6,7 @@ import sys
 
 from scripts.lora._dataset import IMG_NAME_RE, find_captions, find_images
 
-TITLE = "Validate LoRA dataset"
+TITLE = "Validate a LoRA training dataset"
 _INPUTS_DIR = Path(__file__).parent / "inputs"
 DESCRIPTION = "Check that images follow img_NNN naming and each has a matching caption .txt file."
 
