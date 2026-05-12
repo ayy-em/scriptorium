@@ -25,6 +25,7 @@
     </a>
   </nav>
 
+  <hr class="sidebar-divider">
   <p class="sidebar-section-label">Categories</p>
   <div class="sidebar-categories">
     {% for theme, scripts in all_themes.items() %}
@@ -32,7 +33,7 @@
             :class="{ 'active': $store.ui.activeCategory === '{{ theme }}' }"
             @click="$store.ui.activeCategory = $store.ui.activeCategory === '{{ theme }}' ? null : '{{ theme }}'">
       {{ theme_icon(theme, 14) }}
-      <span class="sidebar-category-name">{{ theme }}</span>
+      <span class="sidebar-category-name">{{ labels[theme] }}</span>
       <span class="category-count">{{ scripts | length }}</span>
     </button>
     {% endfor %}
@@ -49,7 +50,7 @@
       </svg>
       <span class="sidebar-cli-title">CLI usage</span>
     </div>
-    <p>Run any script with <code>uv run main.py &lt;key&gt;</code>.</p>
+    <p class="sidebar-info-text">Run any script via CLI:<br><code>uv run main.py &lt;key&gt;</code></p>
   </div>
 
   <div class="sidebar-status">

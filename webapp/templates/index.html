@@ -34,8 +34,8 @@
                   stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
           <span class="theme-header-icon">{{ theme_icon(theme, 13) }}</span>
-          <span class="theme-name">{{ theme }}</span>
-          <span class="theme-badge">{{ scripts | length }}</span>
+          <span class="theme-name">{{ labels[theme] }}</span>
+          <span class="theme-badge">{{ scripts | length }} script{{ 's' if scripts | length != 1 else '' }}</span>
         </div>
       </div>
 
@@ -48,7 +48,7 @@
            x-show="rowVisible($el)"
            x-transition.duration.100ms>
           <span class="row-num">{{ loop.index }}</span>
-          <span class="row-key">{{ theme }}.{{ name }}</span>
+          <span class="row-key">{{ name }}</span>
           <span class="row-title">{{ mod.TITLE }}</span>
           <div class="row-actions">
             <button class="icon-btn fav-btn"

@@ -28,6 +28,23 @@ def discover() -> dict[str, ModuleType]:
     return result
 
 
+def theme_labels() -> dict[str, str]:
+    """Return {theme_key: display_label} for each discovered theme.
+
+    Reads the LABEL module attribute; falls back to title-cased key if absent.
+
+    Returns:
+        Mapping of theme key to human-readable label string.
+    """
+    result: dict[str, str] = {}
+    for theme in pkgutil.iter_modules(_scripts_pkg.__path__):
+        if theme.name.startswith("_"):
+            continue
+        mod = importlib.import_module(f"scripts.{theme.name}")
+        result[theme.name] = getattr(mod, "LABEL", theme.name.replace("_", " ").title())
+    return result
+
+
 def discover_themes() -> dict[str, dict[str, ModuleType]]:
     """Return {theme: {script_name: module}} for all discovered scripts.
 
