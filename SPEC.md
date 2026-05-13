@@ -35,7 +35,8 @@ scriptorium/
     ├── scriptorium.spec         # PyInstaller spec for macOS .app bundle
     ├── scriptorium-win.spec     # PyInstaller spec for Windows folder bundle
     ├── build.sh                 # macOS build script
-    ├── build.ps1                # Windows build script
+    ├── build.ps1                # Windows build script (PowerShell)
+    ├── build.bat                # Windows build script (cmd.exe)
     └── installer.iss            # Inno Setup script for Windows installer
 ```
 
@@ -108,8 +109,8 @@ mode.
 
 ### Windows app
 
-```powershell
-powershell -ExecutionPolicy Bypass -File packaging\build.ps1   # → dist\scriptorium\
+```cmd
+packaging\build.bat                                             # → dist\scriptorium\
 iscc packaging\installer.iss                                    # → dist\ScriptoriumSetup.exe
 ```
 

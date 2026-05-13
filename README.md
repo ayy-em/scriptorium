@@ -44,8 +44,8 @@ See `packaging/build.sh` for prerequisites and `xattr` instructions.
 
 A Windows installer can be built with PyInstaller + Inno Setup.
 
-```powershell
-powershell -ExecutionPolicy Bypass -File packaging\build.ps1   # produces dist\scriptorium\
+```cmd
+packaging\build.bat                                             # produces dist\scriptorium\
 iscc packaging\installer.iss                                    # produces dist\ScriptoriumSetup.exe
 ```
 
