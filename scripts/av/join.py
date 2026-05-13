@@ -115,7 +115,7 @@ def _assert_compatible(files: list[Path]) -> None:
         raise RuntimeError(
             f"Cannot join — incompatible files detected:\n{bullet_list}\n\n"
             "Re-encode all files to a common format and resolution first, then retry:\n"
-            "  uv run main.py av.convert <file_or_dir> --to <format> --quality medium"
+            "  uv run main.py formats.convert_video <file_or_dir> --to <format> --quality medium"
         )
 
 

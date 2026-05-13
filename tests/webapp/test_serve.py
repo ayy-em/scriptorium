@@ -26,7 +26,7 @@ class TestIndex:
 
     def test_contains_script_links(self):
         response = client.get("/")
-        assert 'href="/scripts/av/convert"' in response.text
+        assert 'href="/scripts/formats/convert_video"' in response.text
 
     def test_includes_version(self):
         response = client.get("/")
@@ -51,23 +51,23 @@ class TestIndex:
 
 class TestScriptDetail:
     def test_known_script_returns_200(self):
-        response = client.get("/scripts/av/convert")
+        response = client.get("/scripts/formats/convert_video")
         assert response.status_code == 200
 
     def test_shows_script_title(self):
-        response = client.get("/scripts/av/convert")
-        assert "Convert media file" in response.text
+        response = client.get("/scripts/formats/convert_video")
+        assert "Convert video" in response.text
 
     def test_renders_form(self):
-        response = client.get("/scripts/av/convert")
+        response = client.get("/scripts/formats/convert_video")
         assert "<form" in response.text
 
     def test_form_has_fields(self):
-        response = client.get("/scripts/av/convert")
-        assert 'name="source"' in response.text
+        response = client.get("/scripts/formats/convert_video")
+        assert 'name="to_format"' in response.text
 
     def test_choices_render_as_select(self):
-        response = client.get("/scripts/av/convert")
+        response = client.get("/scripts/formats/convert_video")
         assert "<select" in response.text
 
     def test_unknown_script_returns_404(self):
@@ -84,15 +84,15 @@ class TestScriptDetail:
         assert 'type="checkbox"' in response.text
 
     def test_includes_sidebar(self):
-        response = client.get("/scripts/av/convert")
+        response = client.get("/scripts/formats/convert_video")
         assert "sidebar" in response.text
 
     def test_includes_version(self):
-        response = client.get("/scripts/av/convert")
+        response = client.get("/scripts/formats/convert_video")
         assert "status-version" in response.text
 
     def test_includes_breadcrumb(self):
-        response = client.get("/scripts/av/convert")
+        response = client.get("/scripts/formats/convert_video")
         assert "detail-breadcrumb" in response.text
 
 

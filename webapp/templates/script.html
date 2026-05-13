@@ -17,7 +17,17 @@
 <form id="run-form" data-run-url="/scripts/{{ key_path }}/run">
   {% for spec in field_specs %}
   <div class="field">
-    {% if spec.widget == "file" %}
+    {% if spec.widget == "file-multi" %}
+    <label>{{ spec.label }}{% if spec.required %}<span class="req">*</span>{% endif %}</label>
+    <div class="file-upload-wrap" x-data="fileUploadMulti('{{ key.split('.')[0] }}')">
+      <label class="file-drop" :class="{ 'has-file': filenames.length }" @dragover.prevent @drop.prevent="dropFile($event)">
+        <input type="file" class="file-hidden" multiple @change="upload($event)">
+        <span x-show="!filenames.length && !uploading" class="file-placeholder">Drop files here or click to browse</span>
+        <span x-show="uploading" class="file-uploading">Uploading&hellip;</span>
+        <span x-show="filenames.length && !uploading" x-text="filenames.length === 1 ? filenames[0] : filenames.length + ' files queued'" class="file-name"></span>
+      </label>
+    </div>
+    {% elif spec.widget == "file" %}
     <label for="f_{{ spec.dest }}">{{ spec.label }}{% if spec.required %}<span class="req">*</span>{% endif %}</label>
     <div class="file-upload-wrap" x-data="fileUpload('{{ key.split('.')[0] }}')">
       <label class="file-drop" :class="{ 'has-file': filename }" @dragover.prevent @drop.prevent="dropFile($event)">
@@ -101,6 +111,36 @@ function fileUpload(theme) {
       } catch (e) {
         this.filename = '';
         this.path = '';
+      } finally {
+        this.uploading = false;
+      }
+    }
+  };
+}
+
+function fileUploadMulti(theme) {
+  return {
+    filenames: [],
+    uploading: false,
+    async upload(event) {
+      var files = Array.from(event.target.files);
+      if (files.length) await this._sendAll(files);
+    },
+    async dropFile(event) {
+      var files = Array.from(event.dataTransfer.files || []);
+      if (files.length) await this._sendAll(files);
+    },
+    async _sendAll(files) {
+      this.uploading = true;
+      this.filenames = files.map(function(f) { return f.name; });
+      try {
+        await Promise.all(files.map(function(file) {
+          var body = new FormData();
+          body.append('file', file);
+          return fetch('/upload/' + theme, { method: 'POST', body: body });
+        }));
+      } catch (e) {
+        this.filenames = [];
       } finally {
         this.uploading = false;
       }

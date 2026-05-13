@@ -104,7 +104,7 @@ def _widget_for(action: argparse.Action) -> str:
     if action.type in (int, float):
         return "number"
     if action.type is Path and action.dest not in ("outputs", "inputs"):
-        return "file"
+        return "file-multi" if action.nargs == "?" else "file"
     return "text"
 
 
