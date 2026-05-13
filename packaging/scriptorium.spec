@@ -117,7 +117,7 @@ coll = COLLECT(
 app = BUNDLE(
     coll,
     name="Scriptorium.app",
-    icon=str(ROOT / "webapp" / "static" / "logo.webp"),
+    icon=str(ROOT / "packaging" / "logo.icns"),
     bundle_identifier="com.somethingreally.scriptorium",
     info_plist={
         "CFBundleDisplayName": "Scriptorium",
