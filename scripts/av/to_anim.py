@@ -49,20 +49,18 @@ def _stream_rotation(stream: dict) -> int:
     rot = stream.get("tags", {}).get("rotate", "0")
     try:
         return abs(int(rot)) % 360
-    except (ValueError, TypeError):
+    except ValueError, TypeError:
         pass
     for sd in stream.get("side_data_list", []):
         rot = sd.get("rotation", 0)
         try:
             return abs(int(rot)) % 360
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             continue
     return 0
 
 
-def _cap_scale_filter(
-    src_w: int, src_h: int, user_width: int | None, cap: tuple[int, int] | None = None
-) -> str | None:
+def _cap_scale_filter(src_w: int, src_h: int, user_width: int | None, cap: tuple[int, int] | None = None) -> str | None:
     """Return an ffmpeg scale filter that fits output within the resolution cap.
 
     Picks the cap based on orientation: 1920x1080 for landscape/square,
@@ -254,9 +252,7 @@ def _make_gif(
 
     palette_vf = f"{vf_base},format=rgb24,{palettegen}"
     try:
-        run_ffmpeg(
-            ["-v", "error", *time_args, "-i", str(source), "-vf", palette_vf, "-update", "1", str(palette)]
-        )
+        run_ffmpeg(["-v", "error", *time_args, "-i", str(source), "-vf", palette_vf, "-update", "1", str(palette)])
         run_ffmpeg(
             [
                 *time_args,
@@ -289,9 +285,7 @@ def _gifsicle_optimize(path: Path) -> None:
     )
 
 
-def _make_webp(
-    source: Path, time_args: list[str], output: Path, vf_base: str, loop: int
-) -> None:
+def _make_webp(source: Path, time_args: list[str], output: Path, vf_base: str, loop: int) -> None:
     """Generate an animated WebP.
 
     Uses quality=80 and compression_level=6 for a good size/quality balance.

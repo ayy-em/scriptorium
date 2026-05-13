@@ -106,14 +106,21 @@ def filmstrip(
         tmp_dir = Path(tmp)
         for idx, seek in enumerate(positions):
             frame_path = tmp_dir / f"frame_{idx:03d}.jpg"
-            run_ffmpeg([
-                "-ss", f"{seek:.3f}",
-                "-i", str(source),
-                "-frames:v", "1",
-                "-update", "1",
-                "-q:v", "2",
-                str(frame_path),
-            ])
+            run_ffmpeg(
+                [
+                    "-ss",
+                    f"{seek:.3f}",
+                    "-i",
+                    str(source),
+                    "-frames:v",
+                    "1",
+                    "-update",
+                    "1",
+                    "-q:v",
+                    "2",
+                    str(frame_path),
+                ]
+            )
             frame = Image.open(frame_path)
             frame.thumbnail((frame_w, frame_h), Image.LANCZOS)
             col = idx % cols

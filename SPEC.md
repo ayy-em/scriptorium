@@ -31,9 +31,12 @@ scriptorium/
 │   ├── static/              # CSS, logo
 │   └── templates/           # Jinja2 templates (base, index, script detail)
 └── packaging/
-    ├── entrypoint.py        # frozen .app entry (web server + --run-script mode)
-    ├── scriptorium.spec     # PyInstaller spec for macOS .app bundle
-    └── build.sh             # one-command build script
+    ├── entrypoint.py            # frozen app entry (web server + --run-script mode)
+    ├── scriptorium.spec         # PyInstaller spec for macOS .app bundle
+    ├── scriptorium-win.spec     # PyInstaller spec for Windows folder bundle
+    ├── build.sh                 # macOS build script
+    ├── build.ps1                # Windows build script
+    └── installer.iss            # Inno Setup script for Windows installer
 ```
 
 `inputs/`, `outputs/`, and `past_inputs/` directories are gitignored everywhere
@@ -98,9 +101,25 @@ bash packaging/build.sh                 # → dist/Scriptorium.app
 ```
 
 The `.app` bundle uses PyInstaller. On launch it finds a free port, starts
-uvicorn, and opens the default browser. Scripts run as subprocesses via the
-frozen binary's `--run-script` flag (same binary, different argv). The sidebar
-hides the CLI usage section when running in frozen mode.
+uvicorn, and opens a native webview window (pywebview/WKWebView). Scripts run
+as subprocesses via the frozen binary's `--run-script` flag (same binary,
+different argv). The sidebar hides the CLI usage section when running in frozen
+mode.
+
+### Windows app
+
+```powershell
+powershell -ExecutionPolicy Bypass -File packaging\build.ps1   # → dist\scriptorium\
+iscc packaging\installer.iss                                    # → dist\ScriptoriumSetup.exe
+```
+
+The Windows build uses PyInstaller in folder-bundle mode (no macOS `BUNDLE`
+step). The entry point is the same `packaging/entrypoint.py` — it attempts a
+pywebview native window and falls back to the default browser if the platform
+backend (pythonnet/winforms) cannot initialise. The Inno Setup installer places
+files in `%LOCALAPPDATA%\Scriptorium`, creates Start Menu shortcuts, and
+optionally adds the install directory to the user PATH. No admin rights
+required (`PrivilegesRequired=lowest`).
 
 ### Programmatic
 

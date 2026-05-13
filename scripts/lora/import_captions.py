@@ -20,6 +20,8 @@ def _outputs() -> Path:
     d = outputs_dir("lora") / "generated_captions"
     d.mkdir(parents=True, exist_ok=True)
     return d
+
+
 _KEY_RE = re.compile(r"^img_(\d+)\.txt$")
 
 

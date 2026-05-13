@@ -42,6 +42,7 @@ AUDIO_ONLY_EXTS = frozenset(
 # Containers with reliable cover-art embedding support via ffmpeg.
 COVER_SUPPORTED_EXTS = frozenset({".mp4", ".m4v", ".m4a", ".mp3", ".mkv", ".flac"})
 
+
 def av_inputs_dir() -> Path:
     """Return the default av inputs directory, creating it if needed."""
     return inputs_dir("av")

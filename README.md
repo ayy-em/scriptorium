@@ -40,6 +40,21 @@ File outputs go to `~/scriptorium/outputs/<theme>/`; uploaded inputs are saved t
 
 See `packaging/build.sh` for prerequisites and `xattr` instructions.
 
+## How To Use: Windows Installer
+
+A Windows installer can be built with PyInstaller + Inno Setup.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File packaging\build.ps1   # produces dist\scriptorium\
+iscc packaging\installer.iss                                    # produces dist\ScriptoriumSetup.exe
+```
+
+The installer places the app in `%LOCALAPPDATA%\Scriptorium`, creates a Start Menu
+shortcut, and optionally adds the install directory to PATH for CLI usage. No admin
+rights required.
+
+See `packaging/build.ps1` for prerequisites.
+
 ## How To Use: CLI
 
 ```sh
@@ -52,16 +67,19 @@ uv run main.py <theme>.<script> [args]  # run it
 
 | Script     | Description                     |
 |------------|---------------------------------|
-| av.convert | Convert media file to a different format |
-| av.dump_frames | Dump all frames from a video clip between two timestamps |
-| av.filmstrip | Extract frames and arrange them on a filmstrip sheet (PDF/PNG) |
+| av.dump_frames | Dump all frames from a video clip |
+| av.filmstrip | Video filmstrip sheet |
 | av.join    | Join multiple media files |
-| av.split   | Split media file into multiple segments |
+| av.split   | Split media file in multiple segments |
 | av.tag     | Read/write media metadata tags |
-| av.to_anim | Convert a video segment to an animated GIF/WebP |
-| av.trim    | Trim a media file to a time range |
+| av.to_anim | Turn a video segment into an animated GIF/WebP |
+| av.trim    | Trim a media file |
 | av.volume  | Adjust audio volume, normalize, or apply fade-in/out |
 | downloads.download | Download media from a URL (YouTube, Vimeo, etc.) |
+| formats.convert_audio | Convert audio |
+| formats.convert_image | Convert image |
+| formats.convert_tabular | Convert tabular |
+| formats.convert_video | Convert video |
 | lora.export_captions | Export captions to JSON |
 | lora.import_captions | Import captions from JSON |
 | lora.renumber | Renumber LoRA dataset images |
