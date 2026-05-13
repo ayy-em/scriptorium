@@ -27,7 +27,7 @@ templates.env.globals["has_ffmpeg"] = has_ffmpeg()
 templates.env.globals["ffmpeg_install_hint"] = (
     "Install via Homebrew: brew install ffmpeg"
     if sys.platform == "darwin"
-    else "Install ffmpeg and ensure it is on your PATH."
+    else "Download ffmpeg from gyan.dev/ffmpeg/builds and add it to your PATH."
 )
 
 

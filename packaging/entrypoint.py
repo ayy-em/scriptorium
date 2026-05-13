@@ -1,12 +1,12 @@
-"""Entry point for the frozen Scriptorium .app bundle.
+"""Entry point for the frozen Scriptorium app (.app on macOS, .exe on Windows).
 
 Handles two modes:
   --run-script <key> [args...]   Run a script via the CLI dispatcher (used
                                  internally by the webapp subprocess runner).
   (no args)                      Start the web server in a background thread
-                                 and host the UI in a native WKWebView window
-                                 so the .app owns its own dock icon and has
-                                 no browser chrome.
+                                 and open a native webview window (pywebview).
+                                 Falls back to the default browser if the
+                                 native window cannot be initialised.
 """
 
 import socket
@@ -51,15 +51,14 @@ def main() -> None:
 
     try:
         import webview  # noqa: PLC0415
-    except ImportError:
+
+        webview.create_window("Scriptorium", url, width=1200, height=800)
+        webview.start()
+    except Exception:
         import webbrowser  # noqa: PLC0415
 
         webbrowser.open(url)
         server.join()
-        return
-
-    webview.create_window("Scriptorium", url, width=1200, height=800)
-    webview.start()
 
 
 if __name__ == "__main__":
