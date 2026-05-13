@@ -26,10 +26,11 @@ Submitting the form runs the script and streams output in real time.
 
 ## How To Use: macOS App
 
-A standalone `.app` bundle can be built with PyInstaller — no Python or uv needed
-on the target machine.
+A standalone `.app` bundle can be built with PyInstaller — no Python or uv needed on the target machine.
 
 ```sh
+uv sync --all-extras
+brew install ffmpeg
 bash packaging/build.sh                 # produces dist/Scriptorium.app
 ```
 

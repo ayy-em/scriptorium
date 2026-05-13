@@ -66,6 +66,8 @@ hidden_imports = [
     "pandas",
     "openpyxl",
     "ffmpeg",
+    "webview",
+    "webview.platforms.cocoa",
 ]
 
 # Data files that must be included in the bundle.
@@ -102,7 +104,6 @@ exe = EXE(
     strip=False,
     upx=False,
     console=False,
-    target_arch="universal2",
 )
 
 coll = COLLECT(
