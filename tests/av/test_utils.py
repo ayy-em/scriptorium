@@ -16,19 +16,19 @@ from scripts.av._utils import (
 
 
 def test_av_inputs_dir_creates_and_returns_path(tmp_path, monkeypatch):
-    monkeypatch.setattr("scripts.av._utils._AV_DIR", tmp_path)
+    monkeypatch.setattr("core.paths._bundle_dir", lambda: tmp_path)
     d = av_inputs_dir()
     assert d.exists()
     assert d.name == "inputs"
-    assert d.parent == tmp_path
+    assert d.parent == tmp_path / "scripts" / "av"
 
 
 def test_av_outputs_dir_creates_and_returns_path(tmp_path, monkeypatch):
-    monkeypatch.setattr("scripts.av._utils._AV_DIR", tmp_path)
+    monkeypatch.setattr("core.paths._bundle_dir", lambda: tmp_path)
     d = av_outputs_dir()
     assert d.exists()
     assert d.name == "outputs"
-    assert d.parent == tmp_path
+    assert d.parent == tmp_path / "scripts" / "av"
 
 
 def test_find_media_files_filters_by_extension(tmp_path):

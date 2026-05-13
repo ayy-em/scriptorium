@@ -4,11 +4,15 @@ import argparse
 from pathlib import Path
 import sys
 
+from core.paths import inputs_dir
 from scripts.lora._dataset import IMG_NAME_RE, find_captions, find_images
 
 TITLE = "Validate a LoRA training dataset"
-_INPUTS_DIR = Path(__file__).parent / "inputs"
 DESCRIPTION = "Check that images follow img_NNN naming and each has a matching caption .txt file."
+
+
+def _inputs() -> Path:
+    return inputs_dir("lora")
 
 
 def validate(directory: Path) -> bool:
@@ -66,7 +70,7 @@ def get_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--inputs",
         type=Path,
-        default=_INPUTS_DIR,
+        default=None,
         metavar="DIR",
         help="dataset directory (default: lora/inputs/; bare name resolves to lora/inputs/)",
     )
@@ -76,7 +80,7 @@ def get_parser() -> argparse.ArgumentParser:
 def run() -> None:
     """CLI entrypoint. Parse arguments and dispatch to validate()."""
     args = get_parser().parse_args()
-    inputs = args.inputs
+    inputs = args.inputs or _inputs()
     if inputs.parent == Path("."):
-        inputs = _INPUTS_DIR / inputs.name
+        inputs = _inputs() / inputs.name
     sys.exit(0 if validate(inputs) else 1)

@@ -1,6 +1,6 @@
 # Scriptorium
 
-Themed utility scripts with a single CLI entrypoint.
+Themed utility scripts with a web UI and single CLI entrypoint.
 
 ## Quickstart Guide
 
@@ -14,7 +14,32 @@ Note individual scripts' prerequisites listed below:
 - `av.*` scripts require **ffmpeg** (and **ffprobe**) to be on your `PATH` for all platforms.
     - **Fix:** Install via your package manager (e.g. `winget install Gyan.FFmpeg`, `brew install ffmpeg`).
 
-## How To Use
+## How To Use: Web UI
+
+```sh
+uv run webapp                           # start at http://127.0.0.1:8000
+```
+
+The web UI lists all scripts grouped by theme. Clicking a script opens a detail
+page with an auto-generated form. File inputs support drag-and-drop upload.
+Submitting the form runs the script and streams output in real time.
+
+## How To Use: macOS App
+
+A standalone `.app` bundle can be built with PyInstaller — no Python or uv needed
+on the target machine.
+
+```sh
+bash packaging/build.sh                 # produces dist/Scriptorium.app
+```
+
+Double-clicking the app starts the web server and opens a browser window.
+File outputs go to `~/scriptorium/outputs/<theme>/`; uploaded inputs are saved to
+`~/scriptorium/inputs/<theme>/`.
+
+See `packaging/build.sh` for prerequisites and `xattr` instructions.
+
+## How To Use: CLI
 
 ```sh
 uv run main.py                          # list all scripts

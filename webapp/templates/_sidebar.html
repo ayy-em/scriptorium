@@ -41,6 +41,19 @@
 
   <div class="sidebar-spacer"></div>
 
+  {% if not is_frozen and not has_ffmpeg %}
+  <div class="ffmpeg-banner">
+    <div class="ffmpeg-banner-title">ffmpeg not found</div>
+    <p>A/V scripts need ffmpeg on your PATH.<br><code>{{ ffmpeg_install_hint }}</code></p>
+  </div>
+  {% elif is_frozen and not has_ffmpeg %}
+  <div class="ffmpeg-banner">
+    <div class="ffmpeg-banner-title">ffmpeg not found</div>
+    <p>A/V scripts need ffmpeg installed.<br><code>{{ ffmpeg_install_hint }}</code></p>
+  </div>
+  {% endif %}
+
+  {% if not is_frozen %}
   <div class="sidebar-cli">
     <div class="sidebar-cli-header">
       <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
@@ -52,6 +65,7 @@
     </div>
     <p class="sidebar-info-text">Run any script via CLI:<br><code class="sidebar-cli-code">uv run main.py &lt;key&gt;</code></p>
   </div>
+  {% endif %}
 
   <div class="sidebar-cli sidebar-github">
     <div class="sidebar-cli-header">

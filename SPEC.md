@@ -15,6 +15,7 @@ no `sys.exit` outside of `run()`.
 scriptorium/
 ├── main.py                  # CLI entrypoint
 ├── core/
+│   ├── paths.py             # centralized path resolution (frozen vs dev)
 │   ├── registry.py          # auto-discovers scripts and themes
 │   └── runner.py            # dispatch + middleware (run, run_fn)
 ├── scripts/
@@ -24,11 +25,15 @@ scriptorium/
 │       ├── <script>.py      # one script per file
 │       ├── inputs/          # gitignored — drop files here to process
 │       └── outputs/         # gitignored — results land here
-└── webapp/
-    ├── app.py               # FastAPI server
-    ├── _form.py             # argparse introspection for auto-generated forms
-    ├── static/              # CSS, logo
-    └── templates/           # Jinja2 templates (base, index, script detail)
+├── webapp/
+│   ├── app.py               # FastAPI server
+│   ├── _form.py             # argparse introspection for auto-generated forms
+│   ├── static/              # CSS, logo
+│   └── templates/           # Jinja2 templates (base, index, script detail)
+└── packaging/
+    ├── entrypoint.py        # frozen .app entry (web server + --run-script mode)
+    ├── scriptorium.spec     # PyInstaller spec for macOS .app bundle
+    └── build.sh             # one-command build script
 ```
 
 `inputs/`, `outputs/`, and `past_inputs/` directories are gitignored everywhere
@@ -71,13 +76,31 @@ Run 'uv run main.py av.<script> --help' for usage details.
 ### Webapp
 
 ```sh
-uv run main.py web.serve                # start the local web UI (default: http://127.0.0.1:8000)
-uv run main.py web.serve --port 9000    # custom port
+uv run webapp                           # start the local web UI (default: http://127.0.0.1:8000)
+uv run webapp --port 9000               # custom port
 ```
 
 The web UI lists all scripts grouped by theme, with live search and dark/light mode.
 Clicking a script opens a detail page with an auto-generated form (built from
-`get_parser()`). Submitting the form runs the script and streams its output via SSE.
+`get_parser()`). Path-typed arguments render as drag-and-drop file upload fields
+(except `--outputs` and `--inputs` directory args, which remain text fields).
+Submitting the form runs the script and streams its output via SSE.
+
+Uploaded files are saved to the theme's inputs directory via `POST /upload/{theme}`.
+
+When ffmpeg is not found on PATH, a banner appears in the sidebar with install
+instructions.
+
+### macOS app
+
+```sh
+bash packaging/build.sh                 # → dist/Scriptorium.app
+```
+
+The `.app` bundle uses PyInstaller. On launch it finds a free port, starts
+uvicorn, and opens the default browser. Scripts run as subprocesses via the
+frozen binary's `--run-script` flag (same binary, different argv). The sidebar
+hides the CLI usage section when running in frozen mode.
 
 ### Programmatic
 
@@ -133,23 +156,27 @@ theme's `inputs/` directory automatically, so users can type just a filename:
 uv run main.py av.convert clip.mp4 --to mp3   # resolves to av/inputs/clip.mp4
 ```
 
-Each theme exposes helper functions (typically in a `_utils.py` or `_dataset.py`
-private module) that return the resolved `inputs/` and `outputs/` `Path` objects
-and create the directories on demand if they do not exist:
+### `core.paths` — centralized path resolution
+
+All path resolution goes through `core.paths`, which detects whether the app is
+running as a frozen PyInstaller bundle or in development:
+
+| Mode   | `inputs_dir("av")`                | `outputs_dir("av")`                |
+|--------|-----------------------------------|------------------------------------|
+| Dev    | `scripts/av/inputs/`              | `scripts/av/outputs/`              |
+| Frozen | `~/scriptorium/inputs/av/`        | `~/scriptorium/outputs/av/`        |
+
+Theme helpers delegate to `core.paths`:
 
 ```python
-_THEME_DIR = Path(__file__).parent
+from core.paths import inputs_dir, outputs_dir
 
-def inputs_dir() -> Path:
-    d = _THEME_DIR / "inputs"
-    d.mkdir(parents=True, exist_ok=True)
-    return d
-
-def outputs_dir() -> Path:
-    d = _THEME_DIR / "outputs"
-    d.mkdir(parents=True, exist_ok=True)
-    return d
+def av_inputs_dir() -> Path:
+    return inputs_dir("av")
 ```
+
+`core.paths` also provides `templates_dir()`, `static_dir()`, `has_ffmpeg()`,
+`read_version()`, and the `FROZEN` boolean.
 
 ---
 
@@ -288,8 +315,9 @@ from scripts.lora._dataset import find_images
    `prog="uv run main.py <theme>.<script>"`, `epilog=_EXAMPLES`, and
    `formatter_class=argparse.RawDescriptionHelpFormatter`; `run()` calls
    `get_parser().parse_args()`
-7. Resolve bare filenames to `<theme>/inputs/<name>` inside `run()` before passing
-   to public functions; write outputs to `<theme>/outputs/` by default
+7. Use `core.paths.inputs_dir("<theme>")` and `core.paths.outputs_dir("<theme>")`
+   for default paths; resolve bare filenames inside `run()` before passing to
+   public functions
 8. Verify it appears in `uv run main.py`
 9. Verify `uv run main.py <theme>` lists the script with its title and description
 10. Verify `uv run main.py <theme>.<script> --help` shows the correct usage line,
@@ -306,8 +334,9 @@ from scripts.lora._dataset import find_images
    - `DESCRIPTION = "..."` — one-line tagline for the web UI header and `uv run main.py <theme>`
 3. Create `scripts/<theme>/inputs/` and `scripts/<theme>/outputs/` directories
    (they are gitignored automatically via the root `.gitignore` pattern)
-4. Add a `_utils.py` (or equivalent) with `inputs_dir()` and `outputs_dir()` helpers
-   if the theme's scripts read from or write to local files
+4. Add a `_utils.py` (or equivalent) that delegates to `core.paths.inputs_dir()`
+   and `core.paths.outputs_dir()` if the theme's scripts read from or write to
+   local files
 5. Verify the theme appears in `uv run main.py` (top-level listing)
 6. Verify `uv run main.py <theme>` prints the description followed by the script list
 7. Verify the theme appears in the web UI sidebar with the correct label and description

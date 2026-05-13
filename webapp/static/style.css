@@ -953,5 +953,93 @@ input[type=checkbox] { width: 15px; height: 15px; cursor: pointer; flex-shrink: 
   color: var(--text-faint);
 }
 
+/* ─── File upload widget ────────────────────────────────────────────────── */
+.file-upload-wrap {
+  max-width: 460px;
+}
+
+.file-drop {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 64px;
+  padding: 0.75rem 1rem;
+  border: 2px dashed var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-panel);
+  cursor: pointer;
+  transition: border-color 150ms ease, background-color 150ms ease;
+}
+
+.file-drop:hover,
+.file-drop:focus-within {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+}
+
+.file-drop.has-file {
+  border-style: solid;
+  border-color: var(--accent);
+}
+
+.file-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+}
+
+.file-placeholder {
+  font-size: 0.84rem;
+  color: var(--text-faint);
+}
+
+.file-uploading {
+  font-size: 0.84rem;
+  color: var(--accent-text);
+}
+
+.file-name {
+  font-size: 0.84rem;
+  font-weight: 500;
+  color: var(--accent-text);
+  font-family: var(--font-mono);
+}
+
+/* ─── FFmpeg banner ─────────────────────────────────────────────────────── */
+.ffmpeg-banner {
+  margin: 0 0.625rem 0.5rem;
+  padding: 0.6rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid oklch(72% 0.152 85 / 30%);
+  background: oklch(72% 0.152 85 / 8%);
+}
+
+.ffmpeg-banner-title {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: oklch(55% 0.140 85);
+  margin-bottom: 0.2rem;
+}
+
+html.dark .ffmpeg-banner-title {
+  color: oklch(78% 0.140 85);
+}
+
+.ffmpeg-banner p {
+  font-size: 0.73rem;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
+.ffmpeg-banner code {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  background: var(--bg-hover);
+  padding: 0.1rem 0.3rem;
+  border-radius: 4px;
+}
+
 /* [x-cloak] hides Alpine-managed elements before Alpine initialises */
 [x-cloak] { display: none !important; }

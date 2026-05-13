@@ -26,9 +26,15 @@ class TestFieldsFromParser:
         assert f.required is True
         assert f.flag is None
 
-    def test_positional_path_is_text_widget(self):
+    def test_positional_path_is_file_widget(self):
         parser = _parser()
         parser.add_argument("path", type=Path)
+        (f,) = fields_from_parser(parser)
+        assert f.widget == "file"
+
+    def test_outputs_path_is_text_widget(self):
+        parser = _parser()
+        parser.add_argument("--outputs", type=Path)
         (f,) = fields_from_parser(parser)
         assert f.widget == "text"
 

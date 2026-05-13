@@ -6,11 +6,20 @@ from pathlib import Path
 import re
 import sys
 
+from core.paths import inputs_dir, outputs_dir
+
 TITLE = "Import captions from JSON"
 DESCRIPTION = "Read a captions.json and write individual img_NNN.txt files to outputs/generated_captions/."
 
-_INPUTS_DIR = Path(__file__).parent / "inputs"
-_OUTPUTS_DIR = Path(__file__).parent / "outputs" / "generated_captions"
+
+def _inputs() -> Path:
+    return inputs_dir("lora")
+
+
+def _outputs() -> Path:
+    d = outputs_dir("lora") / "generated_captions"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
 _KEY_RE = re.compile(r"^img_(\d+)\.txt$")
 
 
@@ -89,7 +98,7 @@ def get_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--input",
         type=Path,
-        default=_INPUTS_DIR / "captions.json",
+        default=None,
         metavar="FILE",
         help="source JSON file (default: lora/inputs/captions.json; bare name resolves to lora/inputs/)",
     )
@@ -99,7 +108,7 @@ def get_parser() -> argparse.ArgumentParser:
 def run() -> None:
     """CLI entrypoint. Parse arguments and dispatch to import_captions()."""
     args = get_parser().parse_args()
-    input_file = args.input
+    input_file = args.input or (_inputs() / "captions.json")
     if input_file.parent == Path("."):
-        input_file = _INPUTS_DIR / input_file.name
-    import_captions(input_file, _OUTPUTS_DIR)
+        input_file = _inputs() / input_file.name
+    import_captions(input_file, _outputs())

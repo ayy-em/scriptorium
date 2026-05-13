@@ -5,7 +5,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from fastapi.testclient import TestClient
 
-from webapp.app import _read_git_hash, _read_version, _themes_search_json, app
+from core.paths import read_version
+from webapp.app import _read_git_hash, _themes_search_json, app
 
 client = TestClient(app)
 
@@ -149,7 +150,7 @@ class TestRunEndpoint:
 
 class TestHelpers:
     def test_read_version_returns_string(self):
-        v = _read_version()
+        v = read_version()
         assert isinstance(v, str)
         assert len(v) > 0
 

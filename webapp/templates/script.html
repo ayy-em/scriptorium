@@ -17,7 +17,18 @@
 <form id="run-form" data-run-url="/scripts/{{ key_path }}/run">
   {% for spec in field_specs %}
   <div class="field">
-    {% if spec.widget == "checkbox" %}
+    {% if spec.widget == "file" %}
+    <label for="f_{{ spec.dest }}">{{ spec.label }}{% if spec.required %}<span class="req">*</span>{% endif %}</label>
+    <div class="file-upload-wrap" x-data="fileUpload('{{ key.split('.')[0] }}')">
+      <label class="file-drop" :class="{ 'has-file': filename }" @dragover.prevent @drop.prevent="dropFile($event)">
+        <input type="file" class="file-hidden" @change="upload($event)">
+        <span x-show="!filename && !uploading" class="file-placeholder">Drop a file here or click to browse</span>
+        <span x-show="uploading" class="file-uploading">Uploading&hellip;</span>
+        <span x-show="filename && !uploading" x-text="filename" class="file-name"></span>
+      </label>
+      <input type="hidden" id="f_{{ spec.dest }}" name="{{ spec.dest }}" x-model="path">
+    </div>
+    {% elif spec.widget == "checkbox" %}
     <div class="checkbox-row">
       <input type="checkbox" id="f_{{ spec.dest }}" name="{{ spec.dest }}" value="on">
       <label for="f_{{ spec.dest }}">{{ spec.label }}</label>
@@ -65,6 +76,38 @@
 </div>
 
 <script>
+function fileUpload(theme) {
+  return {
+    filename: '',
+    path: '',
+    uploading: false,
+    async upload(event) {
+      var file = event.target.files[0];
+      if (file) await this._send(file);
+    },
+    async dropFile(event) {
+      var file = (event.dataTransfer.files || [])[0];
+      if (file) await this._send(file);
+    },
+    async _send(file) {
+      this.uploading = true;
+      this.filename = file.name;
+      var body = new FormData();
+      body.append('file', file);
+      try {
+        var res = await fetch('/upload/' + theme, { method: 'POST', body: body });
+        var data = await res.json();
+        this.path = data.path;
+      } catch (e) {
+        this.filename = '';
+        this.path = '';
+      } finally {
+        this.uploading = false;
+      }
+    }
+  };
+}
+
 (function () {
   var form = document.getElementById('run-form');
   var outputSection = document.getElementById('output-section');

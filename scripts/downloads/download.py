@@ -6,21 +6,15 @@ import sys
 
 import yt_dlp
 
+from core.paths import outputs_dir as _core_outputs_dir
+
 TITLE = "Download media from a URL (YouTube, Vimeo, etc.)"
 DESCRIPTION = "Download a video (or extract audio as MP3) from a supported URL using yt-dlp."
 
-_DOWNLOADS_DIR = Path(__file__).parent
-
 
 def _outputs_dir() -> Path:
-    """Return the default downloads outputs directory, creating it if needed.
-
-    Returns:
-        Path to scripts/downloads/outputs/.
-    """
-    d = _DOWNLOADS_DIR / "outputs"
-    d.mkdir(parents=True, exist_ok=True)
-    return d
+    """Return the default downloads outputs directory, creating it if needed."""
+    return _core_outputs_dir("downloads")
 
 
 def download(

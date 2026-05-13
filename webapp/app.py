@@ -7,44 +7,38 @@ import json
 from pathlib import Path
 import subprocess
 import sys
-import tomllib
 
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import StreamingResponse
+from fastapi import FastAPI, HTTPException, Request, UploadFile
+from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
+from core.paths import FROZEN, has_ffmpeg, inputs_dir, read_version, static_dir, templates_dir
 from core.registry import discover, discover_themes, theme_descriptions, theme_labels
 from webapp._form import build_argv, fields_from_parser
 
 _REPO_ROOT = Path(__file__).parent.parent
-_TEMPLATES_DIR = Path(__file__).parent / "templates"
-_STATIC_DIR = Path(__file__).parent / "static"
 
 app = FastAPI(title="Scriptorium")
-app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
-templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
-
-
-def _read_version() -> str:
-    """Read the project version from pyproject.toml.
-
-    Returns:
-        Version string, or "—" on any failure.
-    """
-    try:
-        with open(_REPO_ROOT / "pyproject.toml", "rb") as f:
-            return tomllib.load(f)["project"]["version"]
-    except Exception:
-        return "—"
+app.mount("/static", StaticFiles(directory=str(static_dir())), name="static")
+templates = Jinja2Templates(directory=str(templates_dir()))
+templates.env.globals["is_frozen"] = FROZEN
+templates.env.globals["has_ffmpeg"] = has_ffmpeg()
+templates.env.globals["ffmpeg_install_hint"] = (
+    "Install via Homebrew: brew install ffmpeg"
+    if sys.platform == "darwin"
+    else "Install ffmpeg and ensure it is on your PATH."
+)
 
 
 def _read_git_hash() -> str:
     """Read the short git commit hash of the current HEAD.
 
     Returns:
-        Short hash string, or "—" on any failure.
+        Short hash string, or "—" on any failure (including frozen mode).
     """
+    if FROZEN:
+        return "—"
     try:
         result = subprocess.run(
             ["git", "rev-parse", "--short", "HEAD"],
@@ -77,7 +71,7 @@ def _themes_search_json(themes: dict) -> str:
     return json.dumps(data).replace("</", "<\\/")
 
 
-_APP_VERSION = _read_version()
+_APP_VERSION = read_version()
 _GIT_HASH = _read_git_hash()
 
 
@@ -151,6 +145,16 @@ async def run_script(theme: str, script_name: str, request: Request) -> Streamin
     )
 
 
+@app.post("/upload/{theme}")
+async def upload_file(theme: str, file: UploadFile) -> JSONResponse:
+    """Accept a file upload and save it to the theme's inputs directory."""
+    save_dir = inputs_dir(theme)
+    save_path = save_dir / file.filename
+    content = await file.read()
+    save_path.write_bytes(content)
+    return JSONResponse({"path": str(save_path), "filename": file.filename})
+
+
 async def _stream_script(key: str, argv: list[str]):
     """Run a script as a subprocess and yield its output as SSE events.
 
@@ -164,14 +168,18 @@ async def _stream_script(key: str, argv: list[str]):
     Yields:
         SSE-formatted byte strings.
     """
+    if FROZEN:
+        cmd = [sys.executable, "--run-script", key, *argv]
+        cwd = None
+    else:
+        cmd = [sys.executable, str(_REPO_ROOT / "main.py"), key, *argv]
+        cwd = str(_REPO_ROOT)
+
     proc = await asyncio.create_subprocess_exec(
-        sys.executable,
-        str(_REPO_ROOT / "main.py"),
-        key,
-        *argv,
+        *cmd,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
-        cwd=str(_REPO_ROOT),
+        cwd=cwd,
     )
 
     async for line in proc.stdout:  # type: ignore[union-attr]

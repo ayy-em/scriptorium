@@ -4,6 +4,8 @@ import json
 from pathlib import Path
 import subprocess
 
+from core.paths import inputs_dir, outputs_dir
+
 MEDIA_EXTS = frozenset(
     {
         ".mp4",
@@ -40,29 +42,14 @@ AUDIO_ONLY_EXTS = frozenset(
 # Containers with reliable cover-art embedding support via ffmpeg.
 COVER_SUPPORTED_EXTS = frozenset({".mp4", ".m4v", ".m4a", ".mp3", ".mkv", ".flac"})
 
-_AV_DIR = Path(__file__).parent
-
-
 def av_inputs_dir() -> Path:
-    """Return the default av inputs directory, creating it if needed.
-
-    Returns:
-        Path to scripts/av/inputs/.
-    """
-    d = _AV_DIR / "inputs"
-    d.mkdir(parents=True, exist_ok=True)
-    return d
+    """Return the default av inputs directory, creating it if needed."""
+    return inputs_dir("av")
 
 
 def av_outputs_dir() -> Path:
-    """Return the default av outputs directory, creating it if needed.
-
-    Returns:
-        Path to scripts/av/outputs/.
-    """
-    d = _AV_DIR / "outputs"
-    d.mkdir(parents=True, exist_ok=True)
-    return d
+    """Return the default av outputs directory, creating it if needed."""
+    return outputs_dir("av")
 
 
 def find_media_files(directory: Path) -> list[Path]:

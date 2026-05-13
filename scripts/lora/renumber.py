@@ -4,11 +4,15 @@ import argparse
 from pathlib import Path
 import sys
 
+from core.paths import inputs_dir
 from scripts.lora._dataset import find_images
 
 TITLE = "Renumber LoRA dataset images"
-_INPUTS_DIR = Path(__file__).parent / "inputs"
 DESCRIPTION = "Rename all images (and paired captions) to sequential img_001, img_002, ... naming."
+
+
+def _inputs() -> Path:
+    return inputs_dir("lora")
 
 
 def renumber(directory: Path, *, dry_run: bool) -> None:
@@ -70,7 +74,7 @@ def get_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--inputs",
         type=Path,
-        default=_INPUTS_DIR,
+        default=None,
         metavar="DIR",
         help="dataset directory (default: lora/inputs/; bare name resolves to lora/inputs/)",
     )
@@ -85,7 +89,7 @@ def get_parser() -> argparse.ArgumentParser:
 def run() -> None:
     """CLI entrypoint. Parse arguments and dispatch to renumber()."""
     args = get_parser().parse_args()
-    inputs = args.inputs
+    inputs = args.inputs or _inputs()
     if inputs.parent == Path("."):
-        inputs = _INPUTS_DIR / inputs.name
+        inputs = _inputs() / inputs.name
     renumber(inputs, dry_run=not args.apply)

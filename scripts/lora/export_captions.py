@@ -5,20 +5,26 @@ import json
 from pathlib import Path
 import sys
 
+from core.paths import inputs_dir, outputs_dir
 from scripts.lora._dataset import find_captions
 
 TITLE = "Export captions to JSON"
 DESCRIPTION = "Collect all .txt caption files in the dataset and write {filename: text} as JSON."
 
-_INPUTS_DIR = Path(__file__).parent / "inputs"
-_OUTPUTS_DIR = Path(__file__).parent / "outputs"
+
+def _inputs() -> Path:
+    return inputs_dir("lora")
+
+
+def _outputs() -> Path:
+    return outputs_dir("lora")
 
 
 def _resolve_output(name: str | None) -> Path | None:
     if name is None:
         return None
     stem = Path(name).stem  # tolerate 'captions' or 'captions.json'
-    return _OUTPUTS_DIR / f"{stem}.json"
+    return _outputs() / f"{stem}.json"
 
 
 def export(directory: Path, output: Path | None) -> None:
@@ -58,7 +64,7 @@ def get_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--inputs",
         type=Path,
-        default=_INPUTS_DIR,
+        default=None,
         metavar="DIR",
         help="dataset directory (default: lora/inputs/; bare name resolves to lora/inputs/)",
     )
@@ -77,7 +83,7 @@ def get_parser() -> argparse.ArgumentParser:
 def run() -> None:
     """CLI entrypoint. Parse arguments and dispatch to export()."""
     args = get_parser().parse_args()
-    inputs = args.inputs
+    inputs = args.inputs or _inputs()
     if inputs.parent == Path("."):
-        inputs = _INPUTS_DIR / inputs.name
+        inputs = _inputs() / inputs.name
     export(inputs, _resolve_output(args.output))

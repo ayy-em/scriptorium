@@ -2,6 +2,7 @@
 
 import argparse
 from dataclasses import dataclass
+from pathlib import Path
 
 
 @dataclass
@@ -102,6 +103,8 @@ def _widget_for(action: argparse.Action) -> str:
         return "textarea"
     if action.type in (int, float):
         return "number"
+    if action.type is Path and action.dest not in ("outputs", "inputs"):
+        return "file"
     return "text"
 
 
