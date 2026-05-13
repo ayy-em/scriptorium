@@ -27,6 +27,9 @@ uv.lock
 .env
 creds.json
 
+# OS
+.DS_Store
+
 # artifacts of any sorts
 inputs/
 outputs/
