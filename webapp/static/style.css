@@ -5,14 +5,17 @@
   --bg-sidebar:   oklch(99.5% 0.003 280);
   --bg-hover:     oklch(96.5% 0.018 290);
   --bg-input:     oklch(96.5% 0.004 264);
-  --text:         oklch(16% 0.015 264);
-  --text-muted:   oklch(52% 0.008 264);
-  --text-faint:   oklch(68% 0.006 264);
-  --border:       oklch(92% 0.004 264);
+  --text:         oklch(12% 0.015 264);
+  --text-muted:   oklch(46% 0.008 264);
+  --text-faint:   oklch(62% 0.006 264);
+  --border:       oklch(90% 0.004 264);
   --accent:       oklch(50% 0.230 293);
   --accent-hover: oklch(44% 0.233 291);
   --accent-bg:    oklch(50% 0.230 293 / 7%);
   --accent-text:  oklch(44% 0.233 291);
+  --green:        oklch(62% 0.190 145);
+  --green-hover:  oklch(56% 0.200 145);
+  --green-glow:   oklch(62% 0.190 145 / 35%);
   --red:          oklch(55% 0.222 27);
   --shadow-card:  0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
   --sidebar-w:    224px;
@@ -25,20 +28,23 @@
 }
 
 html.dark {
-  --bg:           oklch(9% 0.010 264);
-  --bg-panel:     oklch(14% 0.010 264);
-  --bg-sidebar:   oklch(11% 0.010 264);
+  --bg:           oklch(7% 0.008 264);
+  --bg-panel:     oklch(12% 0.010 264);
+  --bg-sidebar:   oklch(9.5% 0.008 264);
   --bg-hover:     oklch(14% 0.022 285);
-  --bg-input:     oklch(15% 0.010 264);
-  --text:         oklch(96% 0.005 264);
-  --text-muted:   oklch(63% 0.006 264);
-  --text-faint:   oklch(40% 0.008 264);
-  --border:       oklch(20% 0.010 264);
+  --bg-input:     oklch(13% 0.010 264);
+  --text:         oklch(97% 0.004 264);
+  --text-muted:   oklch(66% 0.006 264);
+  --text-faint:   oklch(42% 0.008 264);
+  --border:       oklch(18% 0.010 264);
   --accent:       oklch(60% 0.196 293);
   --accent-hover: oklch(50% 0.230 293);
   --accent-bg:    oklch(60% 0.196 293 / 12%);
   --accent-text:  oklch(70% 0.170 293);
-  --shadow-card:  0 1px 3px rgba(0, 0, 0, 0.35), 0 1px 2px rgba(0, 0, 0, 0.25);
+  --green:        oklch(68% 0.180 145);
+  --green-hover:  oklch(74% 0.170 145);
+  --green-glow:   oklch(68% 0.180 145 / 30%);
+  --shadow-card:  0 1px 3px rgba(0, 0, 0, 0.45), 0 1px 2px rgba(0, 0, 0, 0.35);
 }
 
 /* ─── Reset ─────────────────────────────────────────────────────────────── */
@@ -184,7 +190,7 @@ body {
 }
 
 .sidebar-nav {
-  padding: 0.75rem 0.625rem 0.375rem;
+  padding: 0.75rem 0.625rem 0.25rem;
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -214,6 +220,8 @@ body {
   background: var(--accent-bg);
   color: var(--accent-text);
   font-weight: 600;
+  border-left: 3px solid var(--accent);
+  padding-left: calc(0.75rem - 3px);
 }
 
 .sidebar-link--stub {
@@ -266,12 +274,14 @@ body {
   background: var(--accent-bg);
   color: var(--accent-text);
   font-weight: 600;
+  border-left: 3px solid var(--accent);
+  padding-left: calc(0.75rem - 3px);
 }
 
 .sidebar-category svg { flex-shrink: 0; opacity: 0.8; }
 .sidebar-category.active svg { opacity: 1; }
 
-.sidebar-category-name { flex: 1; }
+.sidebar-category-name { flex: 1; font-family: var(--font-mono); font-size: 0.82rem; }
 
 .category-count {
   font-size: 0.68rem;
@@ -345,7 +355,7 @@ body {
 
 /* ─── Sidebar GitHub card ────────────────────────────────────────────────── */
 .sidebar-github {
-  margin-top: 0.5rem;
+  margin-top: 0.625rem;
 }
 
 .sidebar-github-link {
@@ -377,7 +387,7 @@ html.dark .sidebar-github-logo { filter: invert(1); opacity: 0.6; }
   gap: 0.3rem;
   padding: 0.625rem 1.25rem;
   border-top: 1px solid var(--border);
-  margin-top: 0.75rem;
+  margin-top: 1.25rem;
   transition: border-color 200ms ease;
 }
 
@@ -576,14 +586,15 @@ html.dark .sidebar-github-logo { filter: invert(1); opacity: 0.6; }
   height: 48px;
   color: var(--text);
   border-bottom: 1px solid var(--border);
-  transition: background-color 150ms ease, border-color 200ms ease;
+  transition: background-color 150ms ease, border-color 200ms ease, transform 150ms var(--ease-out);
 }
 
 .theme-rows .script-row:last-child { border-bottom: none; }
 
 @media (hover: hover) and (pointer: fine) {
   .script-row:hover {
-    background: color-mix(in oklch, var(--accent) 4%, var(--bg-panel));
+    background: color-mix(in oklch, var(--accent) 6%, var(--bg-panel));
+    transform: translateX(3px);
   }
 }
 
@@ -626,6 +637,14 @@ html.dark .sidebar-github-logo { filter: invert(1); opacity: 0.6; }
   gap: 0.25rem;
   flex-shrink: 0;
 }
+
+.copy-cli-btn { opacity: 0; transition: opacity 120ms ease; }
+
+@media (hover: hover) and (pointer: fine) {
+  .script-row:hover .copy-cli-btn { opacity: 1; }
+}
+
+.copy-cli-btn.copied { color: var(--green); opacity: 1; }
 
 /* ─── Empty / loading / error states ────────────────────────────────────── */
 .no-results {
@@ -804,6 +823,15 @@ a:focus-visible, button:focus-visible { outline-offset: 3px; }
   margin-bottom: 1.75rem;
 }
 
+/* ─── Form container ────────────────────────────────────────────────────── */
+#run-form {
+  background: color-mix(in oklch, var(--bg-input) 60%, var(--bg));
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.25rem 1.5rem 1rem;
+  max-width: 640px;
+}
+
 .field { margin-bottom: 1.1rem; }
 
 .field label {
@@ -812,6 +840,18 @@ a:focus-visible, button:focus-visible { outline-offset: 3px; }
   font-weight: 600;
   margin-bottom: 0.3rem;
   color: var(--text);
+}
+
+.field--required { border-left: 3px solid var(--accent); padding-left: 0.75rem; }
+.field--required label { font-weight: 700; }
+.field--optional label { font-weight: 500; }
+
+.optional-tag {
+  font-size: 0.72rem;
+  font-weight: 400;
+  color: var(--text-faint);
+  font-style: italic;
+  margin-left: 0.3rem;
 }
 
 .req { color: var(--red); margin-left: 2px; }
@@ -823,7 +863,7 @@ input[type=number],
 select,
 textarea {
   width: 100%;
-  max-width: 460px;
+  max-width: 520px;
   padding: 0.4rem 0.65rem;
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -855,23 +895,35 @@ input[type=checkbox] { width: 15px; height: 15px; cursor: pointer; flex-shrink: 
 /* ─── Run button ─────────────────────────────────────────────────────────── */
 .run-btn {
   margin-top: 0.75rem;
-  padding: 0.5rem 1.5rem;
-  background: var(--accent);
-  color: white;
+  padding: 0.65rem 2.5rem;
+  background: var(--green);
+  color: oklch(98% 0.005 145);
   border: none;
   border-radius: 6px;
-  font-size: 0.9rem;
-  font-weight: 500;
+  font-size: 0.95rem;
+  font-weight: 600;
   cursor: pointer;
-  transition: background-color 150ms ease, transform 100ms ease-out;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: background-color 150ms ease, transform 100ms ease-out, box-shadow 200ms ease;
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .run-btn:hover:not(:disabled) { background: var(--accent-hover); }
+  .run-btn:hover:not(:disabled) {
+    background: var(--green-hover);
+    box-shadow: 0 0 20px var(--green-glow), 0 0 6px var(--green-glow);
+  }
 }
 
 .run-btn:active:not(:disabled) { transform: scale(0.97); }
 .run-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.run-btn-icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
 
 @keyframes pulseSoft {
   0%, 100% { opacity: 1; }
@@ -916,6 +968,45 @@ input[type=checkbox] { width: 15px; height: 15px; cursor: pointer; flex-shrink: 
 #output .exit-ok { color: oklch(79% 0.171 142); font-weight: 600; }
 #output .exit-err { color: oklch(70% 0.178 27); font-weight: 600; }
 
+/* ─── Run result banner ─────────────────────────────────────────────────── */
+.run-result {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  padding: 0.6rem 1rem;
+  border-radius: 6px;
+  font-size: 0.84rem;
+  font-weight: 600;
+  font-family: var(--font-mono);
+}
+
+.run-result--ok {
+  background: oklch(62% 0.190 145 / 10%);
+  border: 1px solid oklch(62% 0.190 145 / 30%);
+  color: oklch(62% 0.190 145);
+}
+
+html.dark .run-result--ok {
+  background: oklch(68% 0.180 145 / 12%);
+  border-color: oklch(68% 0.180 145 / 25%);
+  color: oklch(75% 0.160 145);
+}
+
+.run-result--err {
+  background: oklch(55% 0.222 27 / 10%);
+  border: 1px solid oklch(55% 0.222 27 / 30%);
+  color: oklch(55% 0.222 27);
+}
+
+html.dark .run-result--err {
+  background: oklch(60% 0.200 27 / 12%);
+  border-color: oklch(60% 0.200 27 / 25%);
+  color: oklch(72% 0.165 27);
+}
+
+.run-result svg { flex-shrink: 0; }
+
 /* ─── Animations ─────────────────────────────────────────────────────────── */
 @keyframes fadeSlideIn {
   from { opacity: 0; transform: translateY(10px); }
@@ -937,9 +1028,10 @@ input[type=checkbox] { width: 15px; height: 15px; cursor: pointer; flex-shrink: 
   .detail-breadcrumb { animation: fadeSlideIn 200ms var(--ease-out) backwards; }
   .detail-title      { animation: fadeSlideIn 220ms  50ms var(--ease-out) backwards; }
   .detail-desc       { animation: fadeSlideIn 220ms  90ms var(--ease-out) backwards; }
-  #run-form          { animation: fadeSlideIn 240ms 130ms var(--ease-out) backwards; }
+  #run-form          { animation: fadeSlideIn 260ms 130ms var(--ease-out) backwards; }
   .detail-no-args    { animation: fadeSlideIn 220ms  90ms var(--ease-out) backwards; }
   .detail-run-btn    { animation: fadeSlideIn 240ms 130ms var(--ease-out) backwards; }
+  .run-result        { animation: fadeSlideIn 200ms var(--ease-out) backwards; }
 }
 
 /* ─── Utility classes (extracted from inline styles) ────────────────────── */
@@ -955,7 +1047,7 @@ input[type=checkbox] { width: 15px; height: 15px; cursor: pointer; flex-shrink: 
 
 /* ─── File upload widget ────────────────────────────────────────────────── */
 .file-upload-wrap {
-  max-width: 460px;
+  max-width: 520px;
 }
 
 .file-drop {

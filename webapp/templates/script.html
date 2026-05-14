@@ -16,9 +16,9 @@
 {% if field_specs %}
 <form id="run-form" data-run-url="/scripts/{{ key_path }}/run">
   {% for spec in field_specs %}
-  <div class="field">
+  <div class="field {{ 'field--required' if spec.required else 'field--optional' }}">
     {% if spec.widget == "file-multi" %}
-    <label>{{ spec.label }}{% if spec.required %}<span class="req">*</span>{% endif %}</label>
+    <label>{{ spec.label }}{% if spec.required %}<span class="req">*</span>{% else %}<span class="optional-tag">optional</span>{% endif %}</label>
     <div class="file-upload-wrap" x-data="fileUploadMulti('{{ key.split('.')[0] }}')">
       <label class="file-drop" :class="{ 'has-file': filenames.length }" @dragover.prevent @drop.prevent="dropFile($event)">
         <input type="file" class="file-hidden" multiple @change="upload($event)">
@@ -28,7 +28,7 @@
       </label>
     </div>
     {% elif spec.widget == "file" %}
-    <label for="f_{{ spec.dest }}">{{ spec.label }}{% if spec.required %}<span class="req">*</span>{% endif %}</label>
+    <label for="f_{{ spec.dest }}">{{ spec.label }}{% if spec.required %}<span class="req">*</span>{% else %}<span class="optional-tag">optional</span>{% endif %}</label>
     <div class="file-upload-wrap" x-data="fileUpload('{{ key.split('.')[0] }}')">
       <label class="file-drop" :class="{ 'has-file': filename }" @dragover.prevent @drop.prevent="dropFile($event)">
         <input type="file" class="file-hidden" @change="upload($event)">
@@ -44,7 +44,7 @@
       <label for="f_{{ spec.dest }}">{{ spec.label }}</label>
     </div>
     {% elif spec.widget == "select" %}
-    <label for="f_{{ spec.dest }}">{{ spec.label }}{% if spec.required %}<span class="req">*</span>{% endif %}</label>
+    <label for="f_{{ spec.dest }}">{{ spec.label }}{% if spec.required %}<span class="req">*</span>{% else %}<span class="optional-tag">optional</span>{% endif %}</label>
     <select id="f_{{ spec.dest }}" name="{{ spec.dest }}"{% if spec.required %} required{% endif %}>
       {% if not spec.required %}<option value="">— optional —</option>{% endif %}
       {% for c in spec.choices %}
@@ -53,17 +53,17 @@
     </select>
     {% elif spec.widget == "textarea" %}
     <label for="f_{{ spec.dest }}">
-      {{ spec.label }}{% if spec.required %}<span class="req">*</span>{% endif %}
+      {{ spec.label }}{% if spec.required %}<span class="req">*</span>{% else %}<span class="optional-tag">optional</span>{% endif %}
       <span class="field-label-hint"> — one value per line</span>
     </label>
     <textarea id="f_{{ spec.dest }}" name="{{ spec.dest }}"{% if spec.required %} required{% endif %}>{{ spec.default or "" }}</textarea>
     {% elif spec.widget == "number" %}
-    <label for="f_{{ spec.dest }}">{{ spec.label }}{% if spec.required %}<span class="req">*</span>{% endif %}</label>
+    <label for="f_{{ spec.dest }}">{{ spec.label }}{% if spec.required %}<span class="req">*</span>{% else %}<span class="optional-tag">optional</span>{% endif %}</label>
     <input type="number" id="f_{{ spec.dest }}" name="{{ spec.dest }}" step="any"
       {% if spec.default %}value="{{ spec.default }}"{% endif %}
       {% if spec.required %}required{% endif %}>
     {% else %}
-    <label for="f_{{ spec.dest }}">{{ spec.label }}{% if spec.required %}<span class="req">*</span>{% endif %}</label>
+    <label for="f_{{ spec.dest }}">{{ spec.label }}{% if spec.required %}<span class="req">*</span>{% else %}<span class="optional-tag">optional</span>{% endif %}</label>
     <input type="text" id="f_{{ spec.dest }}" name="{{ spec.dest }}"
       {% if spec.default %}value="{{ spec.default }}" placeholder="{{ spec.default }}"{% endif %}
       {% if spec.required %}required{% endif %}>
@@ -73,16 +73,27 @@
     {% endif %}
   </div>
   {% endfor %}
-  <button type="submit" class="run-btn" id="run-btn">Run</button>
+  <button type="submit" class="run-btn" id="run-btn">
+    <svg class="run-btn-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path d="M4 2.5v11l9-5.5z" fill="currentColor"/>
+    </svg>
+    Run
+  </button>
 </form>
 {% else %}
 <p class="detail-no-args">This script takes no arguments.</p>
-<button class="run-btn detail-run-btn" id="run-btn">Run</button>
+<button class="run-btn detail-run-btn" id="run-btn">
+  <svg class="run-btn-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+    <path d="M4 2.5v11l9-5.5z" fill="currentColor"/>
+  </svg>
+  Run
+</button>
 {% endif %}
 
 <div id="output-section">
   <h2>Output</h2>
   <div id="output"></div>
+  <div id="run-result"></div>
 </div>
 
 <script>
@@ -176,13 +187,47 @@ function fileUploadMulti(theme) {
     return frag;
   }
 
+  var resultDiv = document.getElementById('run-result');
+  var RUN_ICON = '<svg class="run-btn-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M4 2.5v11l9-5.5z" fill="currentColor"/></svg>';
+
+  function formatElapsed(s) {
+    if (s < 60) return s.toFixed(1) + 's';
+    var m = Math.floor(s / 60);
+    var sec = Math.round(s % 60);
+    return m + 'm ' + (sec < 10 ? '0' : '') + sec + 's';
+  }
+
+  function showResult(data) {
+    resultDiv.innerHTML = '';
+    var info;
+    try { info = JSON.parse(data); } catch (e) { return; }
+    var ok = info.exit_code === 0;
+    var el = document.createElement('div');
+    el.className = 'run-result ' + (ok ? 'run-result--ok' : 'run-result--err');
+    if (ok) {
+      el.innerHTML = '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8.5l3.5 3.5 6.5-7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+        + 'Completed successfully in ' + formatElapsed(info.elapsed);
+    } else {
+      el.innerHTML = '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.5"/><path d="M5.5 5.5l5 5M10.5 5.5l-5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>'
+        + 'Run failed (exit code ' + info.exit_code + ')';
+    }
+    resultDiv.appendChild(el);
+  }
+
+  function resetBtn() {
+    runBtn.disabled = false;
+    runBtn.classList.remove('is-running');
+    runBtn.innerHTML = RUN_ICON + ' Run';
+  }
+
   function startRun(queryString) {
     if (es) { es.close(); }
     output.textContent = '';
+    resultDiv.innerHTML = '';
     outputSection.classList.add('is-visible');
     runBtn.disabled = true;
     runBtn.classList.add('is-running');
-    runBtn.textContent = 'Running…';
+    runBtn.innerHTML = RUN_ICON + ' Running…';
 
     es = new EventSource(runUrl + (queryString ? '?' + queryString : ''));
 
@@ -193,18 +238,15 @@ function fileUploadMulti(theme) {
       output.scrollTop = output.scrollHeight;
     };
 
-    es.addEventListener('done', function () {
+    es.addEventListener('done', function (e) {
       es.close();
-      runBtn.disabled = false;
-      runBtn.classList.remove('is-running');
-      runBtn.textContent = 'Run';
+      resetBtn();
+      showResult(e.data);
     });
 
     es.onerror = function () {
       es.close();
-      runBtn.disabled = false;
-      runBtn.classList.remove('is-running');
-      runBtn.textContent = 'Run';
+      resetBtn();
     };
   }
 

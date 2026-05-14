@@ -159,7 +159,8 @@ async def _stream_script(key: str, argv: list[str]):
     """Run a script as a subprocess and yield its output as SSE events.
 
     Yields stdout lines first, then stderr lines. Each line is HTML-escaped.
-    A final 'done' event signals the client to close the connection.
+    A final 'done' event signals the client to close the connection and
+    includes a JSON payload with the exit code and elapsed time.
 
     Args:
         key: Script key (e.g. "av.convert").
@@ -168,12 +169,16 @@ async def _stream_script(key: str, argv: list[str]):
     Yields:
         SSE-formatted byte strings.
     """
+    import time  # noqa: PLC0415
+
     if FROZEN:
         cmd = [sys.executable, "--run-script", key, *argv]
         cwd = None
     else:
         cmd = [sys.executable, str(_REPO_ROOT / "main.py"), key, *argv]
         cwd = str(_REPO_ROOT)
+
+    t0 = time.monotonic()
 
     proc = await asyncio.create_subprocess_exec(
         *cmd,
@@ -192,9 +197,11 @@ async def _stream_script(key: str, argv: list[str]):
 
     await proc.wait()
     rc = proc.returncode
+    elapsed = round(time.monotonic() - t0, 1)
     css = "exit-ok" if rc == 0 else "exit-err"
     yield f"data: <span class='{css}'>exit {rc}</span>\n\n".encode()
-    yield b"event: done\ndata: \n\n"
+    done_payload = json.dumps({"exit_code": rc, "elapsed": elapsed})
+    yield f"event: done\ndata: {done_payload}\n\n".encode()
 
 
 def get_parser() -> argparse.ArgumentParser:
