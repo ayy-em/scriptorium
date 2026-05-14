@@ -18,6 +18,10 @@ cd /d "%~dp0.."
 echo ==^> Installing all optional dependencies...
 uv sync --all-extras || exit /b 1
 
+echo ==^> Cleaning previous build artifacts...
+if exist dist rmdir /s /q dist
+if exist build rmdir /s /q build
+
 echo ==^> Installing PyInstaller...
 uv pip install pyinstaller || exit /b 1
 

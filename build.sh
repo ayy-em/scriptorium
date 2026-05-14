@@ -41,6 +41,9 @@ build_macos() {
         echo "==> ffmpeg found: $(ffmpeg -version | head -1)"
     fi
 
+    echo "==> Cleaning previous build artifacts..."
+    rm -rf dist/ build/
+
     echo "==> Installing PyInstaller..."
     uv pip install pyinstaller
 

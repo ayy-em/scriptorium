@@ -19,6 +19,9 @@ cd "$(dirname "$0")/.."
 echo "==> Installing all optional dependencies..."
 uv sync --all-extras
 
+echo "==> Cleaning previous build artifacts..."
+rm -rf dist/ build/
+
 echo "==> Installing PyInstaller..."
 uv pip install pyinstaller
 
