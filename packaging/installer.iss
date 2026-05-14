@@ -23,9 +23,10 @@ AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}
 AppSupportURL={#MyAppURL}/issues
-DefaultDirName={localappdata}\{#MyAppName}
+DefaultDirName={autopf}\{#MyAppName}
 DefaultGroupName={#MyAppName}
 PrivilegesRequired=lowest
+PrivilegesRequiredOverridesAllowed=dialog commandline
 OutputDir=..\dist
 OutputBaseFilename=ScriptoriumSetup
 SetupIconFile=logo.ico
@@ -45,8 +46,8 @@ Name: "addtopath";   Description: "Add to PATH (for CLI usage)"; GroupDescriptio
 Source: "..\dist\scriptorium\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{group}\{#MyAppName}";         Filename: "{app}\{#MyAppExeName}"
-Name: "{group}\Uninstall {#MyAppName}"; Filename: "{uninstallexe}"
+Name: "{autoprograms}\{#MyAppName}\{#MyAppName}";         Filename: "{app}\{#MyAppExeName}"
+Name: "{autoprograms}\{#MyAppName}\Uninstall {#MyAppName}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#MyAppName}";    Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 [Run]
