@@ -13,6 +13,7 @@ no `sys.exit` outside of `run()`.
 
 ```
 scriptorium/
+├── build.sh                 # unified build entrypoint (detects OS, delegates)
 ├── main.py                  # CLI entrypoint
 ├── core/
 │   ├── paths.py             # centralized path resolution (frozen vs dev)
@@ -93,6 +94,24 @@ Uploaded files are saved to the theme's inputs directory via `POST /upload/{them
 
 When ffmpeg is not found on PATH, a banner appears in the sidebar with install
 instructions.
+
+### Building a standalone app
+
+```sh
+bash build.sh
+```
+
+A unified build entrypoint in the repo root. It detects the OS via `uname` and
+delegates to the platform-specific pipeline. On macOS it auto-installs missing
+tools (uv, Homebrew, ffmpeg) before building. On Windows it validates that Inno
+Setup is available, then delegates to `packaging/build_installer.bat`.
+
+| Platform | Shell | Output |
+|----------|-------|--------|
+| macOS | Terminal / zsh | `dist/Scriptorium.app` |
+| Windows | Git Bash | `dist/ScriptoriumSetup.exe` |
+
+The platform-specific scripts below can still be invoked directly.
 
 ### macOS app
 

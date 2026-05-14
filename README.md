@@ -24,36 +24,45 @@ The web UI lists all scripts grouped by theme. Clicking a script opens a detail
 page with an auto-generated form. File inputs support drag-and-drop upload.
 Submitting the form runs the script and streams output in real time.
 
-## How To Use: macOS App
+## Building a Standalone App
 
-A standalone `.app` bundle can be built with PyInstaller — no Python or uv needed on the target machine.
+A single command builds the distributable app for your platform:
 
 ```sh
-uv sync --all-extras
-brew install ffmpeg
-bash packaging/build.sh                 # produces dist/Scriptorium.app
+bash build.sh
 ```
+
+The script auto-detects your OS, installs missing tools (uv, Homebrew, ffmpeg),
+and runs the full build pipeline. No manual setup required.
+
+| Platform | Output | Prerequisites |
+|----------|--------|---------------|
+| macOS | `dist/Scriptorium.app` | None (tools are auto-installed) |
+| Windows | `dist/ScriptoriumSetup.exe` | Git Bash, [Inno Setup 6+](https://jrsoftware.org/issetup.php) on PATH |
+
+### macOS app
 
 Double-clicking the app starts the web server and opens a browser window.
 File outputs go to `~/scriptorium/outputs/<theme>/`; uploaded inputs are saved to
 `~/scriptorium/inputs/<theme>/`.
 
-See `packaging/build.sh` for prerequisites and `xattr` instructions.
+On a Mac that did not build it, clear the quarantine flag first:
+`xattr -cr dist/Scriptorium.app`.
 
-## How To Use: Windows Installer
-
-A Windows installer can be built with PyInstaller + Inno Setup.
-
-```cmd
-packaging\build_installer.bat                                   # produces dist\ScriptoriumSetup.exe
-```
+### Windows installer
 
 The installer supports two modes: "Install for all users" (requires admin, installs
 to `C:\Program Files\Scriptorium`) or "Install just for me" (no admin rights,
 installs to `%LOCALAPPDATA%\Programs\Scriptorium`). It creates a Start Menu shortcut
 and optionally adds the install directory to PATH for CLI usage.
 
-See `packaging/build_installer.bat` for prerequisites.
+### Platform-specific build scripts
+
+The unified `build.sh` delegates to these under the hood — they can still be
+invoked directly if needed:
+
+- **macOS:** `bash packaging/build.sh`
+- **Windows:** `packaging\build_installer.bat`
 
 ## How To Use: CLI
 
