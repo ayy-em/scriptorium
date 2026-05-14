@@ -6,6 +6,7 @@ import sys
 
 import yt_dlp
 
+from core.argparse import ScriptoriumParser
 from core.paths import outputs_dir as _core_outputs_dir
 
 TITLE = "Download media from a URL (YouTube, Vimeo, etc.)"
@@ -83,7 +84,7 @@ examples:
 
 def get_parser() -> argparse.ArgumentParser:
     """Return the argument parser for this script."""
-    parser = argparse.ArgumentParser(
+    parser = ScriptoriumParser(
         description=DESCRIPTION,
         prog="uv run main.py downloads.download",
         epilog=_EXAMPLES,
@@ -99,6 +100,7 @@ def get_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--audio",
         action="store_true",
+        ui_label="Audio only",
         help="Extract audio as MP3 instead of downloading video.",
     )
     parser.add_argument(

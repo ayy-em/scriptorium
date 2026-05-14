@@ -3,6 +3,7 @@
 import argparse
 from pathlib import Path
 
+from core.argparse import ScriptoriumParser
 from webapp._form import FieldSpec, build_argv, fields_from_parser
 
 
@@ -137,6 +138,24 @@ class TestFieldsFromParser:
         parser.add_argument("end")
         names = [f.dest for f in fields_from_parser(parser)]
         assert names == ["source", "start", "end"]
+
+    def test_ui_label_overrides_optional_flag(self):
+        parser = ScriptoriumParser()
+        parser.add_argument("--audio", action="store_true", ui_label="Audio only")
+        (f,) = fields_from_parser(parser)
+        assert f.label == "Audio only"
+
+    def test_ui_label_overrides_positional(self):
+        parser = ScriptoriumParser()
+        parser.add_argument("source", ui_label="Source file")
+        (f,) = fields_from_parser(parser)
+        assert f.label == "Source file"
+
+    def test_no_ui_label_falls_back(self):
+        parser = ScriptoriumParser()
+        parser.add_argument("--fade-in", type=float, dest="fade_in")
+        (f,) = fields_from_parser(parser)
+        assert f.label == "Fade in"
 
 
 class TestBuildArgv:

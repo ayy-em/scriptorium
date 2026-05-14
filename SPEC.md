@@ -303,12 +303,30 @@ inline, so the two stay in sync automatically.
 - Named for what they do (`validate`, `export`, `import_captions`, …)
 - Are the unit under test
 
+### Custom UI labels (`ui_label`)
+
+By default the web UI derives form field labels from the flag name
+(`--fade-in` → "Fade in"). When the auto-derived label is misleading or
+too terse, pass `ui_label` to `add_argument()` to override it:
+
+```python
+parser.add_argument("--audio", action="store_true", ui_label="Audio only")
+```
+
+This requires using `ScriptoriumParser` from `core.argparse` instead of the
+stdlib `ArgumentParser`. `ScriptoriumParser` is a drop-in subclass — it
+accepts the same arguments and behaves identically, except it also supports
+`ui_label`. Scripts that don't need `ui_label` can continue using the
+stdlib parser.
+
 ### Minimal example
 
 ```python
 import argparse
 import sys
 from pathlib import Path
+
+from core.argparse import ScriptoriumParser
 
 TITLE = "Do a thing"
 DESCRIPTION = "Does the thing to a file."
@@ -326,7 +344,7 @@ def do_thing(path: Path) -> int:
 
 
 def get_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
+    parser = ScriptoriumParser(
         description=DESCRIPTION,
         prog="uv run main.py <theme>.do_thing",
         epilog=_EXAMPLES,

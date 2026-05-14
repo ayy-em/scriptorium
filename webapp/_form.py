@@ -55,12 +55,14 @@ def fields_from_parser(parser: argparse.ArgumentParser) -> list[FieldSpec]:
         flag = max(action.option_strings, key=len) if action.option_strings else None
         multiple = action.nargs in ("+", "*")
 
+        ui_label = getattr(action, "ui_label", None)
+
         if is_positional:
             required = action.nargs not in ("?", "*")
-            label = action.dest.replace("_", " ").capitalize()
+            label = ui_label or action.dest.replace("_", " ").capitalize()
         else:
             required = bool(getattr(action, "required", False))
-            label = flag.lstrip("-").replace("-", " ").capitalize()  # type: ignore[union-attr]
+            label = ui_label or flag.lstrip("-").replace("-", " ").capitalize()  # type: ignore[union-attr]
 
         default: str | None = None
         if action.default not in (None, argparse.SUPPRESS):
