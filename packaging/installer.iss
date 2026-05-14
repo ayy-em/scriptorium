@@ -1,7 +1,7 @@
 ; Inno Setup script for the Scriptorium Windows installer.
 ;
 ; Prerequisites:
-;   1. Run  packaging\build.ps1  first to produce dist\scriptorium\
+;   1. Run  packaging\build_installer.bat  (it calls PyInstaller automatically)
 ;   2. Install Inno Setup 6+  (https://jrsoftware.org/issetup.php)
 ;
 ; Build:

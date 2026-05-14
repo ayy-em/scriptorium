@@ -45,15 +45,15 @@ See `packaging/build.sh` for prerequisites and `xattr` instructions.
 A Windows installer can be built with PyInstaller + Inno Setup.
 
 ```cmd
-packaging\build.bat                                             # produces dist\scriptorium\
-iscc packaging\installer.iss                                    # produces dist\ScriptoriumSetup.exe
+packaging\build_installer.bat                                   # produces dist\ScriptoriumSetup.exe
 ```
 
-The installer places the app in `%LOCALAPPDATA%\Scriptorium`, creates a Start Menu
-shortcut, and optionally adds the install directory to PATH for CLI usage. No admin
-rights required.
+The installer supports two modes: "Install for all users" (requires admin, installs
+to `C:\Program Files\Scriptorium`) or "Install just for me" (no admin rights,
+installs to `%LOCALAPPDATA%\Programs\Scriptorium`). It creates a Start Menu shortcut
+and optionally adds the install directory to PATH for CLI usage.
 
-See `packaging/build.ps1` for prerequisites.
+See `packaging/build_installer.bat` for prerequisites.
 
 ## How To Use: CLI
 

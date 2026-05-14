@@ -35,8 +35,7 @@ scriptorium/
     ├── scriptorium.spec         # PyInstaller spec for macOS .app bundle
     ├── scriptorium-win.spec     # PyInstaller spec for Windows folder bundle
     ├── build.sh                 # macOS build script
-    ├── build.ps1                # Windows build script (PowerShell)
-    ├── build.bat                # Windows build script (cmd.exe)
+    ├── build_installer.bat      # Windows build script (PyInstaller + Inno Setup)
     └── installer.iss            # Inno Setup script for Windows installer
 ```
 
@@ -107,20 +106,57 @@ as subprocesses via the frozen binary's `--run-script` flag (same binary,
 different argv). The sidebar hides the CLI usage section when running in frozen
 mode.
 
+#### macOS build details
+
+| Item | Value |
+|------|-------|
+| Build script | `packaging/build.sh` |
+| PyInstaller spec | `packaging/scriptorium.spec` |
+| Output | `dist/Scriptorium.app` |
+| Prerequisites | Python 3.14, uv, Xcode command-line tools |
+| Webview backend | pywebview + Cocoa (WKWebView) |
+
+The build script runs three steps: `uv sync --all-extras` (install all optional
+dependencies), `uv pip install pyinstaller`, and `pyinstaller packaging/scriptorium.spec`.
+The resulting `.app` is unsigned — on a Mac that did not build it, the quarantine
+flag must be cleared before launch: `xattr -cr dist/Scriptorium.app`.
+
 ### Windows app
 
 ```cmd
-packaging\build.bat                                             # → dist\scriptorium\
-iscc packaging\installer.iss                                    # → dist\ScriptoriumSetup.exe
+packaging\build_installer.bat           # → dist\ScriptoriumSetup.exe
 ```
 
 The Windows build uses PyInstaller in folder-bundle mode (no macOS `BUNDLE`
 step). The entry point is the same `packaging/entrypoint.py` — it attempts a
 pywebview native window and falls back to the default browser if the platform
-backend (pythonnet/winforms) cannot initialise. The Inno Setup installer places
-files in `%LOCALAPPDATA%\Scriptorium`, creates Start Menu shortcuts, and
-optionally adds the install directory to the user PATH. No admin rights
-required (`PrivilegesRequired=lowest`).
+backend (pythonnet/winforms) cannot initialise.
+
+#### Windows build details
+
+| Item | Value |
+|------|-------|
+| Build script | `packaging/build_installer.bat` |
+| PyInstaller spec | `packaging/scriptorium-win.spec` |
+| Inno Setup script | `packaging/installer.iss` |
+| Output | `dist/ScriptoriumSetup.exe` |
+| Prerequisites | Python 3.14, uv, Inno Setup 6+ (`iscc` on PATH) |
+| Webview backend | pywebview + EdgeChromium (falls back to browser) |
+
+`build_installer.bat` runs the full pipeline: dependency sync, PyInstaller
+folder bundle, and Inno Setup compilation — producing a single
+`ScriptoriumSetup.exe` in one command.
+
+The installer supports two privilege modes via a dialog shown at launch:
+
+| Mode | Install path | Elevation |
+|------|-------------|-----------|
+| Install for all users | `C:\Program Files\Scriptorium` | UAC admin prompt |
+| Install just for me | `%LOCALAPPDATA%\Programs\Scriptorium` | None |
+
+Both modes create Start Menu shortcuts and optionally add the install directory
+to the user's PATH for CLI usage. Silent installs can select mode via
+`/allusers` or `/currentuser` command-line switches.
 
 ### Programmatic
 
