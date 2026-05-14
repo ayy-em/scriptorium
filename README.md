@@ -1,9 +1,11 @@
 # Scriptorium
 
-Themed utility scripts toolkit, running as platform-specific apps, a webapp with browser-based UI, or a CLI tool. Built by coders, for non-coders.
+Themed utility toolkit, running as platform-native apps, a webapp with browser-based UI, or a CLI tool. 
+Built by coders, for non-coders.
 
-![Scriptorium Logo](webapp/static/logo.webp)
-
+<p align="center">
+  <img src="https://github.com/ayy-em/scriptorium/raw/main/webapp/static/logo.webp?raw=true" alt="Scriptorium logo"/>
+</p>
 
 ## Quickstart: Install
 
@@ -12,7 +14,7 @@ Themed utility scripts toolkit, running as platform-specific apps, a webapp with
 
 Done.
 
-Note individual scripts' prerequisites listed below:
+### Prereqs for individual scripts
 
 1. `av.*` scripts require **ffmpeg** (and **ffprobe**) to be on your `PATH` for all platforms.
 **Fix:** Install via your package manager (e.g. `winget install Gyan.FFmpeg`, `brew install ffmpeg`).
