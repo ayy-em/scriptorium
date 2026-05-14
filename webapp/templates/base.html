@@ -22,12 +22,47 @@
         dark: localStorage.getItem('theme') === 'dark',
         search: '',
         activeCategory: null,
+        settingsOpen: false,
+        outputsDir: '',
+        _settingsLoaded: false,
+
         toggleDark() {
           this.dark = !this.dark;
           localStorage.setItem('theme', this.dark ? 'dark' : 'light');
           document.documentElement.classList.toggle('dark', this.dark);
         },
+
+        async loadSettings() {
+          if (this._settingsLoaded) return;
+          try {
+            var res = await fetch('/api/settings');
+            var data = await res.json();
+            this.outputsDir = data.outputs_dir || '';
+            if (data.theme === 'dark' !== this.dark) {
+              this.dark = data.theme === 'dark';
+              localStorage.setItem('theme', this.dark ? 'dark' : 'light');
+              document.documentElement.classList.toggle('dark', this.dark);
+            }
+            this._settingsLoaded = true;
+          } catch (e) { /* use defaults */ }
+        },
+
+        async saveSettings() {
+          try {
+            await fetch('/api/settings', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                theme: this.dark ? 'dark' : 'light',
+                outputs_dir: this.outputsDir
+              })
+            });
+            this.settingsOpen = false;
+          } catch (e) { /* silent */ }
+        },
       });
+
+      Alpine.store('ui').loadSettings();
     });
   </script>
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/cdn.min.js"></script>
@@ -68,6 +103,15 @@
           <path d="M13.5 9.5A6 6 0 0 1 6.5 2.5a6 6 0 1 0 7 7Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
         </svg>
       </button>
+      <button class="settings-btn"
+              @click="$store.ui.settingsOpen = true"
+              aria-label="Open settings">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <circle cx="8" cy="8" r="2" stroke="currentColor" stroke-width="1.4"/>
+          <path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.41 1.41M11.54 11.54l1.41 1.41M3.05 12.95l1.41-1.41M11.54 4.46l1.41-1.41"
+                stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+        </svg>
+      </button>
     </div>
   </header>
 
@@ -80,6 +124,8 @@
       </div>
     </main>
   </div>
+
+  {% include "_settings_modal.html" %}
 
   <script>
     /* Ctrl+K / Cmd+K focuses the search input */

@@ -13,6 +13,9 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
+from core.config import UserConfig
+from core.config import load as load_config
+from core.config import save as save_config
 from core.paths import FROZEN, has_ffmpeg, inputs_dir, read_version, static_dir, templates_dir
 from core.registry import discover, discover_themes, theme_descriptions, theme_labels
 from webapp._form import build_argv, fields_from_parser
@@ -153,6 +156,25 @@ async def upload_file(theme: str, file: UploadFile) -> JSONResponse:
     content = await file.read()
     save_path.write_bytes(content)
     return JSONResponse({"path": str(save_path), "filename": file.filename})
+
+
+@app.get("/api/settings")
+async def get_settings() -> JSONResponse:
+    """Return current user settings."""
+    cfg = load_config()
+    return JSONResponse({"theme": cfg.theme, "outputs_dir": cfg.outputs_dir})
+
+
+@app.post("/api/settings")
+async def post_settings(request: Request) -> JSONResponse:
+    """Persist user settings to config.json."""
+    body = await request.json()
+    cfg = UserConfig(
+        theme=body.get("theme", "light"),
+        outputs_dir=body.get("outputs_dir", ""),
+    )
+    save_config(cfg)
+    return JSONResponse({"ok": True})
 
 
 async def _stream_script(key: str, argv: list[str]):

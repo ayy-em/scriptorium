@@ -148,6 +148,41 @@ class TestRunEndpoint:
         assert b"exit 0" in response.content
 
 
+class TestSettingsAPI:
+    def test_get_settings_returns_200(self):
+        response = client.get("/api/settings")
+        assert response.status_code == 200
+        data = response.json()
+        assert "theme" in data
+        assert "outputs_dir" in data
+
+    def test_post_settings_persists(self, tmp_path, monkeypatch):
+        path = tmp_path / "config.json"
+        monkeypatch.setattr("core.config._CONFIG_PATH", path)
+
+        response = client.post(
+            "/api/settings",
+            json={"theme": "dark", "outputs_dir": str(tmp_path / "out")},
+        )
+        assert response.status_code == 200
+        assert response.json()["ok"] is True
+
+        get_response = client.get("/api/settings")
+        data = get_response.json()
+        assert data["theme"] == "dark"
+        assert data["outputs_dir"] == str(tmp_path / "out")
+
+    def test_post_settings_with_empty_outputs(self, tmp_path, monkeypatch):
+        path = tmp_path / "config.json"
+        monkeypatch.setattr("core.config._CONFIG_PATH", path)
+
+        response = client.post(
+            "/api/settings",
+            json={"theme": "light", "outputs_dir": ""},
+        )
+        assert response.status_code == 200
+
+
 class TestHelpers:
     def test_read_version_returns_string(self):
         v = read_version()

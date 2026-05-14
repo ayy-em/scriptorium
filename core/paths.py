@@ -41,8 +41,18 @@ def inputs_dir(theme: str) -> Path:
 
 
 def outputs_dir(theme: str) -> Path:
-    """Return the outputs directory for a theme, creating it if needed."""
-    if FROZEN:
+    """Return the outputs directory for a theme, creating it if needed.
+
+    If the user has set a custom outputs directory in settings, it is used
+    as the root (with a theme subdirectory). Otherwise the default location
+    is used.
+    """
+    from core.config import load as _load_config  # noqa: PLC0415
+
+    custom = _load_config().outputs_dir
+    if custom:
+        d = Path(custom) / theme
+    elif FROZEN:
         d = _user_data_dir() / "outputs" / theme
     else:
         d = _bundle_dir() / "scripts" / theme / "outputs"
