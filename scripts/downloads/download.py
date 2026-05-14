@@ -89,24 +89,24 @@ def get_parser() -> argparse.ArgumentParser:
         epilog=_EXAMPLES,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    parser.add_argument("url", help="URL of the media to download")
+    parser.add_argument("url", help="URL of the media to download.")
     parser.add_argument(
         "--filename",
         default=None,
         metavar="NAME",
-        help="Output file stem without extension (defaults to video title)",
+        help="Output file stem without extension (defaults to video title).",
     )
     parser.add_argument(
         "--audio",
         action="store_true",
-        help="Extract audio as MP3 instead of downloading video",
+        help="Extract audio as MP3 instead of downloading video.",
     )
     parser.add_argument(
         "--outputs",
         type=Path,
         default=None,
         metavar="DIR",
-        help="Output directory (default: downloads/outputs/)",
+        help="Output directory (default: downloads/outputs/).",
     )
     return parser
 

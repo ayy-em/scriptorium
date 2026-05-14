@@ -1,8 +1,11 @@
 # Scriptorium
 
-Themed utility scripts with a web UI and single CLI entrypoint.
+Themed utility scripts toolkit, running as platform-specific apps, a webapp with browser-based UI, or a CLI tool. Built by coders, for non-coders.
 
-## Quickstart Guide
+![Scriptorium Logo](webapp/static/logo.webp)
+
+
+## Quickstart: Install
 
 1. Clone repo
 2. Run `uv sync`
@@ -11,10 +14,10 @@ Done.
 
 Note individual scripts' prerequisites listed below:
 
-- `av.*` scripts require **ffmpeg** (and **ffprobe**) to be on your `PATH` for all platforms.
-    - **Fix:** Install via your package manager (e.g. `winget install Gyan.FFmpeg`, `brew install ffmpeg`).
+1. `av.*` scripts require **ffmpeg** (and **ffprobe**) to be on your `PATH` for all platforms.
+**Fix:** Install via your package manager (e.g. `winget install Gyan.FFmpeg`, `brew install ffmpeg`).
 
-## How To Use: Web UI
+## Quickstart: Run the Web UI
 
 ```sh
 uv run webapp                           # start at http://127.0.0.1:8000
@@ -24,7 +27,7 @@ The web UI lists all scripts grouped by theme. Clicking a script opens a detail
 page with an auto-generated form. File inputs support drag-and-drop upload.
 Submitting the form runs the script and streams output in real time.
 
-## Building a Standalone App
+## Building Apps
 
 A single command builds the distributable app for your platform:
 
