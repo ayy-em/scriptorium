@@ -6,58 +6,79 @@
 #   bash build.sh
 #
 # macOS output:  dist/Scriptorium.app
-# Windows output: dist/ScriptoriumSetup.exe  (requires Git Bash)
+# Windows output: dist/ScriptoriumSetup.exe  (Git Bash, WSL, or MSYS2)
 
 set -euo pipefail
 cd "$(dirname "$0")"
 
+export NODE_OPTIONS="--no-deprecation"
+
+BUILD_START="$SECONDS"
+STEP=0
+
+step() {
+    STEP=$((STEP + 1))
+    echo ""
+    echo "==> [$STEP] $1"
+}
+
+elapsed() {
+    local secs=$(( SECONDS - BUILD_START ))
+    printf "%dm%02ds" $((secs / 60)) $((secs % 60))
+}
+
 ensure_uv() {
     if command -v uv &>/dev/null; then
-        echo "==> uv found: $(uv --version)"
+        echo "    uv found: $(uv --version)"
         return
     fi
-    echo "==> uv not found, installing..."
+    echo "    uv not found, installing..."
     curl -LsSf https://astral.sh/uv/install.sh | sh
     export PATH="$HOME/.local/bin:$PATH"
-    echo "==> uv installed: $(uv --version)"
+    echo "    uv installed: $(uv --version)"
 }
 
 build_macos() {
+    step "Checking prerequisites"
     ensure_uv
 
-    echo "==> Installing all optional dependencies..."
-    uv sync --all-extras
-
     if ! command -v brew &>/dev/null; then
-        echo "==> Homebrew not found, installing..."
+        echo "    Homebrew not found, installing..."
         /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
         eval "$(/opt/homebrew/bin/brew shellenv 2>/dev/null || /usr/local/bin/brew shellenv 2>/dev/null)"
     fi
 
     if ! command -v ffmpeg &>/dev/null; then
-        echo "==> Installing ffmpeg via Homebrew..."
+        echo "    Installing ffmpeg via Homebrew..."
         brew install ffmpeg
     else
-        echo "==> ffmpeg found: $(ffmpeg -version | head -1)"
+        echo "    ffmpeg found: $(ffmpeg -version | head -1)"
     fi
 
-    echo "==> Cleaning previous build artifacts..."
+    step "Installing dependencies (uv sync --all-extras)"
+    uv sync --all-extras
+
+    step "Cleaning previous build artifacts"
     rm -rf dist/ build/
 
-    echo "==> Installing PyInstaller..."
+    step "Installing PyInstaller"
     uv pip install pyinstaller
 
-    echo "==> Building .app bundle..."
+    step "Building .app bundle (this may take a while)"
     uv run pyinstaller packaging/scriptorium.spec --noconfirm --clean
 
     echo ""
-    echo "==> Build complete: dist/Scriptorium.app"
+    echo "========================================"
+    echo "  BUILD COMPLETE  ($(elapsed))"
+    echo "  Output: dist/Scriptorium.app"
+    echo "========================================"
     echo ""
     echo "To run on a Mac that did not build it, clear the quarantine flag:"
     echo "  xattr -cr dist/Scriptorium.app"
 }
 
 build_windows() {
+    step "Checking prerequisites"
     ensure_uv
 
     if ! command -v iscc &>/dev/null && ! command -v iscc.exe &>/dev/null; then
@@ -67,19 +88,51 @@ build_windows() {
         echo "Then ensure the install directory is on your PATH."
         exit 1
     fi
+    echo "    iscc found"
 
-    echo "==> Delegating to packaging/build_installer.bat..."
+    step "Running packaging/build_installer.bat"
     cmd.exe //c "packaging\\build_installer.bat"
+
+    echo ""
+    echo "========================================"
+    echo "  BUILD COMPLETE  ($(elapsed))"
+    echo "  Output: dist/ScriptoriumSetup.exe"
+    echo "========================================"
+}
+
+build_windows_wsl() {
+    local win_root
+    win_root="$(wslpath -w "$(pwd)")"
+    echo "    Windows path: $win_root"
+
+    echo ""
+    echo "==> Running packaging\\build_installer.bat via cmd.exe"
+    cmd.exe /c "cd /d \"${win_root}\" && packaging\\build_installer.bat"
+
+    echo ""
+    echo "========================================"
+    echo "  BUILD COMPLETE  ($(elapsed))"
+    echo "  Output: dist\\ScriptoriumSetup.exe"
+    echo "========================================"
 }
 
 OS="$(uname -s)"
 case "$OS" in
     Darwin)
-        echo "==> Detected macOS"
+        echo "Initiating build. System detected: macOS. Target artifact: Scriptorium.app"
         build_macos
         ;;
+    Linux)
+        if grep -qi microsoft /proc/version 2>/dev/null; then
+            echo "Initiating build. System detected: Windows (WSL). Target artifact: ScriptoriumSetup.exe"
+            build_windows_wsl
+        else
+            echo "ERROR: Native Linux is not supported."
+            exit 1
+        fi
+        ;;
     MINGW*|MSYS*|CYGWIN*|Windows_NT)
-        echo "==> Detected Windows"
+        echo "Initiating build. System detected: Windows. Target artifact: ScriptoriumSetup.exe"
         build_windows
         ;;
     *)
