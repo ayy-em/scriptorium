@@ -56,6 +56,8 @@ hidden_imports = [
     "uvicorn.protocols.http.auto",
     "uvicorn.protocols.websockets",
     "uvicorn.protocols.websockets.auto",
+    "uvicorn.config",
+    "uvicorn.server",
     "uvicorn.lifespan",
     "uvicorn.lifespan.on",
     "fastapi",
