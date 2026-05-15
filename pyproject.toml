@@ -15,6 +15,7 @@ dev = [
     "jinja2>=3.1",
     "pytest>=9.0.3",
     "python-multipart>=0.0.9",
+    "requests>=2.32",
     "ruff>=0.15.12",
     "uvicorn[standard]>=0.30",
     "yt-dlp>=2024.1.0",
@@ -27,6 +28,7 @@ webapp = "webapp.app:run"
 av        = ["ffmpeg-python>=0.2", "Pillow>=11.0"]
 downloads = ["yt-dlp>=2024.1.0"]
 photo     = ["Pillow>=11.0"]
+sitemaps  = ["requests>=2.32"]
 tabular   = ["pandas>=2.2", "openpyxl>=3.1"]
 web       = [
     "fastapi>=0.115",

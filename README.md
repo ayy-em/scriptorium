@@ -108,6 +108,7 @@ uv run main.py <theme>.<script> [args]  # run it
 | formats.convert_image | Convert image |
 | formats.convert_tabular | Convert tabular |
 | formats.convert_video | Convert video |
+| sitemaps.status_check | Check HTTP status and response times for every URL in a sitemap |
 | lora.export_captions | Export captions to JSON |
 | lora.import_captions | Import captions from JSON |
 | lora.renumber | Renumber LoRA dataset images |
