@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from fastapi.testclient import TestClient
 
 from core.paths import read_version
-from webapp.app import _read_git_hash, _themes_search_json, app
+from webapp.app import _parse_version, _read_git_hash, _themes_search_json, app
 
 client = TestClient(app)
 
@@ -210,3 +210,74 @@ class TestHelpers:
         themes = {"av": {"x": MagicMock(TITLE="</script>evil")}}
         result = _themes_search_json(themes)
         assert "</script>" not in result
+
+    def test_parse_version_basic(self):
+        assert _parse_version("0.3.0") == (0, 3, 0)
+
+    def test_parse_version_comparison(self):
+        assert _parse_version("0.4.0") > _parse_version("0.3.0")
+        assert _parse_version("1.0.0") > _parse_version("0.99.0")
+        assert _parse_version("0.3.0") == _parse_version("0.3.0")
+
+
+class TestQuitEndpoint:
+    def test_quit_returns_403_in_dev_mode(self):
+        response = client.post("/api/quit")
+        assert response.status_code == 403
+
+    def test_quit_returns_200_when_frozen(self, monkeypatch):
+        monkeypatch.setattr("webapp.app.FROZEN", True)
+        mock_server = MagicMock()
+        mock_server.should_exit = False
+        client.app.state.uv_server = mock_server
+
+        response = client.post("/api/quit")
+        assert response.status_code == 200
+        assert response.json()["ok"] is True
+        assert mock_server.should_exit is True
+
+        monkeypatch.setattr("webapp.app.FROZEN", False)
+        delattr(client.app.state, "uv_server")
+
+    def test_quit_returns_503_when_no_server_ref(self, monkeypatch):
+        monkeypatch.setattr("webapp.app.FROZEN", True)
+        if hasattr(client.app.state, "uv_server"):
+            delattr(client.app.state, "uv_server")
+
+        response = client.post("/api/quit")
+        assert response.status_code == 503
+
+        monkeypatch.setattr("webapp.app.FROZEN", False)
+
+
+class TestUpdateCheckEndpoint:
+    def test_update_check_returns_200(self):
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "tag_name": "v99.0.0",
+            "html_url": "https://github.com/ayy-em/scriptorium/releases/tag/v99.0.0",
+        }
+        mock_response.raise_for_status = MagicMock()
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client.get = AsyncMock(return_value=mock_response)
+
+        with patch("httpx.AsyncClient", return_value=mock_client):
+            response = client.get("/api/update-check")
+            assert response.status_code == 200
+            data = response.json()
+            assert "update_available" in data
+            assert "current" in data
+
+    def test_update_check_handles_network_error(self):
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client.get = AsyncMock(side_effect=Exception("network error"))
+
+        with patch("httpx.AsyncClient", return_value=mock_client):
+            response = client.get("/api/update-check")
+            assert response.status_code == 200
+            data = response.json()
+            assert data["update_available"] is False

@@ -1,8 +1,8 @@
 """User settings persistence backed by ~/scriptorium/config.json."""
 
+from dataclasses import asdict, dataclass
 import json
 import logging
-from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 from core.paths import _user_data_dir

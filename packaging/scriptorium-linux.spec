@@ -1,9 +1,8 @@
 # -*- mode: python ; coding: utf-8 -*-
-"""PyInstaller spec for building the Scriptorium macOS .app bundle.
+"""PyInstaller spec for building the Scriptorium Linux binary.
 
 Build from the repo root:
-    cd /path/to/scriptorium
-    pyinstaller packaging/scriptorium.spec
+    pyinstaller packaging/scriptorium-linux.spec --noconfirm --clean
 """
 
 import os
@@ -11,7 +10,6 @@ from pathlib import Path
 
 ROOT = Path(os.path.abspath(os.path.join(SPECPATH, "..")))
 
-# Collect every script sub-package so the registry can discover them at runtime.
 hidden_imports = [
     "core",
     "core.paths",
@@ -73,10 +71,9 @@ hidden_imports = [
     "openpyxl",
     "ffmpeg",
     "webview",
-    "webview.platforms.cocoa",
+    "webview.platforms.gtk",
 ]
 
-# Data files that must be included in the bundle.
 datas = [
     (str(ROOT / "webapp" / "templates"), "webapp/templates"),
     (str(ROOT / "webapp" / "static"), "webapp/static"),
@@ -119,17 +116,4 @@ coll = COLLECT(
     strip=False,
     upx=False,
     name="scriptorium",
-)
-
-app = BUNDLE(
-    coll,
-    name="Scriptorium.app",
-    icon=str(ROOT / "packaging" / "logo.icns"),
-    bundle_identifier="com.somethingreally.scriptorium",
-    info_plist={
-        "CFBundleDisplayName": "Scriptorium",
-        "CFBundleShortVersionString": "0.4.0",
-        "NSHighResolutionCapable": True,
-        "LSBackgroundOnly": False,
-    },
 )

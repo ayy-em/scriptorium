@@ -2,7 +2,7 @@
 
 import json
 
-from core.config import UserConfig, load, save, _CONFIG_PATH
+from core.config import UserConfig, load, save
 
 
 class TestUserConfig:

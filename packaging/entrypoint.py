@@ -7,7 +7,7 @@ Handles two modes:
                                  and open a desktop window.  Tries three tiers:
                                  1. pywebview native window
                                  2. Edge/Chrome --app mode (chromeless)
-                                 3. Default browser + MessageBox fallback
+                                 3. Default browser fallback (quit via UI)
 """
 
 import socket
@@ -88,19 +88,78 @@ def _patch_missing_streams() -> None:
 
 
 def _find_chromium_browser() -> tuple[str, str] | None:
-    """Locate Edge or Chrome on the system.
+    """Locate a Chromium-based browser on the system.
 
-    Searches the Windows registry, well-known filesystem paths, and PATH.
+    On Windows, searches the registry, well-known filesystem paths, and PATH.
+    On macOS, searches /Applications and common install locations.
+    On Linux, searches common binary names on PATH.
+
+    Returns:
+        A ``(name, exe_path)`` tuple, or ``None`` if none found.
+    """
+    import os  # noqa: PLC0415
+    import shutil  # noqa: PLC0415
+
+    if sys.platform == "win32":
+        return _find_chromium_windows()
+
+    if sys.platform == "darwin":
+        candidates = [
+            (
+                "Google Chrome",
+                [
+                    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+                    os.path.expanduser("~/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"),
+                ],
+            ),
+            (
+                "Microsoft Edge",
+                [
+                    "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+                    os.path.expanduser("~/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge"),
+                ],
+            ),
+            (
+                "Chromium",
+                [
+                    "/Applications/Chromium.app/Contents/MacOS/Chromium",
+                ],
+            ),
+        ]
+    else:
+        candidates = [
+            ("Google Chrome", []),
+            ("Chromium", []),
+            ("Microsoft Edge", []),
+        ]
+        which_names = ["google-chrome", "google-chrome-stable", "chromium-browser", "chromium", "microsoft-edge"]
+        for wn in which_names:
+            found = shutil.which(wn)
+            if found:
+                name = "Google Chrome" if "chrome" in wn else ("Chromium" if "chromium" in wn else "Microsoft Edge")
+                return (name, found)
+
+    for name, known_paths in candidates:
+        for path in known_paths:
+            if os.path.isfile(path):
+                return (name, path)
+
+    for exe_name in ["google-chrome", "chromium-browser", "chromium"]:
+        found = shutil.which(exe_name)
+        if found:
+            return (exe_name.replace("-", " ").title(), found)
+
+    return None
+
+
+def _find_chromium_windows() -> tuple[str, str] | None:
+    """Locate Edge or Chrome on Windows via registry and filesystem.
 
     Returns:
         A ``(name, exe_path)`` tuple, or ``None`` if neither is found.
     """
     import os  # noqa: PLC0415
     import shutil  # noqa: PLC0415
-
-    if sys.platform != "win32":
-        return None
-
     import winreg  # noqa: PLC0415
 
     candidates = [
@@ -184,8 +243,8 @@ def _find_chromium_browser() -> tuple[str, str] | None:
     return None
 
 
-def _edge_app_window(url: str, uv_server, logger) -> None:  # noqa: ANN001
-    """Open the app in a chromeless Edge/Chrome ``--app`` window.
+def _chromium_app_window(url: str, uv_server, logger) -> None:  # noqa: ANN001
+    """Open the app in a chromeless Chromium ``--app`` window.
 
     Blocks until the user closes the window, then signals the server to stop.
 
@@ -197,8 +256,8 @@ def _edge_app_window(url: str, uv_server, logger) -> None:  # noqa: ANN001
     Raises:
         RuntimeError: If no Chromium-based browser is found.
     """
-    import subprocess  # noqa: PLC0415
     from pathlib import Path  # noqa: PLC0415
+    import subprocess  # noqa: PLC0415
 
     browser = _find_chromium_browser()
     if browser is None:
@@ -227,41 +286,26 @@ def _edge_app_window(url: str, uv_server, logger) -> None:  # noqa: ANN001
     uv_server.should_exit = True
 
 
-def _browser_fallback(url: str, uv_server, logger) -> None:  # noqa: ANN001
-    """Open the app in the default browser and block until the user dismisses a dialog.
+def _browser_fallback(url: str, server_thread: threading.Thread, logger) -> None:  # noqa: ANN001
+    """Open the app in the default browser and block until the server stops.
 
-    On Windows (non-console .exe) a native message-box is shown.  On other
-    platforms a terminal ``input()`` prompt is used instead.
+    The user can stop the server via the Quit button in the web UI, which
+    calls the ``/api/quit`` endpoint.
 
     Args:
         url: The local URL the server is listening on.
-        uv_server: A ``uvicorn.Server`` instance to shut down on dismissal.
+        server_thread: The background thread running the server.
         logger: Logger for diagnostic messages.
     """
     import webbrowser  # noqa: PLC0415
 
     webbrowser.open(url)
-    logger.info("Opened browser fallback at %s", url)
+    logger.info("Opened browser fallback at %s — quit via the UI", url)
 
-    if sys.platform == "win32":
-        import ctypes  # noqa: PLC0415
-
-        ctypes.windll.user32.MessageBoxW(
-            0,
-            f"Scriptorium is running at {url}\n\n"
-            "A standalone window could not be opened.\n"
-            "The app has been opened in your default browser instead.\n\n"
-            "Click OK to stop the server and exit.",
-            "Scriptorium",
-            0x00000040,  # MB_ICONINFORMATION
-        )
-    else:
-        try:
-            input("Press Enter to stop the server...\n")
-        except (EOFError, KeyboardInterrupt):
-            pass
-
-    uv_server.should_exit = True
+    try:
+        server_thread.join()
+    except KeyboardInterrupt:
+        logger.info("Interrupted — shutting down")
 
 
 def main() -> None:
@@ -290,6 +334,8 @@ def main() -> None:
     config = uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning")
     uv_server = uvicorn.Server(config)
 
+    app.state.uv_server = uv_server
+
     server_thread = threading.Thread(target=_run_server, args=(uv_server,), daemon=True)
     server_thread.start()
 
@@ -313,19 +359,18 @@ def main() -> None:
             return
         except Exception:
             uv_server.should_exit = False
-            logger.exception("pywebview failed — trying Edge app mode")
+            logger.exception("pywebview failed — trying Chromium app mode")
 
-    # Tier 2: Edge/Chrome --app mode
-    if sys.platform == "win32":
-        try:
-            _edge_app_window(url, uv_server, logger)
-            server_thread.join(timeout=5.0)
-            return
-        except Exception:
-            logger.exception("Edge app mode failed — falling back to browser")
+    # Tier 2: Chromium --app mode (cross-platform)
+    try:
+        _chromium_app_window(url, uv_server, logger)
+        server_thread.join(timeout=5.0)
+        return
+    except Exception:
+        logger.exception("Chromium app mode failed — falling back to browser")
 
-    # Tier 3: plain browser fallback
-    _browser_fallback(url, uv_server, logger)
+    # Tier 3: plain browser fallback (quit via /api/quit)
+    _browser_fallback(url, server_thread, logger)
     server_thread.join(timeout=5.0)
 
 

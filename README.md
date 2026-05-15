@@ -44,6 +44,7 @@ and runs the full build pipeline. No manual setup required.
 |----------|--------|---------------|
 | macOS | `dist/Scriptorium.app` | None (tools are auto-installed) |
 | Windows | `dist/ScriptoriumSetup.exe` | Git Bash, [Inno Setup 6+](https://jrsoftware.org/issetup.php) on PATH |
+| Linux | `dist/scriptorium-linux-x86_64.tar.gz` | None (tools are auto-installed) |
 
 ### macOS app
 
@@ -61,6 +62,12 @@ to `C:\Program Files\Scriptorium`) or "Install just for me" (no admin rights,
 installs to `%LOCALAPPDATA%\Programs\Scriptorium`). It creates a Start Menu shortcut
 and optionally adds the install directory to PATH for CLI usage.
 
+### Linux binary
+
+Extract the tarball and run the `scriptorium` binary. The app opens a Chromium
+`--app` window if Chrome/Chromium is installed, otherwise falls back to the
+default browser with a Quit button in the sidebar.
+
 ### Platform-specific build scripts
 
 The unified `build.sh` delegates to these under the hood — they can still be
@@ -68,6 +75,13 @@ invoked directly if needed:
 
 - **macOS:** `bash packaging/build.sh`
 - **Windows:** `packaging\build_installer.bat`
+- **Linux:** `bash packaging/build_linux.sh`
+
+### CI / Releases
+
+Pushing a version tag (e.g. `v0.4.0`) triggers the GitHub Actions workflow at
+`.github/workflows/release.yml`, which builds all three platform artifacts and
+attaches them to a GitHub Release.
 
 ## How To Use: CLI
 
@@ -122,6 +136,20 @@ from pathlib import Path
 
 run_fn(export, Path("scripts/lora/inputs"), Path("scripts/lora/outputs/captions.json"))
 ```
+
+## Version History
+
+### v0.4.0
+- **User Settings** — new settings modal with theme and output directory persistence
+- **Modernized UI** — OKLch palette, refined dark mode, custom form labels, streaming output banners
+- **Smarter desktop app** — auto-update check, sidebar Quit button, cross-platform Chromium `--app` window
+- **Linux support** — build script, PyInstaller spec, and tarball output
+- **CI/CD** — GitHub Actions release workflow builds all three platforms on tag push
+
+### v0.3.0
+- Windows installer (.exe) via PyInstaller + Inno Setup
+- Unified cross-platform `build.sh` entrypoint
+- Desktop app with 3-tier window cascade (pywebview, Edge --app, browser)
 
 ## More Information
 

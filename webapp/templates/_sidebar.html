@@ -79,6 +79,19 @@
        class="sidebar-github-link">Scriptorium on GitHub &rarr;</a>
   </div>
 
+  <template x-if="$store.ui.updateAvailable">
+    <a :href="$store.ui.updateUrl"
+       target="_blank"
+       rel="noopener noreferrer"
+       class="update-banner">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+        <path d="M8 2v8M5 7l3 3 3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M2 12v1.5A1.5 1.5 0 0 0 3.5 15h9a1.5 1.5 0 0 0 1.5-1.5V12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+      <span>Update available: v<span x-text="$store.ui.latestVersion"></span></span>
+    </a>
+  </template>
+
   <div class="sidebar-status">
     <div class="sidebar-status-row">
       <span class="status-dot" title="All systems go"></span>
@@ -90,4 +103,16 @@
        rel="noopener noreferrer"
        class="sidebar-credit">SomethingReally, 2026</a>
   </div>
+
+  {% if is_frozen %}
+  <button class="quit-btn"
+          @click="fetch('/api/quit', { method: 'POST' })"
+          title="Stop the server and close the app">
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path d="M6 2H4a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2M10.5 12l3.5-4-3.5-4M6 8h8"
+            stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    Quit Scriptorium
+  </button>
+  {% endif %}
 </aside>

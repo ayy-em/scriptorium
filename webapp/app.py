@@ -4,6 +4,7 @@ import argparse
 import asyncio
 import html
 import json
+import logging
 from pathlib import Path
 import subprocess
 import sys
@@ -19,6 +20,8 @@ from core.config import save as save_config
 from core.paths import FROZEN, has_ffmpeg, inputs_dir, read_version, static_dir, templates_dir
 from core.registry import discover, discover_themes, theme_descriptions, theme_labels
 from webapp._form import build_argv, fields_from_parser
+
+logger = logging.getLogger(__name__)
 
 _REPO_ROOT = Path(__file__).parent.parent
 
@@ -175,6 +178,71 @@ async def post_settings(request: Request) -> JSONResponse:
     )
     save_config(cfg)
     return JSONResponse({"ok": True})
+
+
+@app.post("/api/quit")
+async def quit_server(request: Request) -> JSONResponse:
+    """Signal the uvicorn server to shut down (frozen mode only).
+
+    Returns:
+        JSON acknowledgement, or 403 if not running in frozen mode.
+    """
+    if not FROZEN:
+        raise HTTPException(status_code=403, detail="Quit is only available in the desktop app")
+    uv_server = getattr(request.app.state, "uv_server", None)
+    if uv_server is None:
+        raise HTTPException(status_code=503, detail="Server reference not available")
+    logger.info("Quit requested via API — shutting down")
+    uv_server.should_exit = True
+    return JSONResponse({"ok": True})
+
+
+def _parse_version(version: str) -> tuple[int, ...]:
+    """Parse a version string into a tuple of integers for comparison.
+
+    Args:
+        version: Dotted version string like ``"0.3.0"``.
+
+    Returns:
+        Tuple of integers, e.g. ``(0, 3, 0)``.
+    """
+    return tuple(int(x) for x in version.split(".") if x.isdigit())
+
+
+_GITHUB_RELEASES_URL = "https://api.github.com/repos/ayy-em/scriptorium/releases/latest"
+
+
+@app.get("/api/update-check")
+async def update_check() -> JSONResponse:
+    """Check GitHub Releases for a newer version.
+
+    Returns:
+        JSON with ``update_available``, ``current``, ``latest``, and ``url`` fields.
+    """
+    import httpx  # noqa: PLC0415
+
+    current = _APP_VERSION
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                _GITHUB_RELEASES_URL,
+                timeout=5.0,
+                headers={"Accept": "application/vnd.github+json"},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            latest = data["tag_name"].lstrip("v")
+            return JSONResponse(
+                {
+                    "current": current,
+                    "latest": latest,
+                    "update_available": _parse_version(latest) > _parse_version(current),
+                    "url": data.get("html_url", ""),
+                }
+            )
+    except Exception:
+        logger.debug("Update check failed", exc_info=True)
+        return JSONResponse({"current": current, "update_available": False})
 
 
 async def _stream_script(key: str, argv: list[str]):

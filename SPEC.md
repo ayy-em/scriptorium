@@ -16,6 +16,8 @@ scriptorium/
 ├── build.sh                 # unified build entrypoint (detects OS, delegates)
 ├── main.py                  # CLI entrypoint
 ├── core/
+│   ├── argparse.py          # ScriptoriumParser with ui_label support
+│   ├── config.py            # user settings persistence (UserConfig, load, save)
 │   ├── paths.py             # centralized path resolution (frozen vs dev)
 │   ├── registry.py          # auto-discovers scripts and themes
 │   └── runner.py            # dispatch + middleware (run, run_fn)
@@ -35,8 +37,10 @@ scriptorium/
     ├── entrypoint.py            # frozen app entry (web server + --run-script mode)
     ├── scriptorium.spec         # PyInstaller spec for macOS .app bundle
     ├── scriptorium-win.spec     # PyInstaller spec for Windows folder bundle
+    ├── scriptorium-linux.spec   # PyInstaller spec for Linux binary
     ├── build.sh                 # macOS build script
     ├── build_installer.bat      # Windows build script (PyInstaller + Inno Setup)
+    ├── build_linux.sh           # Linux build script
     └── installer.iss            # Inno Setup script for Windows installer
 ```
 
@@ -110,6 +114,10 @@ Setup is available, then delegates to `packaging/build_installer.bat`.
 |----------|-------|--------|
 | macOS | Terminal / zsh | `dist/Scriptorium.app` |
 | Windows | Git Bash | `dist/ScriptoriumSetup.exe` |
+| Linux | bash | `dist/scriptorium-linux-x86_64.tar.gz` |
+
+A GitHub Actions workflow (`.github/workflows/release.yml`) builds all three
+platforms and uploads artifacts to a GitHub Release on tag push (`v*`).
 
 The platform-specific scripts below can still be invoked directly.
 
@@ -120,10 +128,18 @@ bash packaging/build.sh                 # → dist/Scriptorium.app
 ```
 
 The `.app` bundle uses PyInstaller. On launch it finds a free port, starts
-uvicorn, and opens a native webview window (pywebview/WKWebView). Scripts run
-as subprocesses via the frozen binary's `--run-script` flag (same binary,
-different argv). The sidebar hides the CLI usage section when running in frozen
-mode.
+uvicorn, and tries three display tiers in order:
+1. **pywebview** native window (WKWebView on macOS, EdgeChromium on Windows)
+2. **Chromium `--app` mode** — chromeless window via Chrome/Edge/Chromium
+3. **Default browser** fallback — user quits via the sidebar Quit button
+
+Scripts run as subprocesses via the frozen binary's `--run-script` flag (same
+binary, different argv). The sidebar hides the CLI usage section and shows a
+Quit button when running in frozen mode. A `/api/quit` endpoint (frozen-only)
+allows the UI to signal the server to shut down.
+
+On startup the app checks GitHub Releases for a newer version and shows a
+banner in the sidebar if an update is available.
 
 #### macOS build details
 
@@ -147,9 +163,9 @@ packaging\build_installer.bat           # → dist\ScriptoriumSetup.exe
 ```
 
 The Windows build uses PyInstaller in folder-bundle mode (no macOS `BUNDLE`
-step). The entry point is the same `packaging/entrypoint.py` — it attempts a
-pywebview native window and falls back to the default browser if the platform
-backend (pythonnet/winforms) cannot initialise.
+step). The entry point is the same `packaging/entrypoint.py` with the same
+3-tier window cascade: pywebview, Chromium `--app` mode (Edge/Chrome),
+then default browser fallback.
 
 #### Windows build details
 
@@ -176,6 +192,26 @@ The installer supports two privilege modes via a dialog shown at launch:
 Both modes create Start Menu shortcuts and optionally add the install directory
 to the user's PATH for CLI usage. Silent installs can select mode via
 `/allusers` or `/currentuser` command-line switches.
+
+### Linux binary
+
+```sh
+bash packaging/build_linux.sh           # → dist/scriptorium-linux-x86_64.tar.gz
+```
+
+#### Linux build details
+
+| Item | Value |
+|------|-------|
+| Build script | `packaging/build_linux.sh` |
+| PyInstaller spec | `packaging/scriptorium-linux.spec` |
+| Output | `dist/scriptorium-linux-x86_64.tar.gz` |
+| Prerequisites | Python 3.14, uv |
+| Webview backend | pywebview + GTK (falls back to Chromium `--app` or browser) |
+
+Extract the tarball and run `./scriptorium`. The app detects Chrome, Chromium,
+or Edge on PATH for the `--app` mode window. If none are found, it opens the
+default browser.
 
 ### Programmatic
 
