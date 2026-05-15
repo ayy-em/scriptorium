@@ -14,7 +14,7 @@ from scripts.formats._utils import (
     run_convert,
 )
 
-TITLE = "Convert tabular"
+TITLE = "Tabular Data: .csv, .json, .xlsx, .ods, .tsv"
 DESCRIPTION = "Convert spreadsheet and data files between CSV, XLSX, ODS, JSON, and TSV."
 
 _TABULAR_OUT_FORMATS = ["csv", "xlsx", "ods", "json", "tsv"]
