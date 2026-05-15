@@ -23,38 +23,68 @@ def _normalize_timestamp(ts: str) -> str:
     return ts
 
 
-def dump_frames(video: Path, start: str, end: str, outputs_dir: Path) -> list[Path]:
+SUPPORTED_FORMATS = ("jpg", "png")
+
+
+def dump_frames(
+    video: Path,
+    outputs_dir: Path,
+    start: str | None = None,
+    end: str | None = None,
+    fmt: str = "jpg",
+) -> list[Path]:
     """Extract every frame between start and end timestamps from a video.
 
     Uses frame-accurate seeking (-ss/-to after -i) so all frames in the range
-    are captured without keyframe drift. Output files are named frame_00001.jpg,
-    frame_00002.jpg, ... inside outputs_dir/frames/<video_stem>/<start>-<end>/.
+    are captured without keyframe drift. Output files are named frame_00001.jpg
+    (or .png) inside outputs_dir/frames/<video_stem>/<label>/.
+
+    When start or end is omitted the corresponding -ss/-to flag is skipped,
+    defaulting to the first or last frame of the video respectively.
 
     Timestamps are passed directly to ffmpeg and accept any format it understands:
     HH:MM:SS, MM:SS, bare seconds, or the legacy NmNs shorthand (e.g. 1m30s).
 
-    Returns:
-        Sorted list of extracted JPEG frame paths.
-    """
-    ss = _normalize_timestamp(start)
-    to = _normalize_timestamp(end)
+    Args:
+        video: Path to source video file.
+        outputs_dir: Root output directory.
+        start: Start timestamp, or None for the beginning of the video.
+        end: End timestamp, or None for the end of the video.
+        fmt: Image format for extracted frames ("jpg" or "png").
 
-    safe_label = f"{start}-{end}".replace(":", ".")
+    Returns:
+        Sorted list of extracted frame paths.
+    """
+    if fmt not in SUPPORTED_FORMATS:
+        raise ValueError(f"Unsupported format {fmt!r}, expected one of {SUPPORTED_FORMATS}")
+
+    start_label = (start or "0").replace(":", ".")
+    end_label = (end or "end").replace(":", ".")
+    safe_label = f"{start_label}-{end_label}"
     frame_dir = outputs_dir / "frames" / video.stem / safe_label
     frame_dir.mkdir(parents=True, exist_ok=True)
 
-    pattern = str(frame_dir / "frame_%05d.jpg")
-    run_ffmpeg(["-i", str(video), "-ss", ss, "-to", to, "-vsync", "0", pattern])
+    seek_args: list[str] = []
+    if start is not None:
+        seek_args += ["-ss", _normalize_timestamp(start)]
+    if end is not None:
+        seek_args += ["-to", _normalize_timestamp(end)]
 
-    return sorted(frame_dir.glob("*.jpg"))
+    pattern = str(frame_dir / f"frame_%05d.{fmt}")
+    quality_args = ["-q:v", "2"] if fmt == "jpg" else []
+    run_ffmpeg(["-i", str(video), *seek_args, "-vsync", "0", *quality_args, pattern])
+
+    return sorted(frame_dir.glob(f"*.{fmt}"))
 
 
 _EXAMPLES = """
 examples:
+  uv run main.py av.dump_frames video.mp4
   uv run main.py av.dump_frames video.mp4 01:30 02:00
-  uv run main.py av.dump_frames video.mp4 0:00 0:10
+  uv run main.py av.dump_frames video.mp4 0:00 0:10 --format png
   uv run main.py av.dump_frames video.mp4 1m30s 2m0s
   uv run main.py av.dump_frames video.mp4 90 120 --outputs path/to/out/
+  uv run main.py av.dump_frames video.mp4 01:30
 """
 
 
@@ -67,8 +97,26 @@ def get_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument("video", type=Path, help="Source video file (bare name resolves to av/inputs/)")
-    parser.add_argument("start", metavar="START", help="Start timestamp (e.g. 01:30, 1m30s, 90)")
-    parser.add_argument("end", metavar="END", help="End timestamp (e.g. 02:00, 2m0s, 120)")
+    parser.add_argument(
+        "start",
+        metavar="START",
+        nargs="?",
+        default=None,
+        help="Start timestamp (default: first frame; e.g. 01:30, 1m30s, 90)",
+    )
+    parser.add_argument(
+        "end",
+        metavar="END",
+        nargs="?",
+        default=None,
+        help="End timestamp (default: last frame; e.g. 02:00, 2m0s, 120)",
+    )
+    parser.add_argument(
+        "--format",
+        choices=SUPPORTED_FORMATS,
+        default="jpg",
+        help="Image format for extracted frames (default: jpg)",
+    )
     parser.add_argument(
         "--outputs",
         type=Path,
@@ -90,7 +138,7 @@ def run() -> None:
     outputs_dir = args.outputs or av_outputs_dir()
 
     try:
-        frames = dump_frames(video, args.start, args.end, outputs_dir)
+        frames = dump_frames(video, outputs_dir, start=args.start, end=args.end, fmt=args.format)
         dest = frames[0].parent if frames else outputs_dir
         print(f"{len(frames)} frame(s) written to {dest}")
         sys.exit(0)
