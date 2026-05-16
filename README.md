@@ -102,6 +102,7 @@ uv run main.py <theme>.<script> [args]  # run it
 | av.tag     | Read/write media metadata tags |
 | av.to_anim | Turn a video segment into an animated GIF/WebP |
 | av.trim    | Trim a media file |
+| av.video_crop | Crop a video by trimming its edges |
 | av.volume  | Adjust audio volume, normalize, or apply fade-in/out |
 | downloads.download | Download media from a URL (YouTube, Vimeo, etc.) |
 | formats.convert_audio | Convert audio |
