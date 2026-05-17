@@ -28,6 +28,7 @@ hidden_imports = [
     "scripts.av.tag",
     "scripts.av.to_anim",
     "scripts.av.trim",
+    "scripts.av.video_crop",
     "scripts.av.volume",
     "scripts.downloads",
     "scripts.downloads.download",

@@ -69,7 +69,7 @@ uv run main.py <theme>.<script> --help  # show usage, arguments, and examples
 ```
 Audio and video processing backed by ffmpeg
 
-Theme 'av' (9 script(s)):
+Theme 'av' (10 script(s)):
 
   av.convert                                Convert media file to a different format
                                             Transcode a file (or directory of files) to a target container/codec.
