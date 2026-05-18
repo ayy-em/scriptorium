@@ -114,6 +114,7 @@ uv run main.py <theme>.<script> [args]  # run it
 | lora.import_captions | Import captions from JSON |
 | lora.renumber | Renumber LoRA dataset images |
 | lora.validate | Validate a LoRA training dataset |
+| telegram.chat_analysis | Generate a descriptive-analytics report (JSON + PDF + charts) from a Telegram personal-chat export |
 
 
 ## How To Use: CLI Examples

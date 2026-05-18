@@ -52,6 +52,13 @@ hidden_imports = [
     "scripts.sitemaps.status_check",
     "scripts.speech",
     "scripts.tabular",
+    "scripts.telegram",
+    "scripts.telegram._charts",
+    "scripts.telegram._metrics",
+    "scripts.telegram._parsing",
+    "scripts.telegram._pdf",
+    "scripts.telegram._stopwords_ru",
+    "scripts.telegram.chat_analysis",
     "scripts.web",
     # Third-party libraries that might be lazily imported
     "uvicorn",
@@ -78,6 +85,18 @@ hidden_imports = [
     "ffmpeg",
     "webview",
     "webview.platforms.cocoa",
+    "matplotlib",
+    "matplotlib.backends.backend_agg",
+    "reportlab",
+    "reportlab.pdfgen",
+    "reportlab.platypus",
+    "reportlab.lib",
+    "reportlab.lib.styles",
+    "wordcloud",
+    "emoji",
+    "ijson",
+    "ijson.backends",
+    "ijson.backends.python",
 ]
 
 # Data files that must be included in the bundle.

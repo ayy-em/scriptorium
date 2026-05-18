@@ -26,6 +26,7 @@ uv.lock
 # sensitive files
 .env
 creds.json
+tests/telegram/fixtures/chat_export/result.json
 
 # OS
 .DS_Store
