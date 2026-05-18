@@ -3,7 +3,10 @@
 All charts write PNGs into the supplied ``charts_dir`` and return the path.
 """
 
+import calendar
 from collections import Counter
+from datetime import datetime
+import math
 from pathlib import Path
 from typing import Any
 import warnings
@@ -43,19 +46,78 @@ def _participant_label(analytics: dict[str, Any], uid: str) -> str:
 
 def render_monthly_volume(analytics: dict[str, Any], charts_dir: Path) -> Path:
     monthly = analytics["monthly_volume"]
+    now = datetime.fromisoformat(analytics["generated_at"])
+    current_year = now.year
+    current_month = now.month  # 1..12
+    current_day = max(now.day, 1)
+
     fig, ax = plt.subplots(figsize=(8, 4))
-    for i, (year, values) in enumerate(sorted(monthly.items())):
+    forecast_caption: str | None = None
+    year_keys = sorted(monthly.keys())
+    for i, year in enumerate(year_keys):
+        values = monthly[year]
         alpha = 0.4 + 0.3 * i  # newer years brighter
-        ax.plot(MONTHS, values, label=year, marker="o", color=ACTIVE_COLOR, alpha=alpha, linewidth=2)
+        if int(year) == current_year:
+            display_values, forecast_value = _forecast_current_year_series(
+                values, current_month, current_day, current_year
+            )
+            ax.plot(MONTHS, display_values, label=f"{year}*", marker="o", color=ACTIVE_COLOR, alpha=alpha, linewidth=2)
+            # Mark the forecast point with an open marker so it reads as projected, not measured.
+            ax.plot(
+                [MONTHS[current_month - 1]],
+                [forecast_value],
+                marker="o",
+                markerfacecolor="white",
+                markeredgecolor=ACTIVE_COLOR,
+                markeredgewidth=1.5,
+                linestyle="None",
+            )
+            actual_this_month = values[current_month - 1]
+            forecast_caption = (
+                f"* {MONTHS[current_month - 1]} {current_year} is a forecast: "
+                f"{actual_this_month} messages over {current_day} day(s) extrapolated "
+                f"to {calendar.monthrange(current_year, current_month)[1]} days "
+                f"→ ~{forecast_value} (not counted toward totals)."
+            )
+        else:
+            ax.plot(MONTHS, values, label=year, marker="o", color=ACTIVE_COLOR, alpha=alpha, linewidth=2)
     ax.set_title("Messages per month")
     ax.set_ylabel("Messages")
     ax.grid(True, axis="y", linestyle="--", alpha=0.4)
     ax.legend(title="Year", loc="upper right")
-    fig.tight_layout()
+    if forecast_caption:
+        fig.text(0.5, 0.01, forecast_caption, ha="center", fontsize=8, color="#555555")
+        fig.tight_layout(rect=(0, 0.04, 1, 1))
+    else:
+        fig.tight_layout()
     path = charts_dir / "monthly_volume.png"
     fig.savefig(path, dpi=150)
     plt.close(fig)
     return path
+
+
+def _forecast_current_year_series(
+    values: list[int], current_month: int, current_day: int, current_year: int
+) -> tuple[list[float], int]:
+    """Return (12-element series for the current-year line, current-month forecast).
+
+    Months after the current month are NaN so they don't render. The current
+    month is replaced with a day-of-month extrapolation. Months before the
+    current month show actual counts.
+    """
+    days_in_month = calendar.monthrange(current_year, current_month)[1]
+    actual_this_month = values[current_month - 1]
+    forecast = int(round(actual_this_month * days_in_month / current_day))
+    series: list[float] = []
+    for idx, v in enumerate(values):
+        month = idx + 1
+        if month < current_month:
+            series.append(float(v))
+        elif month == current_month:
+            series.append(float(forecast))
+        else:
+            series.append(math.nan)
+    return series, forecast
 
 
 def render_activity_heatmap(analytics: dict[str, Any], charts_dir: Path) -> Path:

@@ -64,6 +64,75 @@ class TestLoadChat:
         with pytest.raises(InvalidExportError, match="missing required top-level keys"):
             load_chat(path)
 
+    def test_participant_ids_always_come_from_messages(self, make_chat_export):
+        """Regression: production bug where the second sender was silently dropped.
+
+        Both participant IDs must come from real ``from_id`` values in messages;
+        ``"unknown"`` must never appear when two distinct senders exist, even if
+        the root ``name`` doesn't exactly match either display name.
+        """
+        msgs = [
+            {
+                "id": 1,
+                "type": "message",
+                "date": "2025-01-01T10:00:00",
+                "date_unixtime": "0",
+                "from": "J M",
+                "from_id": "user_jm",
+                "text": "hi",
+                "text_entities": [{"type": "plain", "text": "hi"}],
+            },
+            {
+                "id": 2,
+                "type": "message",
+                "date": "2025-01-01T10:05:00",
+                "date_unixtime": "0",
+                "from": "Ira Sergeevna",  # display has extra suffix vs root name "Ira"
+                "from_id": "user_ira",
+                "text": "hello",
+                "text_entities": [{"type": "plain", "text": "hello"}],
+            },
+        ]
+        data = {"name": "Ira", "type": "personal_chat", "id": 999, "messages": msgs}
+        path = make_chat_export(data)
+        meta, _ = load_chat(path)
+        ids = {p.id for p in meta.participants}
+        assert ids == {"user_jm", "user_ira"}
+        assert "unknown" not in ids
+        # Substring match picks "Ira Sergeevna" as the partner.
+        partner = next(p for p in meta.participants if not p.is_self)
+        assert partner.id == "user_ira"
+
+    def test_partner_id_falls_back_to_first_sender_when_no_name_match(self, make_chat_export):
+        msgs = [
+            {
+                "id": 1,
+                "type": "message",
+                "date": "2025-01-01T10:00:00",
+                "date_unixtime": "0",
+                "from": "Alpha",
+                "from_id": "user_alpha",
+                "text": "hi",
+                "text_entities": [{"type": "plain", "text": "hi"}],
+            },
+            {
+                "id": 2,
+                "type": "message",
+                "date": "2025-01-01T10:05:00",
+                "date_unixtime": "0",
+                "from": "Beta",
+                "from_id": "user_beta",
+                "text": "hello",
+                "text_entities": [{"type": "plain", "text": "hello"}],
+            },
+        ]
+        data = {"name": "Totally Different", "type": "personal_chat", "id": 1, "messages": msgs}
+        path = make_chat_export(data)
+        meta, _ = load_chat(path)
+        partner = next(p for p in meta.participants if not p.is_self)
+        # Fallback rule: first-appearing sender = partner.
+        assert partner.id == "user_alpha"
+
 
 class TestFlattenEntities:
     def test_concatenates_text_fragments(self):

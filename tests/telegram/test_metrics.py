@@ -74,34 +74,68 @@ class TestInitiationShare:
 
 
 class TestReplyLatency:
-    def test_credits_responder_for_run_end(self):
+    def test_one_sample_per_session_credited_to_responder(self):
         base = datetime(2025, 1, 1, 10, 0)
         session = [
             _msg(base, SELF),
             _msg(base + timedelta(minutes=5), SELF),
-            _msg(base + timedelta(minutes=10), PARTNER),  # B replies — credit B with 5min
+            _msg(base + timedelta(minutes=10), PARTNER),  # first response — credit PARTNER with 5min
             _msg(base + timedelta(minutes=12), PARTNER),
-            _msg(base + timedelta(minutes=20), SELF),  # A replies — credit A with 8min
+            _msg(base + timedelta(minutes=20), SELF),  # SELF's later reply doesn't generate a new sample
         ]
         out = _compute_reply_latency([session], [SELF, PARTNER])
         assert out[PARTNER]["samples"] == 1
         assert out[PARTNER]["mean"] == 300.0
-        assert out[SELF]["samples"] == 1
-        assert out[SELF]["mean"] == 480.0
+        assert out[SELF]["samples"] == 0
 
-    def test_unreplied_run_discarded(self):
+    def test_unreplied_session_discarded(self):
         base = datetime(2025, 1, 1, 10, 0)
         session = [
             _msg(base, SELF),
             _msg(base + timedelta(minutes=1), SELF),
-        ]  # never replied
+        ]  # initiator never replied to
         out = _compute_reply_latency([session], [SELF, PARTNER])
         assert out[PARTNER]["samples"] == 0
+        assert out[SELF]["samples"] == 0
+
+    def test_one_sample_per_session_across_multiple_sessions(self):
+        base = datetime(2025, 1, 1, 10, 0)
+        s1 = [
+            _msg(base, SELF),
+            _msg(base + timedelta(minutes=3), PARTNER),  # PARTNER credited 3min
+        ]
+        s2 = [
+            _msg(base + timedelta(hours=12), PARTNER),
+            _msg(base + timedelta(hours=12, minutes=7), SELF),  # SELF credited 7min
+        ]
+        out = _compute_reply_latency([s1, s2], [SELF, PARTNER])
+        assert out[PARTNER]["samples"] == 1
+        assert out[PARTNER]["mean"] == 180.0
+        assert out[SELF]["samples"] == 1
+        assert out[SELF]["mean"] == 420.0
 
 
 class TestDoubleText:
-    def test_run_of_three_yields_two_double_texts(self):
+    def test_same_user_starts_consecutive_sessions(self):
         base = datetime(2025, 1, 1, 10, 0)
+        s1 = [_msg(base, SELF), _msg(base + timedelta(minutes=1), SELF)]
+        s2 = [_msg(base + timedelta(hours=6), SELF)]  # SELF starts again, no reply in between
+        out = _compute_double_text([s1, s2], [SELF, PARTNER])
+        assert out[SELF]["count"] == 1
+        assert out[PARTNER]["count"] == 0
+        assert out[SELF]["share"] == 1.0
+
+    def test_reply_in_prev_session_blocks_double_text(self):
+        base = datetime(2025, 1, 1, 10, 0)
+        s1 = [_msg(base, SELF), _msg(base + timedelta(minutes=2), PARTNER)]  # PARTNER had last word
+        s2 = [_msg(base + timedelta(hours=6), SELF)]  # SELF starting again is NOT a double-text
+        out = _compute_double_text([s1, s2], [SELF, PARTNER])
+        assert out[SELF]["count"] == 0
+        assert out[PARTNER]["count"] == 0
+
+    def test_intra_session_repeats_are_not_double_texts(self):
+        base = datetime(2025, 1, 1, 10, 0)
+        # All within a single session — no session boundary crossed.
         session = [
             _msg(base, SELF),
             _msg(base + timedelta(minutes=1), SELF),
@@ -109,9 +143,8 @@ class TestDoubleText:
             _msg(base + timedelta(minutes=3), PARTNER),
         ]
         out = _compute_double_text([session], [SELF, PARTNER])
-        assert out[SELF]["count"] == 2
+        assert out[SELF]["count"] == 0
         assert out[PARTNER]["count"] == 0
-        assert out[SELF]["share"] == 1.0
 
 
 class TestStreaks:

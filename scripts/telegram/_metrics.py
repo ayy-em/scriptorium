@@ -2,7 +2,6 @@
 
 from collections import Counter, defaultdict
 from datetime import date, datetime, timedelta
-from itertools import groupby
 import re
 from statistics import mean, median
 from typing import Any
@@ -23,6 +22,8 @@ MIN_WORD_LEN = 4
 # Flattened text must be longer than this to count in length/vocab metrics —
 # weeds out stickers, one-letter reactions, and other noise.
 MIN_TEXT_MESSAGE_CHARS = 3
+# A session needs at least one initiator + one responder to yield a reply sample.
+MIN_SESSION_LEN_FOR_REPLY = 2
 ENGLISH_STOPWORDS: frozenset[str] = frozenset(
     {
         "the",
@@ -276,13 +277,26 @@ def _compute_initiation_share(sessions: list[list[Message]], user_ids: list[str]
 
 
 def _compute_reply_latency(sessions: list[list[Message]], user_ids: list[str]) -> dict[str, dict[str, float]]:
-    """For each consecutive (run_by_A, run_by_B) inside a session, credit B with the gap."""
+    """One reply-latency sample per session that received a response.
+
+    For each session: time(first message from the other user) − time(the last
+    consecutive message in the initiator's opening run). The gap is credited to
+    the responder. Sessions where the initiator is never replied to are
+    discarded.
+    """
     latencies: dict[str, list[float]] = defaultdict(list)
     for session in sessions:
-        runs = [(uid, list(group)) for uid, group in groupby(session, key=lambda m: m.from_id)]
-        for (_, a_run), (b_uid, b_run) in zip(runs, runs[1:], strict=False):
-            gap = (b_run[0].date - a_run[-1].date).total_seconds()
-            latencies[b_uid].append(gap)
+        if len(session) < MIN_SESSION_LEN_FOR_REPLY:
+            continue
+        initiator = session[0].from_id
+        # Find the first message NOT from the initiator.
+        response_idx = next((i for i, m in enumerate(session) if m.from_id != initiator), None)
+        if response_idx is None:
+            continue  # initiator monologued the whole session — no reply to credit
+        last_initial_run_msg = session[response_idx - 1]
+        first_response = session[response_idx]
+        gap = (first_response.date - last_initial_run_msg.date).total_seconds()
+        latencies[first_response.from_id].append(gap)
     out: dict[str, dict[str, float]] = {}
     for uid in user_ids:
         samples = latencies.get(uid, [])
@@ -301,13 +315,17 @@ def _compute_reply_latency(sessions: list[list[Message]], user_ids: list[str]) -
 
 
 def _compute_double_text(sessions: list[list[Message]], user_ids: list[str]) -> dict[str, dict[str, float]]:
-    """Each message inside a monologue run beyond the first is a double-text."""
+    """Cross-session double-texts.
+
+    A double-text occurs when the same user sends the last message of session
+    N-1 *and* initiates session N — i.e. they followed up across a >4h gap
+    without receiving a reply. Each such session boundary adds one double-text
+    for the repeating user.
+    """
     counts: dict[str, int] = defaultdict(int)
-    for session in sessions:
-        for uid, group in groupby(session, key=lambda m: m.from_id):
-            run_len = sum(1 for _ in group)
-            if run_len > 1:
-                counts[uid] += run_len - 1
+    for prev, cur in zip(sessions, sessions[1:], strict=False):
+        if prev[-1].from_id == cur[0].from_id:
+            counts[cur[0].from_id] += 1
     total = sum(counts.values())
     return {
         uid: {

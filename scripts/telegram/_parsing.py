@@ -142,26 +142,66 @@ def load_chat(path: Path) -> tuple[ChatMetadata, list[Message]]:
 
 
 def _identify_participants(partner_name: str, sender_lookup: dict[str, str]) -> tuple[Participant, ...]:
-    """Map the root ``name`` to the partner; everything else is ``self``."""
+    """Label the actual ``from_id`` senders as self / partner.
+
+    Both participant IDs always come from ``sender_lookup`` (the unique ``from_id``
+    values observed in messages). The root-level ``name`` is the chat title — it
+    typically matches the partner's display name in messages but may differ, so
+    it's used only as a best-effort hint for which side is the partner. The root
+    ``id`` is the conversation id, not a user id, and is never used here.
+
+    Resolution order for picking which ``from_id`` is the partner:
+
+    1. Display name exactly equals ``partner_name``.
+    2. Display name case-insensitively equals ``partner_name``.
+    3. Display name and ``partner_name`` share a case-insensitive substring.
+    4. Fallback: the first-appearing sender is treated as the partner.
+
+    The other sender is labeled self. If only one ``from_id`` exists, it is
+    labeled self and an "unknown"-id partner is synthesized.
+    """
+    if not sender_lookup:
+        return ()
+
+    ids = list(sender_lookup.keys())
+    pname = (partner_name or "").strip()
+    pname_l = pname.lower()
+
     partner_id: str | None = None
-    self_id: str | None = None
-    self_display: str | None = None
-    for from_id, display in sender_lookup.items():
-        if display == partner_name and partner_id is None:
-            partner_id = from_id
-        elif self_id is None:
-            self_id = from_id
-            self_display = display
+    if pname:
+        for fid, display in sender_lookup.items():
+            if display == pname:
+                partner_id = fid
+                break
+        if partner_id is None:
+            for fid, display in sender_lookup.items():
+                if display.strip().lower() == pname_l:
+                    partner_id = fid
+                    break
+        if partner_id is None:
+            substring_matches = [
+                fid
+                for fid, display in sender_lookup.items()
+                if pname_l and (pname_l in display.strip().lower() or display.strip().lower() in pname_l)
+            ]
+            if len(substring_matches) == 1:
+                partner_id = substring_matches[0]
+
+    if partner_id is None:
+        # Fallback: first-appearing sender is the partner. Insertion order is
+        # message order (sender_lookup is populated via setdefault during the
+        # chronological message walk).
+        partner_id = ids[0]
+
+    self_id: str | None = next((fid for fid in ids if fid != partner_id), None)
 
     out: list[Participant] = []
     if self_id is not None:
-        out.append(Participant(id=self_id, display_name=self_display or "(you)", is_self=True))
-    if partner_id is not None:
-        out.append(Participant(id=partner_id, display_name=partner_name, is_self=False))
-    elif self_id is not None:
-        out.append(Participant(id="unknown", display_name=partner_name, is_self=False))
-    elif sender_lookup:
-        only_id, only_display = next(iter(sender_lookup.items()))
-        out.append(Participant(id=only_id, display_name=only_display, is_self=True))
-        out.append(Participant(id="unknown", display_name=partner_name, is_self=False))
+        out.append(Participant(id=self_id, display_name=sender_lookup[self_id], is_self=True))
+        out.append(Participant(id=partner_id, display_name=sender_lookup[partner_id], is_self=False))
+    else:
+        # Single-sender chat — label the only id as self, synthesize a partner.
+        only_id = partner_id
+        out.append(Participant(id=only_id, display_name=sender_lookup[only_id], is_self=True))
+        out.append(Participant(id="unknown", display_name=pname or "(partner)", is_self=False))
     return tuple(out)

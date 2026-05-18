@@ -15,8 +15,10 @@ from core.paths import inputs_dir as _core_inputs_dir
 from core.paths import outputs_dir as _core_outputs_dir
 from scripts.telegram._parsing import InvalidExportError, load_chat
 
-TITLE = "Telegram Chat Analysis"
-DESCRIPTION = "Generate a descriptive-analytics report (JSON + PDF + charts) from a Telegram personal-chat export."
+TITLE = "Analyze your Telegram chat history and generate a report full of insights"
+DESCRIPTION = (
+    "Generate a descriptive-analytics report (flashy PDF, stats and charts) based on a Telegram chat history export."
+)
 
 _CHARTS_DIR = "charts"
 _JSON_NAME = "chat_analytics.json"
