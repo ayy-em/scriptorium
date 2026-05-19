@@ -17,6 +17,7 @@ import matplotlib
 
 matplotlib.use("Agg")  # headless backend; must be set before pyplot import
 from matplotlib.colors import LinearSegmentedColormap  # noqa: E402
+import matplotlib.patheffects as path_effects  # noqa: E402
 import matplotlib.pyplot as plt  # noqa: E402
 from wordcloud import WordCloud  # noqa: E402
 
@@ -30,6 +31,7 @@ SHARED_COLOR = "#C084FC"  # lavender — matches --shared
 HERO_COLOR = "#FFEB3B"  # vivid yellow — matches --hero
 HEATMAP_COLD = "#1E3A8A"  # deep indigo, low alpha at the cold end
 HEATMAP_HOT = "#FF1A6B"  # hot pink at the busy end
+WHITE_100 = (1.0, 1.0, 1.0, 1.0)
 WHITE_90 = (1.0, 1.0, 1.0, 0.90)
 WHITE_60 = (1.0, 1.0, 1.0, 0.60)
 WHITE_25 = (1.0, 1.0, 1.0, 0.25)
@@ -53,16 +55,16 @@ def _participant_label(analytics: dict[str, Any], uid: str) -> str:
     return uid
 
 
-def _style_axes(ax: plt.Axes) -> None:
+def _style_axes(ax: plt.Axes, label_color: tuple[float, ...] = WHITE_90) -> None:
     """Strip frame, light grid, white tick labels — designed for dark backdrop."""
     for spine in ax.spines.values():
         spine.set_visible(False)
-    ax.tick_params(colors=WHITE_90, which="both", length=0)
+    ax.tick_params(colors=label_color, which="both", length=0)
     for lbl in (*ax.get_xticklabels(), *ax.get_yticklabels()):
-        lbl.set_color(WHITE_90)
-    ax.xaxis.label.set_color(WHITE_90)
-    ax.yaxis.label.set_color(WHITE_90)
-    ax.title.set_color(WHITE_90)
+        lbl.set_color(label_color)
+    ax.xaxis.label.set_color(label_color)
+    ax.yaxis.label.set_color(label_color)
+    ax.title.set_color(label_color)
     ax.grid(False)
 
 
@@ -78,7 +80,7 @@ def render_monthly_volume(analytics: dict[str, Any], charts_dir: Path) -> Path:
     current_month = now.month
     current_day = max(now.day, 1)
 
-    fig, ax = plt.subplots(figsize=(9, 4.5))
+    fig, ax = plt.subplots(figsize=(9, 4.0))
     fig.patch.set_alpha(0.0)
     ax.set_facecolor((0, 0, 0, 0))
 
@@ -96,16 +98,25 @@ def render_monthly_volume(analytics: dict[str, Any], charts_dir: Path) -> Path:
             display_values, forecast_value = _forecast_current_year_series(
                 values, current_month, current_day, current_year
             )
-            ax.plot(
+            (line,) = ax.plot(
                 MONTHS,
                 display_values,
                 label=f"{year}*",
                 marker="o",
                 color=color,
                 alpha=alpha,
-                linewidth=2.5,
-                markersize=6,
+                linewidth=3.5,
+                markersize=7,
                 markeredgewidth=0,
+                zorder=5,
+            )
+            # Soft glow around the current-year line — a wider stroke at low alpha
+            # behind the actual line gives the neon-bloom effect.
+            line.set_path_effects(
+                [
+                    path_effects.Stroke(linewidth=9, foreground=color, alpha=0.35),
+                    path_effects.Normal(),
+                ]
             )
             ax.plot(
                 [MONTHS[current_month - 1]],
@@ -113,9 +124,10 @@ def render_monthly_volume(analytics: dict[str, Any], charts_dir: Path) -> Path:
                 marker="o",
                 markerfacecolor="none",
                 markeredgecolor=color,
-                markeredgewidth=2,
-                markersize=10,
+                markeredgewidth=2.5,
+                markersize=12,
                 linestyle="None",
+                zorder=6,
             )
             actual_this_month = values[current_month - 1]
             forecast_caption = (
@@ -139,6 +151,7 @@ def render_monthly_volume(analytics: dict[str, Any], charts_dir: Path) -> Path:
     ax.set_ylabel("Messages")
     ax.yaxis.grid(True, linestyle="-", linewidth=0.4, color=WHITE_25, alpha=1.0)
     ax.set_axisbelow(True)
+    ax.margins(x=0.02)
 
     leg = ax.legend(
         title="Year",
@@ -207,19 +220,19 @@ def render_activity_heatmap(analytics: dict[str, Any], charts_dir: Path) -> Path
 
     im = ax.imshow(matrix, aspect="auto", cmap=cmap, interpolation="nearest")
     ax.set_xticks(range(0, 24, 2))
-    ax.set_xticklabels([f"{h:02d}" for h in range(0, 24, 2)])
+    ax.set_xticklabels([f"{h:02d}" for h in range(0, 24, 2)], fontsize=10)
     ax.set_yticks(range(7))
-    ax.set_yticklabels(days)
-    ax.set_xlabel("Hour of day")
+    ax.set_yticklabels(days, fontsize=10)
+    ax.set_xlabel("Hour of day", fontsize=10)
 
     cbar = fig.colorbar(im, ax=ax, label="Messages", pad=0.02, shrink=0.85)
     cbar.outline.set_visible(False)
-    cbar.ax.tick_params(colors=WHITE_90, length=0)
+    cbar.ax.tick_params(colors=WHITE_100, length=0, labelsize=9)
     for lbl in cbar.ax.get_yticklabels():
-        lbl.set_color(WHITE_90)
-    cbar.ax.yaxis.label.set_color(WHITE_90)
+        lbl.set_color(WHITE_100)
+    cbar.ax.yaxis.label.set_color(WHITE_100)
 
-    _style_axes(ax)
+    _style_axes(ax, label_color=WHITE_100)
 
     path = charts_dir / "activity_heatmap.png"
     _save_transparent(fig, path)

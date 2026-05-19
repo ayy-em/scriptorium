@@ -251,45 +251,16 @@
    PAGE 4 — STREAKS + WORDS + EMOJIS
    ============================================================ #}
 <section class="page">
-  <h2 class="section">Streaks &amp; favorites</h2>
+  <h2 class="section">Words, faves &amp; streaks</h2>
 
-  <table class="grid">
-    <tr>
-      <td style="width: 50%;">
-        <div class="card accent-hero">
-          <div class="label">Dry spell</div>
-          <div class="streak">
-            <div class="days">{{ "{:,}".format(a.streaks.longest_silence.days) }}</div>
-            <div class="label">days of silence</div>
-            <div class="span">
-              {{ a.streaks.longest_silence.start }} → {{ a.streaks.longest_silence.end }}
-            </div>
-          </div>
-        </div>
-      </td>
-      <td style="width: 50%;">
-        <div class="card accent-hero">
-          <div class="label">Hot streak</div>
-          <div class="streak">
-            <div class="days">{{ "{:,}".format(a.streaks.longest_streak.days) }}</div>
-            <div class="label">days non-stop</div>
-            <div class="span">
-              {{ a.streaks.longest_streak.start }} → {{ a.streaks.longest_streak.end }}
-            </div>
-          </div>
-        </div>
-      </td>
-    </tr>
-  </table>
-
-  <div class="card" style="margin-top: 0.4cm;">
+  <div class="card">
     <h3>Word cloud</h3>
     <p class="figure" style="margin-bottom: 4pt;">
       <span style="color: var(--self); font-weight: 700;">{{ self_name }}'s words</span>
       &middot;
       <span style="color: var(--partner); font-weight: 700;">{{ partner_name }}'s words</span>
       &middot;
-      <span style="color: #A855F7; font-weight: 700;">shared</span>
+      <span style="color: var(--shared); font-weight: 700;">shared</span>
     </p>
     <div class="chart-frame">
       <img src="{{ charts.word_cloud }}" alt="Word cloud" />
@@ -328,6 +299,35 @@
             <tr><td class="rank">—</td><td class="glyph">—</td><td class="count">—</td></tr>
             {% endfor %}
           </table>
+        </div>
+      </td>
+    </tr>
+  </table>
+
+  <table class="grid streaks-row" style="margin-top: 0.4cm;">
+    <tr>
+      <td style="width: 50%;">
+        <div class="card streak-card">
+          <div class="label">Dry spell</div>
+          <div class="streak">
+            <div class="days">{{ "{:,}".format(a.streaks.longest_silence.days) }}</div>
+            <div class="label">days of silence</div>
+            <div class="span">
+              {{ a.streaks.longest_silence.start }} → {{ a.streaks.longest_silence.end }}
+            </div>
+          </div>
+        </div>
+      </td>
+      <td style="width: 50%;">
+        <div class="card streak-card">
+          <div class="label">Hot streak</div>
+          <div class="streak">
+            <div class="days">{{ "{:,}".format(a.streaks.longest_streak.days) }}</div>
+            <div class="label">days non-stop</div>
+            <div class="span">
+              {{ a.streaks.longest_streak.start }} → {{ a.streaks.longest_streak.end }}
+            </div>
+          </div>
         </div>
       </td>
     </tr>
