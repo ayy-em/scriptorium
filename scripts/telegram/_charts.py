@@ -16,14 +16,30 @@ import warnings
 import matplotlib
 
 matplotlib.use("Agg")  # headless backend; must be set before pyplot import
+from matplotlib import font_manager  # noqa: E402
 from matplotlib.colors import LinearSegmentedColormap  # noqa: E402
 import matplotlib.patheffects as path_effects  # noqa: E402
 import matplotlib.pyplot as plt  # noqa: E402
 from wordcloud import WordCloud  # noqa: E402
 
+from core.paths import assets_dir  # noqa: E402
+
 # matplotlib's default DejaVu font lacks glyphs for many emoji; we accept the
 # visual gap in bar-chart labels rather than chase a system emoji font that may
 # not exist on every platform. Warnings are suppressed at the call site below.
+
+
+def _register_ubuntu_font() -> None:
+    """Make Ubuntu available to matplotlib so chart labels match the PDF body font."""
+    ubuntu_dir = assets_dir() / "fonts" / "Ubuntu"
+    if not ubuntu_dir.is_dir():
+        return
+    for ttf in ubuntu_dir.glob("Ubuntu-*.ttf"):
+        font_manager.fontManager.addfont(str(ttf))
+    plt.rcParams["font.family"] = "Ubuntu"
+
+
+_register_ubuntu_font()
 
 SELF_COLOR = "#38BDF8"  # bright sky — matches --self in report.css
 PARTNER_COLOR = "#FF4D6D"  # electric coral — matches --partner
@@ -101,7 +117,7 @@ def render_monthly_volume(analytics: dict[str, Any], charts_dir: Path) -> Path:
             (line,) = ax.plot(
                 MONTHS,
                 display_values,
-                label=f"{year}*",
+                label=year,
                 marker="o",
                 color=color,
                 alpha=alpha,
@@ -129,11 +145,9 @@ def render_monthly_volume(analytics: dict[str, Any], charts_dir: Path) -> Path:
                 linestyle="None",
                 zorder=6,
             )
-            actual_this_month = values[current_month - 1]
             forecast_caption = (
-                f"* {MONTHS[current_month - 1]} {current_year} forecast: "
-                f"{actual_this_month} msgs in {current_day} day(s) → "
-                f"~{forecast_value} for the full month"
+                f"{MONTHS[current_month - 1]} {current_year} projected to "
+                f"~{forecast_value:,} messages ({current_day} days observed)"
             )
         else:
             ax.plot(
@@ -153,21 +167,24 @@ def render_monthly_volume(analytics: dict[str, Any], charts_dir: Path) -> Path:
     ax.set_axisbelow(True)
     ax.margins(x=0.02)
 
+    # Flat horizontal legend above the plot — outside the data area so it
+    # doesn't fight with the lines for attention.
     leg = ax.legend(
-        title="Year",
-        loc="upper left",
+        loc="lower center",
+        bbox_to_anchor=(0.5, 1.02),
+        ncol=n_years,
         frameon=False,
-        labelcolor=WHITE_90,
-        fontsize=9,
-        title_fontsize=9,
+        labelcolor=WHITE_100,
+        fontsize=10,
+        handlelength=1.6,
+        columnspacing=2.0,
+        borderaxespad=0.0,
     )
-    if leg is not None:
-        leg.get_title().set_color(WHITE_90)
 
-    _style_axes(ax)
+    _style_axes(ax, label_color=WHITE_100)
 
     if forecast_caption:
-        fig.text(0.5, 0.0, forecast_caption, ha="center", fontsize=8, color=WHITE_60)
+        fig.text(0.5, -0.02, forecast_caption, ha="center", fontsize=9, color=WHITE_60)
 
     path = charts_dir / "monthly_volume.png"
     _save_transparent(fig, path)

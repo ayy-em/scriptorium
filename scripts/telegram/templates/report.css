@@ -66,8 +66,23 @@
   --white-90: rgba(255, 255, 255, 0.90);
   --white-70: rgba(255, 255, 255, 0.70);
   --white-50: rgba(255, 255, 255, 0.50);
-  --card-bg: rgba(255, 255, 255, 0.08);
+  --card-bg: rgba(255, 255, 255, 0.14);
   --card-border: rgba(255, 255, 255, 0.22);
+
+  /* Type scale — every text element picks one of these. Seven sizes, deliberate ranks. */
+  --fs-showcase: 36pt;   /* the very biggest stats: callout values, streak days */
+  --fs-hero: 28pt;       /* the page-1 title */
+  --fs-stat: 22pt;       /* row-2 per-user stats */
+  --fs-section: 18pt;    /* section titles (P2–P4) */
+  --fs-h3: 12pt;         /* card h3, podium title */
+  --fs-body: 10pt;       /* punchline, body prose */
+  --fs-label: 8pt;       /* uppercase labels, fine print */
+
+  /* Spacing scale — every margin/padding picks one of these. */
+  --gap-xs: 4pt;
+  --gap-sm: 8pt;
+  --gap-md: 14pt;
+  --gap-lg: 20pt;
 }
 
 * { box-sizing: border-box; }
@@ -90,37 +105,41 @@ html, body {
 }
 .page:last-child { page-break-after: auto; }
 
+/* ---------- Page eyebrow — small label above the section title ---------- */
+.page-eyebrow {
+  font-family: "Poppins", sans-serif;
+  font-weight: 600;
+  font-size: var(--fs-label);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--white-50);
+  margin: 0 0 var(--gap-xs) 0;
+}
+
 /* ---------- Hero typography ---------- */
 h1.hero {
   font-family: "Poppins", sans-serif;
   font-weight: 800;
-  font-size: 28pt;
+  font-size: var(--fs-hero);
   line-height: 1.1;
   color: var(--hero);
-  margin: 0 0 0.4cm 0;
+  margin: 0 0 var(--gap-md) 0;
   text-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
 }
 h2.section {
   font-family: "Poppins", sans-serif;
   font-weight: 700;
-  font-size: 18pt;
+  font-size: var(--fs-section);
   color: #FFFFFF;
-  margin: 0 0 0.25cm 0;
+  margin: 0 0 var(--gap-sm) 0;
   text-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
 }
 p.tagline {
   font-family: "Ubuntu", sans-serif;
   font-weight: 400;
-  font-size: 11pt;
+  font-size: var(--fs-body);
   color: var(--white-90);
-  margin: 0 0 0.5cm 0;
-}
-.uppercase {
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-  font-size: 7.5pt;
-  font-weight: 500;
-  color: var(--white-70);
+  margin: 0 0 var(--gap-lg) 0;
 }
 
 /* ---------- Layout primitives ---------- */
@@ -153,24 +172,24 @@ table.grid > tr > td {
 .card h3 {
   font-family: "Poppins", sans-serif;
   font-weight: 700;
-  font-size: 11pt;
-  margin: 0 0 6pt 0;
+  font-size: var(--fs-h3);
+  margin: 0 0 var(--gap-sm) 0;
   color: #FFFFFF;
 }
 .card .label {
   text-transform: uppercase;
   letter-spacing: 0.10em;
-  font-size: 7pt;
+  font-size: var(--fs-label);
   font-weight: 600;
   color: var(--white-70);
-  margin-bottom: 4pt;
+  margin-bottom: var(--gap-xs);
 }
 .card .punchline {
   font-family: "Ubuntu", sans-serif;
   font-weight: 500;
-  font-size: 10.5pt;
+  font-size: var(--fs-body);
   color: #FFFFFF;
-  margin: 0 0 6pt 0;
+  margin: 0 0 var(--gap-sm) 0;
   line-height: 1.4;
 }
 .card .punchline strong {
@@ -180,7 +199,7 @@ table.grid > tr > td {
 .card .figure {
   font-family: "Ubuntu", sans-serif;
   font-weight: 300;
-  font-size: 9pt;
+  font-size: var(--fs-label);
   color: var(--white-70);
   margin: 0;
   line-height: 1.4;
@@ -189,36 +208,38 @@ table.grid > tr > td {
 /* ---------- Stat callout (big number + uppercase label) ---------- */
 .callout {
   text-align: center;
-  padding: 10pt 6pt 12pt 6pt;
+  padding: var(--gap-sm) var(--gap-xs) var(--gap-md) var(--gap-xs);
 }
 .callout .value {
   font-family: "Poppins", sans-serif;
   font-weight: 800;
-  font-size: 34pt;
+  font-size: var(--fs-showcase);
   line-height: 1;
   color: #FFFFFF;
   text-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
   margin: 0;
+  font-variant-numeric: tabular-nums;
 }
 .callout .value.accent-hero { color: var(--hero); }
 .callout .sublabel {
   text-transform: uppercase;
   letter-spacing: 0.14em;
   font-weight: 600;
-  font-size: 7pt;
+  font-size: var(--fs-label);
   color: var(--white-70);
-  margin-top: 4pt;
+  margin-top: var(--gap-xs);
 }
 
 /* ---------- Charts ---------- */
 .chart-frame {
   text-align: center;
-  margin: 4pt 0 0 0;
+  margin: var(--gap-xs) 0 0 0;
 }
 .chart-frame img {
   max-width: 100%;
   max-height: 8.5cm;
   height: auto;
+  border-radius: 8pt;
 }
 .chart-frame.tall img { max-height: 11cm; }
 
@@ -259,8 +280,9 @@ table.grid > tr > td {
   width: 18pt;
   font-family: "Poppins", sans-serif;
   font-weight: 700;
-  font-size: 11pt;
+  font-size: var(--fs-h3);
   color: var(--white-50);
+  font-variant-numeric: tabular-nums;
 }
 .podium .glyph {
   font-size: 26pt;
@@ -270,17 +292,18 @@ table.grid > tr > td {
 }
 .podium .count {
   text-align: right;
-  padding-right: 4pt;
+  padding-right: var(--gap-xs);
   font-family: "Poppins", sans-serif;
   font-weight: 700;
-  font-size: 12pt;
+  font-size: var(--fs-h3);
   color: #FFFFFF;
+  font-variant-numeric: tabular-nums;
 }
 .podium-title {
   font-family: "Poppins", sans-serif;
   font-weight: 700;
-  font-size: 12pt;
-  margin: 0 0 4pt 0;
+  font-size: var(--fs-h3);
+  margin: 0 0 var(--gap-xs) 0;
 }
 .podium-title.self    { color: var(--self); }
 .podium-title.partner { color: var(--partner); }
@@ -292,11 +315,14 @@ table.grid > tr > td {
   left: 1.2cm;
   right: 1.2cm;
   font-family: "Ubuntu", sans-serif;
-  font-weight: 300;
-  font-size: 7pt;
-  color: var(--white-50);
+  font-weight: 400;
+  font-size: var(--fs-label);
+  color: var(--white-70);
   text-align: center;
+  letter-spacing: 0.06em;
 }
+.footer .pip { color: var(--white-50); margin: 0 1pt; }
+.footer .pip.on { color: var(--hero); }
 
 /* ---------- Domain list ---------- */
 .domain-list {
@@ -309,7 +335,7 @@ table.grid > tr > td {
   justify-content: space-between;
   padding: 3pt 0;
   border-bottom: 0.4pt solid rgba(255, 255, 255, 0.10);
-  font-size: 9.5pt;
+  font-size: var(--fs-body);
 }
 .domain-list li:last-child { border-bottom: 0; }
 .domain-list .domain {
@@ -321,6 +347,7 @@ table.grid > tr > td {
   font-family: "Poppins", sans-serif;
   font-weight: 700;
   color: #FFFFFF;
+  font-variant-numeric: tabular-nums;
 }
 
 /* ---------- Inline "stat row" — two side-by-side big numbers in a card ---------- */
@@ -339,15 +366,16 @@ table.grid > tr > td {
 .row-2 .v {
   font-family: "Poppins", sans-serif;
   font-weight: 800;
-  font-size: 22pt;
+  font-size: var(--fs-stat);
   line-height: 1;
   color: #FFFFFF;
   margin: 0;
+  font-variant-numeric: tabular-nums;
 }
 .row-2 .v.self    { color: var(--self); }
 .row-2 .v.partner { color: var(--partner); }
 .row-2 .l {
-  font-size: 8pt;
+  font-size: var(--fs-label);
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.10em;
@@ -360,29 +388,41 @@ table.grid > tr > td {
   border: 1.5pt solid var(--hero);
   box-shadow: 0 0 0 3pt rgba(255, 235, 59, 0.10);
 }
+.streak-card.cool {
+  border-color: var(--self);
+  box-shadow: 0 0 0 3pt rgba(56, 189, 248, 0.10);
+}
+.streak-card.warm {
+  border-color: var(--hero);
+  box-shadow: 0 0 0 3pt rgba(255, 235, 59, 0.10);
+}
 .streak {
   text-align: center;
-  padding: 8pt 4pt;
+  padding: var(--gap-sm) var(--gap-xs);
 }
 .streak .days {
   font-family: "Poppins", sans-serif;
   font-weight: 800;
-  font-size: 38pt;
+  font-size: var(--fs-showcase);
   line-height: 1;
   color: var(--hero);
   text-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  font-variant-numeric: tabular-nums;
 }
+.streak-card.cool .streak .days { color: var(--self); }
+.streak-card.warm .streak .days { color: var(--hero); }
 .streak .span {
   font-family: "Ubuntu", sans-serif;
   font-weight: 400;
-  font-size: 9pt;
+  font-size: var(--fs-label);
   color: var(--white-70);
-  margin-top: 6pt;
+  margin-top: var(--gap-sm);
+  font-variant-numeric: tabular-nums;
 }
 .streak .label {
   text-transform: uppercase;
   letter-spacing: 0.12em;
   font-weight: 600;
-  font-size: 8pt;
+  font-size: var(--fs-label);
   color: var(--white-90);
 }
