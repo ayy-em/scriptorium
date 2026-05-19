@@ -3,7 +3,9 @@
 from collections.abc import Callable
 from pathlib import Path
 
-from core.paths import inputs_dir, outputs_dir
+from core.paths import inputs_dir, move_to_past_inputs, outputs_dir
+
+_ARCHIVE_THEME = "formats"
 
 VIDEO_EXTS = frozenset({".mp4", ".mkv", ".mov", ".avi", ".webm", ".m4v", ".flv"})
 AUDIO_EXTS = frozenset({".mp3", ".wav", ".aac", ".flac", ".ogg", ".m4a", ".wma", ".opus"})
@@ -85,6 +87,7 @@ def run_convert(
     if source.is_file():
         output = outputs_dir_path / f"{source.stem}{out_suffix}"
         fn(source, output)
+        move_to_past_inputs(_ARCHIVE_THEME, source)
         return [output]
 
     files = find_files(source, exts)
@@ -96,6 +99,7 @@ def run_convert(
         try:
             fn(f, output)
             successes.append(output)
+            move_to_past_inputs(_ARCHIVE_THEME, f)
         except Exception as e:
             failures.append(f"{f.name}: {e}")
 

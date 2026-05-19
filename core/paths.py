@@ -1,5 +1,6 @@
 """Centralized path resolution for frozen (PyInstaller) and development modes."""
 
+from datetime import datetime
 from pathlib import Path
 import shutil
 import sys
@@ -43,6 +44,48 @@ def inputs_dir(theme: str) -> Path:
         d = _bundle_dir() / "scripts" / theme / "inputs"
     d.mkdir(parents=True, exist_ok=True)
     return d
+
+
+def past_inputs_dir(theme: str) -> Path:
+    """Return the past_inputs (archive) directory for a theme, creating it if needed."""
+    if FROZEN:
+        d = _user_data_dir() / "past_inputs" / theme
+    else:
+        d = _bundle_dir() / "scripts" / theme / "past_inputs"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def move_to_past_inputs(theme: str, source: Path) -> Path | None:
+    """Move a processed input file to past_inputs/<theme>/.
+
+    Only moves files that live inside the theme's ``inputs_dir`` — files passed via an
+    absolute path outside the inputs tree are left alone (callers shouldn't archive
+    arbitrary user files). Returns the destination path on success, ``None`` if the
+    source was skipped or the move failed.
+
+    Filename collisions inside ``past_inputs/<theme>/`` are resolved by appending a
+    timestamp suffix so prior archived copies are preserved.
+    """
+    if not source.is_file():
+        return None
+    try:
+        source_resolved = source.resolve()
+        inputs_root = inputs_dir(theme).resolve()
+        source_resolved.relative_to(inputs_root)
+    except OSError, ValueError:
+        return None
+
+    dest_dir = past_inputs_dir(theme)
+    dest = dest_dir / source.name
+    if dest.exists():
+        stamp = datetime.now().strftime("%Y%m%dT%H%M%S")
+        dest = dest_dir / f"{source.stem}_{stamp}{source.suffix}"
+    try:
+        source.rename(dest)
+    except OSError:
+        return None
+    return dest
 
 
 def logs_dir() -> Path:
