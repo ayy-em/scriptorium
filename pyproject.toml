@@ -49,6 +49,9 @@ desktop   = ["pywebview>=5.0"]
 speech = [
     "openai>=1.50",
 ]
+documents = [
+    "pypdf>=4.0",
+]
 
 [tool.uv]
 package = true
