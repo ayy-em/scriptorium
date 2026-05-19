@@ -35,4 +35,5 @@ tests/telegram/fixtures/chat_export/result.json
 inputs/
 outputs/
 past_inputs/
+logs/
 *.json

@@ -45,6 +45,16 @@ def inputs_dir(theme: str) -> Path:
     return d
 
 
+def logs_dir() -> Path:
+    """Return the directory for runtime logs, creating it if needed."""
+    if FROZEN:
+        d = _user_data_dir() / "logs"
+    else:
+        d = _bundle_dir() / "logs"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
 def outputs_dir(theme: str) -> Path:
     """Return the outputs directory for a theme, creating it if needed.
 
