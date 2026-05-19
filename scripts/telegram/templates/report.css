@@ -142,17 +142,31 @@ p.tagline {
   margin: 0 0 var(--gap-lg) 0;
 }
 
-/* ---------- Layout primitives ---------- */
+/* ---------- Layout primitives ----------
+   border-spacing would inset the outermost cells from the table edges,
+   which makes 2-col/3-col cards sit narrower than full-width cards above
+   and below them. Move the gap into per-cell padding instead, zero on
+   first/last child, so cell edges remain flush with the table edges. */
 table.grid {
   width: 100%;
   border-collapse: separate;
-  border-spacing: 0.35cm;
+  border-spacing: 0;
   margin: 0;
   table-layout: fixed;
+  /* height:1px is the canonical trick that lets td > .card stretch via
+     height:100% — without an explicit table height, cells refuse to
+     resolve a percentage child height. */
+  height: 1px;
 }
 table.grid > tr > td {
   vertical-align: top;
-  padding: 0;
+  padding: 0 0.175cm;
+  height: inherit;
+}
+table.grid > tr > td:first-child  { padding-left: 0; }
+table.grid > tr > td:last-child   { padding-right: 0; }
+table.grid > tr > td > .card {
+  height: 100%;
 }
 
 /* ---------- Frosted card ---------- */
@@ -209,6 +223,7 @@ table.grid > tr > td {
 .callout {
   text-align: center;
   padding: var(--gap-sm) var(--gap-xs) var(--gap-md) var(--gap-xs);
+  min-height: 7rem;
 }
 .callout .value {
   font-family: "Poppins", sans-serif;
@@ -327,8 +342,13 @@ table.grid > tr > td {
 
 /* ---------- Silence-breaker opener words ---------- */
 .opener-grid {
-  border-spacing: 0.25cm;
+  border-spacing: 0;
 }
+.opener-grid > tr > td {
+  padding: 0 0.12cm;
+}
+.opener-grid > tr > td:first-child { padding-left: 0; }
+.opener-grid > tr > td:last-child  { padding-right: 0; }
 .opener-col .opener-title {
   font-family: "Poppins", sans-serif;
   font-weight: 700;
@@ -348,9 +368,11 @@ table.grid > tr > td {
 .opener-list li {
   display: flex;
   justify-content: space-between;
-  padding: 2pt 0;
-  font-size: var(--fs-body);
+  align-items: baseline;
+  padding: 1.5pt 0;
+  font-size: var(--fs-label);
   border-bottom: 0.4pt solid rgba(255, 255, 255, 0.10);
+  gap: 4pt;
 }
 .opener-list li:last-child { border-bottom: 0; }
 .opener-list .opener-word {
@@ -360,13 +382,15 @@ table.grid > tr > td {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 75%;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 .opener-list .opener-n {
   font-family: "Poppins", sans-serif;
   font-weight: 700;
   color: #FFFFFF;
   font-variant-numeric: tabular-nums;
+  flex: 0 0 auto;
 }
 
 /* ---------- Domain list ---------- */
@@ -374,13 +398,16 @@ table.grid > tr > td {
   margin: 0;
   padding: 0;
   list-style: none;
+  width: 100%;
 }
 .domain-list li {
   display: flex;
   justify-content: space-between;
+  align-items: baseline;
   padding: 3pt 0;
   border-bottom: 0.4pt solid rgba(255, 255, 255, 0.10);
   font-size: var(--fs-body);
+  gap: 6pt;
 }
 .domain-list li:last-child { border-bottom: 0; }
 .domain-list .domain {
@@ -390,13 +417,15 @@ table.grid > tr > td {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 75%;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 .domain-list .n {
   font-family: "Poppins", sans-serif;
   font-weight: 700;
   color: #FFFFFF;
   font-variant-numeric: tabular-nums;
+  flex: 0 0 auto;
 }
 
 /* ---------- Inline "stat row" — two side-by-side big numbers in a card ---------- */

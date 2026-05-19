@@ -101,7 +101,9 @@ def render_monthly_volume(analytics: dict[str, Any], charts_dir: Path) -> Path:
     ax.set_facecolor((0, 0, 0, 0))
 
     forecast_caption: str | None = None
-    year_keys = sorted(monthly.keys())
+    # The yearly bar chart shows every year; the monthly line chart keeps the
+    # last few years so the legend doesn't drown the data.
+    year_keys = sorted(monthly.keys())[-3:]
     n_years = len(year_keys)
     for i, year in enumerate(year_keys):
         values = monthly[year]

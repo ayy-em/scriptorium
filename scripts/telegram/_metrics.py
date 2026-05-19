@@ -129,12 +129,14 @@ def _compute_share(messages: list[Message], user_ids: list[str]) -> dict[str, fl
 
 
 def _compute_monthly_volume(messages: list[Message], current_year: int) -> dict[str, list[int]]:
-    years = [current_year - 2, current_year - 1, current_year]
-    present_years = {m.date.year for m in messages}
+    """Per-month message counts for every year present in the export.
+
+    Yearly bar chart on page 1 wants the full history; the monthly line chart
+    caps its own series at the most recent few years for legibility.
+    """
+    present_years = sorted({m.date.year for m in messages})
     out: dict[str, list[int]] = {}
-    for y in years:
-        if y not in present_years:
-            continue
+    for y in present_years:
         buckets = [0] * 12
         for m in messages:
             if m.date.year == y:

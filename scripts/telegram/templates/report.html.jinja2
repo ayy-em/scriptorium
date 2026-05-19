@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Chat analytics — {{ a.source.chat_name }}</title>
+  <title>Chat Analytics — {{ a.source.chat_name }}</title>
   <style>{{ css | safe }}</style>
 </head>
 <body>
@@ -43,12 +43,12 @@
   </table>
 
   <div class="card" style="margin-top: var(--gap-md);">
-    <h3>Yearly totals</h3>
+    <h3>Messages, per year</h3>
     <div class="chart-frame yearly">
       <img src="{{ charts.yearly_volume }}" alt="Messages per year" />
     </div>
     <p class="figure" style="margin-top: var(--gap-xs);">
-      Solid bars show actual messages exchanged; the dashed cap on {{ current_year }} extrapolates the rest of the year at the year-to-date pace.
+      Current year is a combination of actuals and projected forecast for the rest of the year.
     </p>
   </div>
 
@@ -213,12 +213,12 @@
   <h2 class="section">When &amp; how you talk</h2>
 
   <div class="card">
-    <h3>Activity heatmap — day of week &times; hour of day</h3>
+    <h3>Activity Heatmap</h3>
     <div class="chart-frame">
       <img src="{{ charts.activity_heatmap }}" alt="Activity heatmap" />
     </div>
     <p class="figure" style="margin-top: var(--gap-xs);">
-      Peak slot: <strong style="color: #FFFFFF;">{{ a.activity_heatmap.peak.day }} at {{ "%02d:00" | format(a.activity_heatmap.peak.hour) }}</strong>
+      Your hottest slot: <strong style="color: #FFFFFF;">{{ a.activity_heatmap.peak.day }} at {{ "%02d:00" | format(a.activity_heatmap.peak.hour) }}</strong>
       with <strong style="color: #FFFFFF;">{{ "{:,}".format(a.activity_heatmap.peak.count) }}</strong> messages.
     </p>
   </div>
