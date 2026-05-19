@@ -38,6 +38,7 @@ class Message:
     text_entities: list[dict] = field(default_factory=list)
     media_type: str | None = None
     sticker_emoji: str | None = None
+    forwarded_from_id: str | None = None
 
 
 SUPPORTED_CHAT_TYPE = "personal_chat"
@@ -92,6 +93,7 @@ def _normalize_one(raw: dict) -> Message | None:
     if not isinstance(entities, list):
         entities = []
     text = _flatten_entities(entities)
+    fwd_id = raw.get("forwarded_from_id") or raw.get("forwarded_from")
     return Message(
         date=date,
         from_id=str(from_id),
@@ -100,6 +102,7 @@ def _normalize_one(raw: dict) -> Message | None:
         text_entities=list(entities),
         media_type=raw.get("media_type"),
         sticker_emoji=raw.get("sticker_emoji"),
+        forwarded_from_id=str(fwd_id) if fwd_id else None,
     )
 
 

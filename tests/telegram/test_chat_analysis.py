@@ -36,9 +36,9 @@ class TestChatAnalysisE2E:
         assert "chat_analytics.pdf" in names
         chart_pngs = {n for n in names if n.startswith("charts/") and n.endswith(".png")}
         assert "charts/monthly_volume.png" in chart_pngs
+        assert "charts/yearly_volume.png" in chart_pngs
         assert "charts/activity_heatmap.png" in chart_pngs
         assert "charts/message_share.png" in chart_pngs
-        assert "charts/reply_latency.png" in chart_pngs
         assert "charts/word_cloud.png" in chart_pngs
         assert "charts/emoji_cloud.png" in chart_pngs
 

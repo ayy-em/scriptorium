@@ -19,6 +19,8 @@ LINK_ENTITY_TYPES = {"link", "text_link", "url"}
 TOP_N_EMOJIS = 20
 TOP_N_STICKERS = 20
 TOP_N_DOMAINS = 10
+TOP_N_OPENER_WORDS = 5
+LONG_MESSAGE_WORD_THRESHOLD = 50
 MIN_WORD_LEN = 4
 # Flattened text must be longer than this to count in length/vocab metrics —
 # weeds out stickers, one-letter reactions, and other noise.
@@ -57,11 +59,13 @@ def build_analytics(
     double_text = _compute_double_text(sessions, user_ids)
 
     length_stats = _compute_message_length(messages, user_ids)
+    long_msg = _compute_long_message_share(messages, user_ids)
     vocab = _compute_vocab_richness(messages, user_ids)
     streaks = _compute_streaks(messages)
     links = _compute_external_links(messages, user_ids)
     top_emojis = _compute_top_emojis(messages, user_ids)
     top_stickers = _compute_top_stickers(messages, user_ids)
+    opener_words = _compute_session_opener_words(sessions, user_ids)
 
     return {
         "schema_version": 1,
@@ -84,6 +88,7 @@ def build_analytics(
         "activity_heatmap": heatmap,
         "initiation_share": initiation,
         "median_message_length": length_stats,
+        "long_message_share": long_msg,
         "reply_latency_seconds": reply_latency,
         "double_text_rate": double_text,
         "vocabulary_richness": vocab,
@@ -91,6 +96,7 @@ def build_analytics(
         "external_links": links,
         "top_emojis": top_emojis,
         "top_stickers": top_stickers,
+        "session_opener_words": opener_words,
     }
 
 
@@ -157,7 +163,13 @@ def _compute_heatmap(messages: list[Message]) -> dict[str, Any]:
     matrix = [[0] * 24 for _ in range(7)]
     for m in messages:
         matrix[m.date.weekday()][m.date.hour] += 1
-    return {"days": days, "matrix": matrix}
+    peak_d, peak_h, peak_c = 0, 0, 0
+    for d in range(7):
+        for h in range(24):
+            if matrix[d][h] > peak_c:
+                peak_d, peak_h, peak_c = d, h, matrix[d][h]
+    peak = {"day": days[peak_d], "hour": peak_h, "count": peak_c}
+    return {"days": days, "matrix": matrix, "peak": peak}
 
 
 def _split_sessions(messages: list[Message]) -> list[list[Message]]:
@@ -211,11 +223,14 @@ def _compute_reply_latency(sessions: list[list[Message]], user_ids: list[str]) -
             out[uid] = {"mean": 0.0, "median": 0.0, "p90": 0.0, "samples": 0}
             continue
         samples_sorted = sorted(samples)
-        p90 = samples_sorted[min(len(samples_sorted) - 1, int(len(samples_sorted) * 0.9))]
+        last = len(samples_sorted) - 1
+        p90 = samples_sorted[min(last, int(len(samples_sorted) * 0.9))]
+        p95 = samples_sorted[min(last, int(len(samples_sorted) * 0.95))]
         out[uid] = {
             "mean": round(mean(samples), 1),
             "median": round(median(samples), 1),
             "p90": round(p90, 1),
+            "p95": round(p95, 1),
             "samples": len(samples),
         }
     return out
@@ -255,7 +270,7 @@ def _tokenize(text: str) -> list[str]:
     return [t.lower() for t in WORD_RE.findall(_strip_emoji(text)) if len(t) >= MIN_WORD_LEN]
 
 
-def _compute_message_length(messages: list[Message], user_ids: list[str]) -> dict[str, dict[str, int]]:
+def _compute_message_length(messages: list[Message], user_ids: list[str]) -> dict[str, dict[str, Any]]:
     by_user_chars: dict[str, list[int]] = defaultdict(list)
     by_user_words: dict[str, list[int]] = defaultdict(list)
     for m in messages:
@@ -263,14 +278,65 @@ def _compute_message_length(messages: list[Message], user_ids: list[str]) -> dic
             continue
         by_user_chars[m.from_id].append(len(m.text))
         by_user_words[m.from_id].append(len(WORD_RE.findall(m.text)))
-    out: dict[str, dict[str, int]] = {}
+    out: dict[str, dict[str, Any]] = {}
     for uid in user_ids:
         chars = by_user_chars.get(uid, [])
         words = by_user_words.get(uid, [])
         out[uid] = {
             "chars": int(round(median(chars))) if chars else 0,
             "words": int(round(median(words))) if words else 0,
+            "mean_words": round(mean(words), 2) if words else 0.0,
         }
+    return out
+
+
+def _compute_long_message_share(messages: list[Message], user_ids: list[str]) -> dict[str, dict[str, Any]]:
+    """Fraction of each user's text messages with >50 words, excluding forwards."""
+    by_user_total: dict[str, int] = defaultdict(int)
+    by_user_long: dict[str, int] = defaultdict(int)
+    for m in messages:
+        if not _is_text_message(m):
+            continue
+        if m.forwarded_from_id is not None:
+            continue
+        by_user_total[m.from_id] += 1
+        if len(WORD_RE.findall(m.text)) > LONG_MESSAGE_WORD_THRESHOLD:
+            by_user_long[m.from_id] += 1
+    out: dict[str, dict[str, Any]] = {}
+    for uid in user_ids:
+        total = by_user_total.get(uid, 0)
+        count = by_user_long.get(uid, 0)
+        out[uid] = {
+            "count": count,
+            "total": total,
+            "share": round(count / total, 4) if total else 0.0,
+        }
+    return out
+
+
+def _compute_session_opener_words(
+    sessions: list[list[Message]], user_ids: list[str]
+) -> dict[str, list[dict[str, Any]]]:
+    """Top words used to open a session, per user and combined.
+
+    A "session opener" is the first message of each session, regardless of
+    whether the other side ever replied. Stopwords + short words are filtered
+    the same way as the word cloud.
+    """
+    by_user: dict[str, Counter[str]] = {uid: Counter() for uid in user_ids}
+    combined: Counter[str] = Counter()
+    for s in sessions:
+        opener = s[0]
+        for tok in _tokenize(opener.text):
+            if tok in STOPWORDS:
+                continue
+            combined[tok] += 1
+            if opener.from_id in by_user:
+                by_user[opener.from_id][tok] += 1
+    out: dict[str, list[dict[str, Any]]] = {}
+    for uid in user_ids:
+        out[uid] = [{"word": w, "count": c} for w, c in by_user[uid].most_common(TOP_N_OPENER_WORDS)]
+    out["combined"] = [{"word": w, "count": c} for w, c in combined.most_common(TOP_N_OPENER_WORDS)]
     return out
 
 

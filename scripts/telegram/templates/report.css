@@ -60,13 +60,13 @@
 
 :root {
   --self: #38BDF8;       /* bright sky — self accent (high contrast on purple/blue gradient) */
-  --partner: #FF4D6D;    /* electric coral — partner accent */
+  --partner: #FF6585;    /* brighter coral — partner accent, tuned to match --self's pop */
   --hero: #FFEB3B;       /* vivid yellow — hero callouts */
   --shared: #C084FC;     /* lavender — shared/neutral accent */
   --white-90: rgba(255, 255, 255, 0.90);
   --white-70: rgba(255, 255, 255, 0.70);
   --white-50: rgba(255, 255, 255, 0.50);
-  --card-bg: rgba(255, 255, 255, 0.14);
+  --card-bg: rgba(255, 255, 255, 0.20);
   --card-border: rgba(255, 255, 255, 0.22);
 
   /* Type scale — every text element picks one of these. Seven sizes, deliberate ranks. */
@@ -191,10 +191,10 @@ table.grid > tr > td {
   color: #FFFFFF;
   margin: 0 0 var(--gap-sm) 0;
   line-height: 1.4;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
 }
 .card .punchline strong {
   font-weight: 700;
-  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
 }
 .card .figure {
   font-family: "Ubuntu", sans-serif;
@@ -242,6 +242,7 @@ table.grid > tr > td {
   border-radius: 8pt;
 }
 .chart-frame.tall img { max-height: 11cm; }
+.chart-frame.yearly img { max-height: 3.4cm; }
 
 /* ---------- Per-user mini-stat row ---------- */
 .user-stat {
@@ -324,6 +325,50 @@ table.grid > tr > td {
 .footer .pip { color: var(--white-50); margin: 0 1pt; }
 .footer .pip.on { color: var(--hero); }
 
+/* ---------- Silence-breaker opener words ---------- */
+.opener-grid {
+  border-spacing: 0.25cm;
+}
+.opener-col .opener-title {
+  font-family: "Poppins", sans-serif;
+  font-weight: 700;
+  font-size: var(--fs-label);
+  text-transform: uppercase;
+  letter-spacing: 0.10em;
+  margin-bottom: var(--gap-xs);
+}
+.opener-col .opener-title.self    { color: var(--self); }
+.opener-col .opener-title.partner { color: var(--partner); }
+.opener-col .opener-title.shared  { color: var(--shared); }
+.opener-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.opener-list li {
+  display: flex;
+  justify-content: space-between;
+  padding: 2pt 0;
+  font-size: var(--fs-body);
+  border-bottom: 0.4pt solid rgba(255, 255, 255, 0.10);
+}
+.opener-list li:last-child { border-bottom: 0; }
+.opener-list .opener-word {
+  font-family: "Ubuntu", sans-serif;
+  font-weight: 500;
+  color: var(--white-90);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 75%;
+}
+.opener-list .opener-n {
+  font-family: "Poppins", sans-serif;
+  font-weight: 700;
+  color: #FFFFFF;
+  font-variant-numeric: tabular-nums;
+}
+
 /* ---------- Domain list ---------- */
 .domain-list {
   margin: 0;
@@ -342,6 +387,10 @@ table.grid > tr > td {
   font-family: "Ubuntu", sans-serif;
   font-weight: 500;
   color: var(--white-90);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 75%;
 }
 .domain-list .n {
   font-family: "Poppins", sans-serif;

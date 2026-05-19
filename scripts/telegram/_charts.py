@@ -288,39 +288,89 @@ def render_message_share(analytics: dict[str, Any], charts_dir: Path) -> Path:
     return path
 
 
-def render_reply_latency(analytics: dict[str, Any], charts_dir: Path) -> Path:
-    latency = analytics["reply_latency_seconds"]
-    labels: list[str] = []
-    means_min: list[float] = []
-    medians_min: list[float] = []
-    p90s_min: list[float] = []
-    colors: list[str] = []
-    for i, (uid, stats) in enumerate(latency.items()):
-        labels.append(_participant_label(analytics, uid))
-        means_min.append(stats["mean"] / 60)
-        medians_min.append(stats["median"] / 60)
-        p90s_min.append(stats["p90"] / 60)
-        colors.append(_user_color(i))
+def render_yearly_volume(analytics: dict[str, Any], charts_dir: Path) -> Path:
+    """Bar chart of yearly totals. Current year is stacked: solid YTD + dashed forecast."""
+    monthly = analytics["monthly_volume"]
+    now = datetime.fromisoformat(analytics["generated_at"])
+    current_year = now.year
+    current_month = now.month
+    current_day = max(now.day, 1)
 
-    fig, ax = plt.subplots(figsize=(8, 3.8))
+    years = sorted(int(y) for y in monthly.keys())
+
+    actuals: list[int] = []
+    forecasts: list[int] = []  # extra (above actual) for current year; 0 otherwise
+    for y in years:
+        totals = monthly[str(y)]
+        ytd = sum(totals)
+        if y == current_year:
+            actuals.append(ytd)
+            # extrapolate the current month, assume completed-months pace for remaining months
+            days_in_cur = calendar.monthrange(current_year, current_month)[1]
+            cur_month_actual = totals[current_month - 1]
+            cur_month_forecast = int(round(cur_month_actual * days_in_cur / current_day))
+            completed_months = current_month - 1
+            completed_total = sum(totals[:completed_months]) if completed_months > 0 else 0
+            avg_completed = completed_total / completed_months if completed_months > 0 else cur_month_actual
+            remaining_months = 12 - current_month
+            forecast_remaining = int(round(avg_completed * remaining_months))
+            extra = (cur_month_forecast - cur_month_actual) + forecast_remaining
+            forecasts.append(max(0, extra))
+        else:
+            actuals.append(ytd)
+            forecasts.append(0)
+
+    fig, ax = plt.subplots(figsize=(9, 2.6))
     fig.patch.set_alpha(0.0)
     ax.set_facecolor((0, 0, 0, 0))
 
-    x = range(len(labels))
-    width = 0.25
-    ax.bar([i - width for i in x], medians_min, width=width, label="Median", color=colors, alpha=1.0, edgecolor="none")
-    ax.bar(list(x), means_min, width=width, label="Mean", color=colors, alpha=0.65, edgecolor="none")
-    ax.bar([i + width for i in x], p90s_min, width=width, label="p90", color=colors, alpha=0.35, edgecolor="none")
-    ax.set_xticks(list(x))
-    ax.set_xticklabels(labels)
-    ax.set_ylabel("Minutes")
-    ax.yaxis.grid(True, linestyle="-", linewidth=0.4, color=WHITE_25, alpha=1.0)
-    ax.set_axisbelow(True)
+    x = list(range(len(years)))
+    bar_w = 0.55
+    # Solid bars — actual or YTD-actual
+    bars = ax.bar(
+        x,
+        actuals,
+        width=bar_w,
+        color=[HERO_COLOR if y == current_year else SELF_COLOR for y in years],
+        edgecolor="none",
+    )
+    # Forecast extra stacked on top of current year — dashed outline, transparent fill.
+    for xi, y, extra, actual in zip(x, years, forecasts, actuals, strict=False):
+        if extra <= 0:
+            continue
+        ax.bar(
+            xi,
+            extra,
+            width=bar_w,
+            bottom=actual,
+            facecolor="none",
+            edgecolor=HERO_COLOR,
+            linewidth=1.5,
+            linestyle="--",
+            alpha=0.9,
+        )
 
-    leg = ax.legend(loc="upper right", frameon=False, labelcolor=WHITE_90, fontsize=9)
-    _style_axes(ax)
+    # Label each bar with the projected total on top.
+    for xi, y, extra, actual in zip(x, years, forecasts, actuals, strict=False):
+        total = actual + extra
+        ax.text(
+            xi,
+            total,
+            f"{total:,}",
+            ha="center",
+            va="bottom",
+            color=WHITE_100,
+            fontsize=11,
+            fontweight="bold",
+        )
 
-    path = charts_dir / "reply_latency.png"
+    ax.set_xticks(x)
+    ax.set_xticklabels([str(y) for y in years])
+    ax.set_ylim(0, max(a + f for a, f in zip(actuals, forecasts, strict=False)) * 1.18 if actuals else 1)
+    ax.set_yticks([])
+    _style_axes(ax, label_color=WHITE_100)
+
+    path = charts_dir / "yearly_volume.png"
     _save_transparent(fig, path)
     return path
 

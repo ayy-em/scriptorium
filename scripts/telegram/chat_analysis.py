@@ -74,9 +74,9 @@ def chat_analysis(source: Path, outputs_dir: Path) -> Path:
 
         chart_paths = {
             "monthly_volume": _charts.render_monthly_volume(analytics, charts_dir),
+            "yearly_volume": _charts.render_yearly_volume(analytics, charts_dir),
             "activity_heatmap": _charts.render_activity_heatmap(analytics, charts_dir),
             "message_share": _charts.render_message_share(analytics, charts_dir),
-            "reply_latency": _charts.render_reply_latency(analytics, charts_dir),
             "emoji_cloud": _charts.render_emoji_cloud(analytics, charts_dir),
         }
         per_user = _metrics.per_user_word_counts(messages, [p.id for p in metadata.participants])

@@ -80,6 +80,12 @@ def _build_context(
     linker_id = max(by_user_links.keys(), key=lambda k: by_user_links[k], default=self_id)
     non_linker_id = partner_id if linker_id == self_id else self_id
 
+    long_msg = analytics["long_message_share"]
+    long_msg_winner_id = max(
+        (self_id, partner_id),
+        key=lambda k: long_msg.get(k, {}).get("share", 0.0),
+    )
+
     top_domains_raw = analytics["external_links"]["by_domain"]
     top_domains = list(top_domains_raw.items())[:_TOP_DOMAIN_COUNT]
 
@@ -111,6 +117,9 @@ def _build_context(
         "linker_name": _name(analytics, linker_id),
         "linker_role": "self" if linker_id == self_id else "partner",
         "non_linker_id": non_linker_id,
+        "long_msg_winner_id": long_msg_winner_id,
+        "long_msg_winner_name": _name(analytics, long_msg_winner_id),
+        "long_msg_winner_role": "self" if long_msg_winner_id == self_id else "partner",
         "top_domains": top_domains,
         "current_year": generated_at.year,
         "charts": {key: Path(p).as_uri() for key, p in chart_paths.items()},
