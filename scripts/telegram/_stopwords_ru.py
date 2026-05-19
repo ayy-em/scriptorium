@@ -158,5 +158,6 @@ RUSSIAN_STOPWORDS: frozenset[str] = frozenset(
         "три",
         "четыре",
         "пять",
+        "https",
     }
 )

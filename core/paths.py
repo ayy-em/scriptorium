@@ -30,6 +30,11 @@ def static_dir() -> Path:
     return _bundle_dir() / "webapp" / "static"
 
 
+def assets_dir() -> Path:
+    """Return the shared assets directory (fonts, images used across themes)."""
+    return _bundle_dir() / "assets"
+
+
 def inputs_dir(theme: str) -> Path:
     """Return the inputs directory for a theme, creating it if needed."""
     if FROZEN:
