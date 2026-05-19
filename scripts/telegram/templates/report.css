@@ -67,7 +67,13 @@
   --white-70: rgba(255, 255, 255, 0.70);
   --white-50: rgba(255, 255, 255, 0.50);
   --card-bg: rgba(255, 255, 255, 0.20);
-  --card-border: rgba(255, 255, 255, 0.22);
+  --card-border: rgba(255, 255, 255, 0.30);
+
+  /* RGB triplets for box-shadow color mixing where rgba() needs a literal channel set. */
+  --self-rgb: 56, 189, 248;
+  --partner-rgb: 255, 101, 133;
+  --hero-rgb: 255, 235, 59;
+  --shared-rgb: 192, 132, 252;
 
   /* Type scale — every text element picks one of these. Seven sizes, deliberate ranks. */
   --fs-showcase: 36pt;   /* the very biggest stats: callout values, streak days */
@@ -105,7 +111,9 @@ html, body {
 }
 .page:last-child { page-break-after: auto; }
 
-/* ---------- Page eyebrow — small label above the section title ---------- */
+/* ---------- Page eyebrow — small label above the section title ----------
+   Each page gets its own accent stripe through the eyebrow + section-heading
+   underline. Set on the body once via the .page--N class on the section. */
 .page-eyebrow {
   font-family: "Poppins", sans-serif;
   font-weight: 600;
@@ -115,6 +123,20 @@ html, body {
   color: var(--white-50);
   margin: 0 0 var(--gap-xs) 0;
 }
+.page-eyebrow::before {
+  content: "";
+  display: inline-block;
+  width: 14pt;
+  height: 1.2pt;
+  background: var(--page-accent, var(--hero));
+  vertical-align: middle;
+  margin-right: 6pt;
+  box-shadow: 0 0 6pt var(--page-accent, var(--hero));
+}
+.page--1 { --page-accent: var(--hero); }
+.page--2 { --page-accent: var(--self); }
+.page--3 { --page-accent: var(--partner); }
+.page--4 { --page-accent: var(--shared); }
 
 /* ---------- Hero typography ---------- */
 h1.hero {
@@ -131,8 +153,11 @@ h2.section {
   font-weight: 700;
   font-size: var(--fs-section);
   color: #FFFFFF;
-  margin: 0 0 var(--gap-sm) 0;
+  margin: 0 0 var(--gap-md) 0;
+  padding-bottom: var(--gap-xs);
   text-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+  border-bottom: 0.8pt solid var(--page-accent, var(--hero));
+  display: inline-block;
 }
 p.tagline {
   font-family: "Ubuntu", sans-serif;
@@ -178,10 +203,35 @@ table.grid > tr > td > .card {
   page-break-inside: avoid;
   break-inside: avoid;
   position: relative;
+  box-shadow: 0 1pt 8pt rgba(0, 0, 0, 0.18);
 }
-.card.accent-self    { border-top: 3pt solid var(--self); }
-.card.accent-partner { border-top: 3pt solid var(--partner); }
-.card.accent-hero    { border-top: 3pt solid var(--hero); }
+/* Accents replace the hard "floating line" treatment with a 1.5pt edge
+   plus an inset color wash that bleeds into the top ~12pt of the card,
+   tying the colored marker to the content underneath instead of leaving
+   it parked over the card. */
+.card.accent-self {
+  border-top: 1.5pt solid var(--self);
+  box-shadow: 0 1pt 8pt rgba(0, 0, 0, 0.18),
+              inset 0 2pt 18pt rgba(var(--self-rgb), 0.10);
+}
+.card.accent-partner {
+  border-top: 1.5pt solid var(--partner);
+  box-shadow: 0 1pt 8pt rgba(0, 0, 0, 0.18),
+              inset 0 2pt 18pt rgba(var(--partner-rgb), 0.10);
+}
+.card.accent-hero {
+  border-top: 1.5pt solid var(--hero);
+  box-shadow: 0 1pt 8pt rgba(0, 0, 0, 0.18),
+              inset 0 2pt 18pt rgba(var(--hero-rgb), 0.10);
+}
+/* The hero callouts on page 1 deliberately step down by sibling: first
+   one is the headline (full accent + accent-coloured value), the others
+   are quieter siblings (subtle wash, white value). */
+.card.accent-hero.callout--quiet {
+  border-top: 0.6pt solid var(--card-border);
+  box-shadow: 0 1pt 8pt rgba(0, 0, 0, 0.18),
+              inset 0 2pt 18pt rgba(var(--hero-rgb), 0.05);
+}
 
 .card h3 {
   font-family: "Poppins", sans-serif;
@@ -338,7 +388,10 @@ table.grid > tr > td > .card {
   letter-spacing: 0.06em;
 }
 .footer .pip { color: var(--white-50); margin: 0 1pt; }
-.footer .pip.on { color: var(--hero); }
+.footer .pip.on {
+  color: var(--page-accent, var(--hero));
+  text-shadow: 0 0 6pt var(--page-accent, var(--hero));
+}
 
 /* ---------- Silence-breaker opener words ---------- */
 .opener-grid {
@@ -428,6 +481,32 @@ table.grid > tr > td > .card {
   flex: 0 0 auto;
 }
 
+/* ---------- Cloud legend — color dots beside names instead of all-colored text ---------- */
+.cloud-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12pt;
+}
+.cloud-legend .swatch {
+  display: inline-flex;
+  align-items: center;
+  gap: 5pt;
+  font-weight: 600;
+  color: var(--white-90);
+  font-size: var(--fs-label);
+  letter-spacing: 0.04em;
+}
+.cloud-legend .dot {
+  display: inline-block;
+  width: 7pt;
+  height: 7pt;
+  border-radius: 50%;
+}
+.cloud-legend .swatch--self    .dot { background: var(--self);    box-shadow: 0 0 5pt rgba(var(--self-rgb), 0.7); }
+.cloud-legend .swatch--partner .dot { background: var(--partner); box-shadow: 0 0 5pt rgba(var(--partner-rgb), 0.7); }
+.cloud-legend .swatch--shared  .dot { background: var(--shared);  box-shadow: 0 0 5pt rgba(var(--shared-rgb), 0.7); }
+
 /* ---------- Inline "stat row" — two side-by-side big numbers in a card ---------- */
 .row-2 {
   display: table;
@@ -462,17 +541,23 @@ table.grid > tr > td > .card {
 }
 
 /* ---------- Streak block ---------- */
+/* Neon-sign treatment: a single thin colored stroke, a soft outer halo
+   that falls off, and a subtle inner colour wash. Replaces the previous
+   "concentric outline + offset solid halo" double-frame look. */
 .streak-card {
-  border: 1.5pt solid var(--hero);
-  box-shadow: 0 0 0 3pt rgba(255, 235, 59, 0.10);
+  border: 1pt solid var(--hero);
+  box-shadow: 0 0 22pt rgba(var(--hero-rgb), 0.28),
+              inset 0 0 16pt rgba(var(--hero-rgb), 0.08);
 }
 .streak-card.cool {
   border-color: var(--self);
-  box-shadow: 0 0 0 3pt rgba(56, 189, 248, 0.10);
+  box-shadow: 0 0 22pt rgba(var(--self-rgb), 0.28),
+              inset 0 0 16pt rgba(var(--self-rgb), 0.08);
 }
 .streak-card.warm {
   border-color: var(--hero);
-  box-shadow: 0 0 0 3pt rgba(255, 235, 59, 0.10);
+  box-shadow: 0 0 22pt rgba(var(--hero-rgb), 0.32),
+              inset 0 0 16pt rgba(var(--hero-rgb), 0.10);
 }
 .streak {
   text-align: center;

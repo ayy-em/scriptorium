@@ -10,7 +10,7 @@
 {# ============================================================
    PAGE 1 — HERO + HEADLINE NUMBERS + MONTHLY VOLUME CHART
    ============================================================ #}
-<section class="page">
+<section class="page page--1">
   <div class="page-eyebrow">01 &middot; Overview</div>
   <h1 class="hero">{{ self_name }} &amp; {{ partner_name }}:<br/>How do you chat?</h1>
   <p class="tagline">
@@ -28,13 +28,13 @@
         </div>
       </td>
       <td>
-        <div class="card accent-hero callout">
+        <div class="card accent-hero callout--quiet callout">
           <div class="value">{{ a.totals.avg_messages_per_day }}</div>
           <div class="sublabel">Messages per day, on average</div>
         </div>
       </td>
       <td>
-        <div class="card accent-hero callout">
+        <div class="card accent-hero callout--quiet callout">
           <div class="value">{{ "{:,}".format(a.totals.messages_ytd) }}</div>
           <div class="sublabel">In {{ current_year }} YTD</div>
         </div>
@@ -69,7 +69,7 @@
 {# ============================================================
    PAGE 2 — CADENCE & DYNAMICS
    ============================================================ #}
-<section class="page">
+<section class="page page--2">
   <div class="page-eyebrow">02 &middot; Cadence</div>
   <h2 class="section">Conversation dynamics</h2>
 
@@ -208,7 +208,7 @@
 {# ============================================================
    PAGE 3 — STYLE & CONTENT
    ============================================================ #}
-<section class="page">
+<section class="page page--3">
   <div class="page-eyebrow">03 &middot; Style</div>
   <h2 class="section">When &amp; how you talk</h2>
 
@@ -330,18 +330,16 @@
 {# ============================================================
    PAGE 4 — STREAKS + WORDS + EMOJIS
    ============================================================ #}
-<section class="page">
+<section class="page page--4">
   <div class="page-eyebrow">04 &middot; Faves</div>
   <h2 class="section">Words, faves &amp; streaks</h2>
 
   <div class="card">
     <h3>Word cloud</h3>
-    <p class="figure" style="margin-bottom: var(--gap-xs);">
-      <span style="color: var(--self); font-weight: 700;">{{ self_name }}'s words</span>
-      &middot;
-      <span style="color: var(--partner); font-weight: 700;">{{ partner_name }}'s words</span>
-      &middot;
-      <span style="color: var(--shared); font-weight: 700;">shared</span>
+    <p class="figure cloud-legend" style="margin-bottom: var(--gap-xs);">
+      <span class="swatch swatch--self"><span class="dot"></span>{{ self_name }}'s words</span>
+      <span class="swatch swatch--partner"><span class="dot"></span>{{ partner_name }}'s words</span>
+      <span class="swatch swatch--shared"><span class="dot"></span>shared</span>
     </p>
     <div class="chart-frame">
       <img src="{{ charts.word_cloud }}" alt="Word cloud" />
