@@ -52,6 +52,9 @@ speech = [
 documents = [
     "pypdf>=4.0",
 ]
+gif = [
+    "pillow>=11.0",
+]
 
 [tool.uv]
 package = true
