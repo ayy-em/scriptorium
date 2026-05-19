@@ -1,0 +1,96 @@
+{# First-visit onboarding carousel. Visibility persisted in localStorage. #}
+<div class="modal-overlay"
+     x-show="$store.ui.onboardingOpen"
+     x-transition:enter="modal-enter"
+     x-transition:enter-start="modal-enter-from"
+     x-transition:enter-end="modal-enter-to"
+     x-transition:leave="modal-leave"
+     x-transition:leave-start="modal-leave-from"
+     x-transition:leave-end="modal-leave-to"
+     @keydown.escape.window="$store.ui.finishOnboarding()"
+     x-cloak>
+  <div class="modal-dialog onboarding-dialog" @click.stop>
+    <button class="modal-close onboarding-skip"
+            @click="$store.ui.finishOnboarding()"
+            aria-label="Skip onboarding">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+        <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+    </button>
+
+    <!-- Slide 1 -->
+    <div class="onboarding-slide" x-show="$store.ui.onboardingStep === 0">
+      <div class="onboarding-art">
+        <svg viewBox="0 0 96 96" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="10" y="22" width="32" height="52" rx="2"/>
+          <path d="M54 22h32v52H54z"/>
+          <path d="M42 48h12M46 44l4 4-4 4"/>
+          <path d="M16 32h20M16 38h20M16 44h14M60 32h20M60 38h16M60 44h20M60 56h16M60 62h12"/>
+        </svg>
+      </div>
+      <p class="onboarding-eyebrow">Convert anything</p>
+      <h2 class="onboarding-title">One toolkit, every format</h2>
+      <p class="onboarding-body">
+        Drop a file, pick a target format, get a clean output. Scriptorium handles audio, video,
+        images, tabular data, and documents — all from a single interface.
+      </p>
+    </div>
+
+    <!-- Slide 2 -->
+    <div class="onboarding-slide" x-show="$store.ui.onboardingStep === 1">
+      <div class="onboarding-art">
+        <svg viewBox="0 0 96 96" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="14" y="20" width="68" height="44" rx="3"/>
+          <path d="M40 32v20l16-10-16-10Z" fill="currentColor" stroke="none"/>
+          <path d="M14 72h68"/>
+          <path d="M22 80h12M40 80h6M52 80h22"/>
+        </svg>
+      </div>
+      <p class="onboarding-eyebrow">Audio &amp; video</p>
+      <h2 class="onboarding-title">Trim, join, transcode</h2>
+      <p class="onboarding-body">
+        Cut a clip, splice a few together, convert formats, or extract frames. The A/V scripts
+        drive ffmpeg under the hood so you never have to memorize a flag.
+      </p>
+    </div>
+
+    <!-- Slide 3 -->
+    <div class="onboarding-slide" x-show="$store.ui.onboardingStep === 2">
+      <div class="onboarding-art">
+        <svg viewBox="0 0 96 96" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="10" y="18" width="76" height="58" rx="3"/>
+          <path d="M10 30h76"/>
+          <circle cx="18" cy="24" r="1.6" fill="currentColor" stroke="none"/>
+          <circle cx="24" cy="24" r="1.6" fill="currentColor" stroke="none"/>
+          <circle cx="30" cy="24" r="1.6" fill="currentColor" stroke="none"/>
+          <path d="M22 46l8 6-8 6M36 58h18"/>
+        </svg>
+      </div>
+      <p class="onboarding-eyebrow">Browser or terminal</p>
+      <h2 class="onboarding-title">Same scripts, two surfaces</h2>
+      <p class="onboarding-body">
+        Use the web UI for drag-and-drop comfort, or run anything directly with
+        <code>uv run main.py &lt;theme&gt;.&lt;script&gt;</code>. Same scripts, your choice of cockpit.
+      </p>
+    </div>
+
+    <div class="onboarding-footer">
+      <div class="onboarding-dots" role="tablist" aria-label="Onboarding progress">
+        <template x-for="i in 3" :key="i">
+          <button class="onboarding-dot"
+                  :class="{ 'is-active': $store.ui.onboardingStep === i - 1 }"
+                  @click="$store.ui.onboardingStep = i - 1"
+                  :aria-label="'Step ' + i"
+                  :aria-current="$store.ui.onboardingStep === i - 1 ? 'step' : false"></button>
+        </template>
+      </div>
+      <button class="onboarding-next" @click="$store.ui.nextOnboarding()">
+        <span x-show="$store.ui.onboardingStep < 2">Next</span>
+        <span x-show="$store.ui.onboardingStep === 2">Let's go</span>
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+</div>
