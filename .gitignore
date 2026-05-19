@@ -31,9 +31,18 @@ tests/telegram/fixtures/chat_export/result.json
 # OS
 .DS_Store
 
-# artifacts of any sorts
-inputs/
-outputs/
+# Local data — repo-root inputs/ and outputs/ are tracked via .gitkeep,
+# their contents are not. Any nested inputs/ outputs/ trees are ignored
+# entirely (legacy per-theme directories may linger on disk).
+**/inputs/
+**/outputs/
+!/inputs/
+!/outputs/
+/inputs/*
+/outputs/*
+!/inputs/.gitkeep
+!/outputs/.gitkeep
+
 past_inputs/
 archive/
 logs/

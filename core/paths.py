@@ -36,35 +36,37 @@ def assets_dir() -> Path:
     return _bundle_dir() / "assets"
 
 
-def inputs_dir(theme: str) -> Path:
-    """Return the inputs directory for a theme, creating it if needed."""
-    if FROZEN:
-        d = _user_data_dir() / "inputs" / theme
-    else:
-        d = _bundle_dir() / "scripts" / theme / "inputs"
+def inputs_dir(theme: str) -> Path:  # noqa: ARG001
+    """Return the shared inputs directory, creating it if needed.
+
+    Theme argument is preserved for API compatibility but ignored: every script
+    reads from the same root inputs directory.
+    """
+    d = _user_data_dir() / "inputs" if FROZEN else _bundle_dir() / "inputs"
     d.mkdir(parents=True, exist_ok=True)
     return d
 
 
-def past_inputs_dir(theme: str) -> Path:
-    """Return the past_inputs (archive) directory for a theme, creating it if needed."""
-    if FROZEN:
-        d = _user_data_dir() / "past_inputs" / theme
-    else:
-        d = _bundle_dir() / "scripts" / theme / "past_inputs"
+def past_inputs_dir(theme: str) -> Path:  # noqa: ARG001
+    """Return the processed-inputs archive directory, creating it if needed.
+
+    Lives at ``inputs/processed/`` so users can see archived files alongside
+    their unprocessed ones. Theme argument preserved for API compatibility.
+    """
+    d = inputs_dir(theme) / "processed"
     d.mkdir(parents=True, exist_ok=True)
     return d
 
 
 def move_to_past_inputs(theme: str, source: Path) -> Path | None:
-    """Move a processed input file to past_inputs/<theme>/.
+    """Move a processed input file to ``inputs/processed/``.
 
-    Only moves files that live inside the theme's ``inputs_dir`` — files passed via an
-    absolute path outside the inputs tree are left alone (callers shouldn't archive
-    arbitrary user files). Returns the destination path on success, ``None`` if the
-    source was skipped or the move failed.
+    Only moves files that live inside the shared inputs root — files passed via
+    an absolute path outside that tree (or already inside ``processed/``) are
+    left alone. Returns the destination path on success, ``None`` if the source
+    was skipped or the move failed.
 
-    Filename collisions inside ``past_inputs/<theme>/`` are resolved by appending a
+    Filename collisions inside ``processed/`` are resolved by appending a
     timestamp suffix so prior archived copies are preserved.
     """
     if not source.is_file():
@@ -72,15 +74,17 @@ def move_to_past_inputs(theme: str, source: Path) -> Path | None:
     try:
         source_resolved = source.resolve()
         inputs_root = inputs_dir(theme).resolve()
+        past_root = past_inputs_dir(theme).resolve()
         source_resolved.relative_to(inputs_root)
     except OSError, ValueError:
         return None
+    if source_resolved.is_relative_to(past_root):
+        return None
 
-    dest_dir = past_inputs_dir(theme)
-    dest = dest_dir / source.name
+    dest = past_root / source.name
     if dest.exists():
         stamp = datetime.now().strftime("%Y%m%dT%H%M%S")
-        dest = dest_dir / f"{source.stem}_{stamp}{source.suffix}"
+        dest = past_root / f"{source.stem}_{stamp}{source.suffix}"
     try:
         source.rename(dest)
     except OSError:
@@ -113,7 +117,7 @@ def outputs_dir(theme: str) -> Path:
     elif FROZEN:
         d = _user_data_dir() / "outputs" / theme
     else:
-        d = _bundle_dir() / "scripts" / theme / "outputs"
+        d = _bundle_dir() / "outputs" / theme
     d.mkdir(parents=True, exist_ok=True)
     return d
 
