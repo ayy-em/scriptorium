@@ -46,6 +46,9 @@ web       = [
     "uvicorn[standard]>=0.30",
 ]
 desktop   = ["pywebview>=5.0"]
+speech = [
+    "openai>=1.50",
+]
 
 [tool.uv]
 package = true
