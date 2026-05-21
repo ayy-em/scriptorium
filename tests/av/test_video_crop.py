@@ -7,7 +7,6 @@ import pytest
 
 from scripts.av.video_crop import crop
 
-
 FAKE_STREAMS = [{"codec_type": "video", "width": 1920, "height": 1080}]
 
 
@@ -18,9 +17,7 @@ def test_crop_builds_correct_ffmpeg_command(tmp_path):
         patch("scripts.av.video_crop.run_ffmpeg") as mock_ff,
     ):
         crop(Path("in.mp4"), out, top=100, right=200, bottom=100, left=200)
-    mock_ff.assert_called_once_with(
-        ["-i", "in.mp4", "-vf", "crop=1520:880:200:100", str(out)]
-    )
+    mock_ff.assert_called_once_with(["-i", "in.mp4", "-vf", "crop=1520:880:200:100", str(out)])
 
 
 def test_crop_asymmetric_values(tmp_path):

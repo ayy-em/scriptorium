@@ -15,6 +15,9 @@ no `sys.exit` outside of `run()`.
 scriptorium/
 ├── build.sh                 # unified build entrypoint (detects OS, delegates)
 ├── main.py                  # CLI entrypoint
+├── inputs/                  # drop files here (shared across every theme)
+│   └── processed/           # files auto-archived here after successful runs
+├── outputs/                 # per-theme outputs land here as <theme>/<file>
 ├── core/
 │   ├── argparse.py          # ScriptoriumParser with ui_label support
 │   ├── config.py            # user settings persistence (UserConfig, load, save)
@@ -23,11 +26,9 @@ scriptorium/
 │   └── runner.py            # dispatch + middleware (run, run_fn)
 ├── scripts/
 │   └── <theme>/
-│       ├── __init__.py      # LABEL, DESCRIPTION; gitignored inputs/ and outputs/
+│       ├── __init__.py      # LABEL, DESCRIPTION
 │       ├── _helpers.py      # private shared code (ignored by registry)
-│       ├── <script>.py      # one script per file
-│       ├── inputs/          # gitignored — drop files here to process
-│       └── outputs/         # gitignored — results land here
+│       └── <script>.py      # one script per file
 ├── webapp/
 │   ├── app.py               # FastAPI server
 │   ├── _form.py             # argparse introspection for auto-generated forms
@@ -44,8 +45,11 @@ scriptorium/
     └── installer.iss            # Inno Setup script for Windows installer
 ```
 
-`inputs/`, `outputs/`, and `past_inputs/` directories are gitignored everywhere
-in the repo and are the conventional locations for local data.
+Local data lives at the repo root: a single `inputs/` directory shared across
+every theme, an `outputs/` directory with one subdirectory per theme
+(`outputs/<theme>/`), and `inputs/processed/` where files are auto-archived
+after a successful run. The `inputs/` and `outputs/` folders themselves are
+tracked via `.gitkeep`; their contents are gitignored.
 
 ---
 
@@ -252,30 +256,34 @@ attributes at runtime. Both fall back gracefully if an attribute is absent.
 
 ## inputs / outputs convention
 
-Every theme that reads or writes files uses the same layout:
+Every theme reads from and writes to a shared layout rooted at the repo:
 
 ```
-scripts/<theme>/
-    inputs/     # gitignored; drop source files here
-    outputs/    # gitignored; processed results land here
+inputs/             # drop source files here (shared across every theme)
+    processed/      # successful runs auto-archive their inputs here
+outputs/
+    <theme>/        # results land here, one subdirectory per theme
 ```
 
-Scripts resolve a bare filename (no directory component in the path) against the
-theme's `inputs/` directory automatically, so users can type just a filename:
+Scripts resolve a bare filename (no directory component in the path) against
+`inputs/` automatically, so users can type just a filename:
 
 ```sh
-uv run main.py av.convert clip.mp4 --to mp3   # resolves to av/inputs/clip.mp4
+uv run main.py av.convert clip.mp4 --to mp3   # resolves to inputs/clip.mp4
 ```
 
 ### `core.paths` — centralized path resolution
 
 All path resolution goes through `core.paths`, which detects whether the app is
-running as a frozen PyInstaller bundle or in development:
+running as a frozen PyInstaller bundle or in development. `inputs_dir()` is
+theme-agnostic (every script shares the same inputs folder); `outputs_dir()`
+remains keyed by theme; `past_inputs_dir()` always points at the same
+`inputs/processed/` archive:
 
-| Mode   | `inputs_dir("av")`                | `outputs_dir("av")`                |
-|--------|-----------------------------------|------------------------------------|
-| Dev    | `scripts/av/inputs/`              | `scripts/av/outputs/`              |
-| Frozen | `~/scriptorium/inputs/av/`        | `~/scriptorium/outputs/av/`        |
+| Mode   | `inputs_dir("av")` | `outputs_dir("av")`         | `past_inputs_dir("av")`        |
+|--------|--------------------|-----------------------------|--------------------------------|
+| Dev    | `inputs/`          | `outputs/av/`               | `inputs/processed/`            |
+| Frozen | `~/scriptorium/inputs/` | `~/scriptorium/outputs/av/` | `~/scriptorium/inputs/processed/` |
 
 Theme helpers delegate to `core.paths`:
 
@@ -461,8 +469,8 @@ from scripts.lora._dataset import find_images
    - A module docstring (conventional, not used at runtime)
    - `LABEL = "..."` — display name for the web UI sidebar and CLI listings
    - `DESCRIPTION = "..."` — one-line tagline for the web UI header and `uv run main.py <theme>`
-3. Create `scripts/<theme>/inputs/` and `scripts/<theme>/outputs/` directories
-   (they are gitignored automatically via the root `.gitignore` pattern)
+3. No theme-local `inputs/` or `outputs/` directories are needed — every theme
+   shares the repo-root `inputs/` and writes to `outputs/<theme>/` automatically
 4. Add a `_utils.py` (or equivalent) that delegates to `core.paths.inputs_dir()`
    and `core.paths.outputs_dir()` if the theme's scripts read from or write to
    local files

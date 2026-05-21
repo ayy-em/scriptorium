@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Chat Analytics — {{ a.source.chat_name }}</title>
+  <style>{{ css | safe }}</style>
+</head>
+<body>
+
+{# ============================================================
+   PAGE 1 — HERO + HEADLINE NUMBERS + MONTHLY VOLUME CHART
+   ============================================================ #}
+<section class="page page--1">
+  <div class="page-eyebrow">01 &middot; Overview</div>
+  <h1 class="hero">{{ self_name }} &amp; {{ partner_name }}:<br/>How do you chat?</h1>
+  <p class="tagline">
+    From <strong>{{ a.totals.date_range.start }}</strong>
+    to <strong>{{ a.totals.date_range.end }}</strong>
+    &middot; <strong>{{ "{:,}".format(a.totals.date_range.days) }}</strong> days of chat.
+  </p>
+
+  <table class="grid">
+    <tr>
+      <td>
+        <div class="card accent-hero callout">
+          <div class="value accent-hero">{{ humanize(a.totals.messages_all_time) }}</div>
+          <div class="sublabel">All-time messages exchanged</div>
+        </div>
+      </td>
+      <td>
+        <div class="card accent-hero callout--quiet callout">
+          <div class="value">{{ a.totals.avg_messages_per_day }}</div>
+          <div class="sublabel">Messages per day, on average</div>
+        </div>
+      </td>
+      <td>
+        <div class="card accent-hero callout--quiet callout">
+          <div class="value">{{ "{:,}".format(a.totals.messages_ytd) }}</div>
+          <div class="sublabel">In {{ current_year }} YTD</div>
+        </div>
+      </td>
+    </tr>
+  </table>
+
+  <div class="card" style="margin-top: var(--gap-md);">
+    <h3>Messages, per year</h3>
+    <div class="chart-frame yearly">
+      <img src="{{ charts.yearly_volume }}" alt="Messages per year" />
+    </div>
+    <p class="figure" style="margin-top: var(--gap-xs);">
+      Current year is a combination of actuals and projected forecast for the rest of the year.
+    </p>
+  </div>
+
+  <div class="card" style="margin-top: var(--gap-md);">
+    <h3>Messages per month</h3>
+    <div class="chart-frame">
+      <img src="{{ charts.monthly_volume }}" alt="Monthly volume" />
+    </div>
+  </div>
+
+  <div class="footer">
+    <span class="pip on">◆</span><span class="pip">◇</span><span class="pip">◇</span><span class="pip">◇</span>
+    &nbsp;&middot;&nbsp; Scriptorium &middot; chat-local time
+  </div>
+</section>
+
+
+{# ============================================================
+   PAGE 2 — CADENCE & DYNAMICS
+   ============================================================ #}
+<section class="page page--2">
+  <div class="page-eyebrow">02 &middot; Cadence</div>
+  <h2 class="section">Conversation dynamics</h2>
+
+  <table class="grid">
+    <tr>
+      <td style="width: 50%;">
+        <div class="card">
+          <div class="label">Who runs the show?</div>
+          <p class="punchline">
+            <strong style="color: var(--{{ leader_role }});">{{ leader_name }}</strong>
+            does most of the talking here.
+          </p>
+          <div class="row-2">
+            <div>
+              <div class="v self">{{ pct(a.share_by_user[self_id]) }}</div>
+              <div class="l">{{ self_name }}</div>
+            </div>
+            <div>
+              <div class="v partner">{{ pct(a.share_by_user[partner_id]) }}</div>
+              <div class="l">{{ partner_name }}</div>
+            </div>
+          </div>
+        </div>
+      </td>
+      <td style="width: 50%;">
+        <div class="card">
+          <div class="label">Who breaks the silence?</div>
+          <p class="punchline">
+            <strong style="color: var(--{{ initiator_role }});">{{ initiator_name }}</strong>
+            kicks off <strong>{{ pct(a.initiation_share[initiator_id]) }}</strong>
+            of the {{ "{:,}".format(a.initiation_share.sessions_total) }} sessions.
+          </p>
+          <p class="figure">
+            A session ends after a 4-hour quiet stretch; the next message starts a new one.
+          </p>
+        </div>
+      </td>
+    </tr>
+  </table>
+
+  <div class="card" style="margin-top: var(--gap-md);">
+    <div class="label">Reply latency</div>
+    <div class="row-2">
+      <div>
+        <div class="v self">{{ format_seconds(a.reply_latency_seconds[self_id].median) }}</div>
+        <div class="l">{{ self_name }} usually replies in</div>
+        <p class="figure" style="margin-top: var(--gap-xs);">
+          95% of replies within <strong style="color: #FFFFFF;">{{ format_seconds(a.reply_latency_seconds[self_id].p95) }}</strong>
+          &middot; {{ "{:,}".format(a.reply_latency_seconds[self_id].samples) }} samples
+        </p>
+      </div>
+      <div>
+        <div class="v partner">{{ format_seconds(a.reply_latency_seconds[partner_id].median) }}</div>
+        <div class="l">{{ partner_name }} usually replies in</div>
+        <p class="figure" style="margin-top: var(--gap-xs);">
+          95% of replies within <strong style="color: #FFFFFF;">{{ format_seconds(a.reply_latency_seconds[partner_id].p95) }}</strong>
+          &middot; {{ "{:,}".format(a.reply_latency_seconds[partner_id].samples) }} samples
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top: var(--gap-md);">
+    <div class="label">The double-text tally</div>
+    <p class="punchline">
+      <strong style="color: var(--{{ doubletexter_role }});">{{ doubletexter_name }}</strong>
+      double-texts the most. By a wide margin.
+    </p>
+    <div class="row-2">
+      <div>
+        <div class="v self">{{ "{:,}".format(a.double_text_rate[self_id].count) }}</div>
+        <div class="l">{{ self_name }} double-texts</div>
+      </div>
+      <div>
+        <div class="v partner">{{ "{:,}".format(a.double_text_rate[partner_id].count) }}</div>
+        <div class="l">{{ partner_name }} double-texts</div>
+      </div>
+    </div>
+    <p class="figure" style="margin-top: var(--gap-xs);">
+      Counted as a double-text when one user closes a session and opens the next without the other replying.
+    </p>
+  </div>
+
+  <div class="card" style="margin-top: var(--gap-md);">
+    <div class="label">How they break the silence</div>
+    <p class="punchline">First words after a quiet stretch — top {{ a.session_opener_words.combined | length }} across {{ "{:,}".format(a.initiation_share.sessions_total) }} session openers.</p>
+    <table class="grid opener-grid">
+      <tr>
+        <td style="width: 33%;">
+          <div class="opener-col self">
+            <div class="opener-title self">{{ self_name }}</div>
+            <ul class="opener-list">
+              {% for w in a.session_opener_words[self_id] %}
+              <li><span class="opener-word">{{ w.word }}</span><span class="opener-n">{{ "{:,}".format(w.count) }}</span></li>
+              {% else %}
+              <li><span class="opener-word">—</span><span class="opener-n">—</span></li>
+              {% endfor %}
+            </ul>
+          </div>
+        </td>
+        <td style="width: 33%;">
+          <div class="opener-col partner">
+            <div class="opener-title partner">{{ partner_name }}</div>
+            <ul class="opener-list">
+              {% for w in a.session_opener_words[partner_id] %}
+              <li><span class="opener-word">{{ w.word }}</span><span class="opener-n">{{ "{:,}".format(w.count) }}</span></li>
+              {% else %}
+              <li><span class="opener-word">—</span><span class="opener-n">—</span></li>
+              {% endfor %}
+            </ul>
+          </div>
+        </td>
+        <td style="width: 33%;">
+          <div class="opener-col shared">
+            <div class="opener-title shared">Both</div>
+            <ul class="opener-list">
+              {% for w in a.session_opener_words.combined %}
+              <li><span class="opener-word">{{ w.word }}</span><span class="opener-n">{{ "{:,}".format(w.count) }}</span></li>
+              {% else %}
+              <li><span class="opener-word">—</span><span class="opener-n">—</span></li>
+              {% endfor %}
+            </ul>
+          </div>
+        </td>
+      </tr>
+    </table>
+  </div>
+
+  <div class="footer">
+    <span class="pip">◇</span><span class="pip on">◆</span><span class="pip">◇</span><span class="pip">◇</span>
+    &nbsp;&middot;&nbsp; Scriptorium &middot; chat-local time
+  </div>
+</section>
+
+
+{# ============================================================
+   PAGE 3 — STYLE & CONTENT
+   ============================================================ #}
+<section class="page page--3">
+  <div class="page-eyebrow">03 &middot; Style</div>
+  <h2 class="section">When &amp; how you talk</h2>
+
+  <div class="card">
+    <h3>Activity Heatmap</h3>
+    <div class="chart-frame">
+      <img src="{{ charts.activity_heatmap }}" alt="Activity heatmap" />
+    </div>
+    <p class="figure" style="margin-top: var(--gap-xs);">
+      Your hottest slot: <strong style="color: #FFFFFF;">{{ a.activity_heatmap.peak.day }} at {{ "%02d:00" | format(a.activity_heatmap.peak.hour) }}</strong>
+      with <strong style="color: #FFFFFF;">{{ "{:,}".format(a.activity_heatmap.peak.count) }}</strong> messages.
+    </p>
+  </div>
+
+  <table class="grid" style="margin-top: var(--gap-md);">
+    <tr>
+      <td style="width: 33.33%;">
+        <div class="card">
+          <div class="label">Message length</div>
+          <p class="punchline">"I just think it's funny how…"</p>
+          <div class="row-2">
+            <div>
+              <div class="v self">{{ a.median_message_length[self_id].chars }}</div>
+              <div class="l">{{ self_name }}</div>
+              <div class="l" style="text-transform:none; letter-spacing:0; font-weight:400;">{{ "%.2f" | format(a.median_message_length[self_id].mean_words) }} avg words</div>
+            </div>
+            <div>
+              <div class="v partner">{{ a.median_message_length[partner_id].chars }}</div>
+              <div class="l">{{ partner_name }}</div>
+              <div class="l" style="text-transform:none; letter-spacing:0; font-weight:400;">{{ "%.2f" | format(a.median_message_length[partner_id].mean_words) }} avg words</div>
+            </div>
+          </div>
+          <p class="figure">Median characters per text message.</p>
+        </div>
+      </td>
+      <td style="width: 33.33%;">
+        <div class="card">
+          <div class="label">Vocabulary richness</div>
+          <p class="punchline">
+            Has <strong style="color: var(--{{ vocab_loser_role }});">{{ vocab_loser_name }}</strong> ever read a book?
+            <span style="display:block; margin-top: var(--gap-xs);">
+              <strong style="color: var(--{{ vocab_winner_role }});">{{ vocab_winner_name }}</strong>
+              uses a richer vocabulary.
+            </span>
+          </p>
+          <div class="row-2">
+            <div>
+              <div class="v self">{{ pct(a.vocabulary_richness[self_id].ratio) }}</div>
+              <div class="l">{{ self_name }}</div>
+            </div>
+            <div>
+              <div class="v partner">{{ pct(a.vocabulary_richness[partner_id].ratio) }}</div>
+              <div class="l">{{ partner_name }}</div>
+            </div>
+          </div>
+        </div>
+      </td>
+      <td style="width: 33.33%;">
+        <div class="card">
+          <div class="label">Who writes the essays?</div>
+          <p class="punchline">
+            <strong style="color: var(--{{ long_msg_winner_role }});">{{ long_msg_winner_name }}</strong>
+            writes the longer takes.
+          </p>
+          <div class="row-2">
+            <div>
+              <div class="v self">{{ pct(a.long_message_share[self_id].share) }}</div>
+              <div class="l">{{ self_name }}</div>
+            </div>
+            <div>
+              <div class="v partner">{{ pct(a.long_message_share[partner_id].share) }}</div>
+              <div class="l">{{ partner_name }}</div>
+            </div>
+          </div>
+          <p class="figure">% of messages over 50 words. Forwards excluded.</p>
+        </div>
+      </td>
+    </tr>
+  </table>
+
+  <div class="card" style="margin-top: var(--gap-md);">
+    <div class="label">External links shared</div>
+    <p class="punchline">
+      <strong style="color: var(--{{ linker_role }});">{{ linker_name }}</strong>
+      is single-handedly funding the link-sharing economy.
+    </p>
+    <table class="grid">
+      <tr>
+        <td style="width: 50%;">
+          <div class="row-2">
+            <div>
+              <div class="v self">{{ "{:,}".format(a.external_links.by_user[self_id]) }}</div>
+              <div class="l">{{ self_name }} links</div>
+            </div>
+            <div>
+              <div class="v partner">{{ "{:,}".format(a.external_links.by_user[partner_id]) }}</div>
+              <div class="l">{{ partner_name }} links</div>
+            </div>
+          </div>
+        </td>
+        <td style="width: 50%;">
+          <ul class="domain-list">
+            {% for domain, n in top_domains %}
+            <li><span class="domain">{{ domain }}</span><span class="n">{{ "{:,}".format(n) }}</span></li>
+            {% endfor %}
+          </ul>
+        </td>
+      </tr>
+    </table>
+  </div>
+
+  <div class="footer">
+    <span class="pip">◇</span><span class="pip">◇</span><span class="pip on">◆</span><span class="pip">◇</span>
+    &nbsp;&middot;&nbsp; Scriptorium &middot; chat-local time
+  </div>
+</section>
+
+
+{# ============================================================
+   PAGE 4 — STREAKS + WORDS + EMOJIS
+   ============================================================ #}
+<section class="page page--4">
+  <div class="page-eyebrow">04 &middot; Faves</div>
+  <h2 class="section">Words, faves &amp; streaks</h2>
+
+  <div class="card">
+    <h3>Word cloud</h3>
+    <p class="figure cloud-legend" style="margin-bottom: var(--gap-xs);">
+      <span class="swatch swatch--self"><span class="dot"></span>{{ self_name }}'s words</span>
+      <span class="swatch swatch--partner"><span class="dot"></span>{{ partner_name }}'s words</span>
+      <span class="swatch swatch--shared"><span class="dot"></span>shared</span>
+    </p>
+    <div class="chart-frame">
+      <img src="{{ charts.word_cloud }}" alt="Word cloud" />
+    </div>
+  </div>
+
+  <table class="grid" style="margin-top: var(--gap-md);">
+    <tr>
+      <td style="width: 50%;">
+        <div class="card accent-self">
+          <div class="podium-title self">{{ self_name }}'s top emojis</div>
+          <table class="podium">
+            {% for item in (a.top_emojis[self_id] or [])[:5] %}
+            <tr>
+              <td class="rank">{{ loop.index }}.</td>
+              <td class="glyph">{{ item.emoji }}</td>
+              <td class="count">{{ "{:,}".format(item.count) }}</td>
+            </tr>
+            {% else %}
+            <tr><td class="rank">—</td><td class="glyph">—</td><td class="count">—</td></tr>
+            {% endfor %}
+          </table>
+        </div>
+      </td>
+      <td style="width: 50%;">
+        <div class="card accent-partner">
+          <div class="podium-title partner">{{ partner_name }}'s top emojis</div>
+          <table class="podium">
+            {% for item in (a.top_emojis[partner_id] or [])[:5] %}
+            <tr>
+              <td class="rank">{{ loop.index }}.</td>
+              <td class="glyph">{{ item.emoji }}</td>
+              <td class="count">{{ "{:,}".format(item.count) }}</td>
+            </tr>
+            {% else %}
+            <tr><td class="rank">—</td><td class="glyph">—</td><td class="count">—</td></tr>
+            {% endfor %}
+          </table>
+        </div>
+      </td>
+    </tr>
+  </table>
+
+  <table class="grid streaks-row" style="margin-top: var(--gap-md);">
+    <tr>
+      <td style="width: 50%;">
+        <div class="card streak-card cool">
+          <div class="label">Dry spell</div>
+          <div class="streak">
+            <div class="days">{{ "{:,}".format(a.streaks.longest_silence.days) }}</div>
+            <div class="label">days of silence</div>
+            <div class="span">
+              {{ a.streaks.longest_silence.start }} → {{ a.streaks.longest_silence.end }}
+            </div>
+          </div>
+        </div>
+      </td>
+      <td style="width: 50%;">
+        <div class="card streak-card warm">
+          <div class="label">Hot streak</div>
+          <div class="streak">
+            <div class="days">{{ "{:,}".format(a.streaks.longest_streak.days) }}</div>
+            <div class="label">days non-stop</div>
+            <div class="span">
+              {{ a.streaks.longest_streak.start }} → {{ a.streaks.longest_streak.end }}
+            </div>
+          </div>
+        </div>
+      </td>
+    </tr>
+  </table>
+
+  <div class="footer">
+    <span class="pip">◇</span><span class="pip">◇</span><span class="pip">◇</span><span class="pip on">◆</span>
+    &nbsp;&middot;&nbsp; Scriptorium &middot; chat-local time
+  </div>
+</section>
+
+</body>
+</html>

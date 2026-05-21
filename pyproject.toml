@@ -30,6 +30,14 @@ downloads = ["yt-dlp>=2024.1.0"]
 photo     = ["Pillow>=11.0"]
 sitemaps  = ["requests>=2.32"]
 tabular   = ["pandas>=2.2", "openpyxl>=3.1"]
+telegram  = [
+    "matplotlib>=3.9",
+    "weasyprint>=63",
+    "jinja2>=3.1",
+    "wordcloud>=1.9",
+    "emoji>=2.14",
+    "ijson>=3.3",
+]
 web       = [
     "fastapi>=0.115",
     "jinja2>=3.1",
@@ -38,6 +46,15 @@ web       = [
     "uvicorn[standard]>=0.30",
 ]
 desktop   = ["pywebview>=5.0"]
+speech = [
+    "openai>=1.50",
+]
+documents = [
+    "pypdf>=4.0",
+]
+gif = [
+    "pillow>=11.0",
+]
 
 [tool.uv]
 package = true
@@ -83,6 +100,14 @@ fixable = ["ALL"]
     "D102",    # test methods don't need docstrings
     "D103",    # test functions don't need docstrings
     "PLR2004", # magic value comparisons are fine in assertions
+]
+"tests/telegram/conftest.py" = [
+    "D101",
+    "D102",
+    "D103",
+    "PLR2004",
+    "PLR0913", # the synthetic _msg() helper centralizes message construction
+    "PLR0915", # build_synthetic_chat is intentionally one long readable script
 ]
 "scripts/av/to_anim.py" = [
     "PLR0913", # to_anim legitimately needs source, start, end, outputs_dir + 4 optional knobs

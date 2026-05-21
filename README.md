@@ -50,7 +50,7 @@ and runs the full build pipeline. No manual setup required.
 
 Double-clicking the app starts the web server and opens a browser window.
 File outputs go to `~/scriptorium/outputs/<theme>/`; uploaded inputs are saved to
-`~/scriptorium/inputs/<theme>/`.
+the shared `~/scriptorium/inputs/` folder.
 
 On a Mac that did not build it, clear the quarantine flag first:
 `xattr -cr dist/Scriptorium.app`.
@@ -114,6 +114,7 @@ uv run main.py <theme>.<script> [args]  # run it
 | lora.import_captions | Import captions from JSON |
 | lora.renumber | Renumber LoRA dataset images |
 | lora.validate | Validate a LoRA training dataset |
+| telegram.chat_analysis | Generate a descriptive-analytics report (JSON + PDF + charts) from a Telegram personal-chat export |
 
 
 ## How To Use: CLI Examples
@@ -136,7 +137,7 @@ from scripts.lora.export_captions import export
 from core.runner import run_fn
 from pathlib import Path
 
-run_fn(export, Path("scripts/lora/inputs"), Path("scripts/lora/outputs/captions.json"))
+run_fn(export, Path("inputs"), Path("outputs/lora/captions.json"))
 ```
 
 ## Version History

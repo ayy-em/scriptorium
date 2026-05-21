@@ -1,0 +1,591 @@
+/* ============================================================
+   Telegram chat-analysis PDF — neon infographic style
+   Rendered by WeasyPrint. All assets are passed via file:// URIs
+   resolved at render-time so @font-face and background images
+   work in both dev and frozen modes.
+   ============================================================ */
+
+@page {
+  size: A4 portrait;
+  margin: 0;
+  background: url("{{ bg_url }}") top center / cover no-repeat;
+}
+
+@font-face {
+  font-family: "Poppins";
+  font-weight: 400;
+  src: url("{{ font_url('Poppins/Poppins-Regular.ttf') }}");
+}
+@font-face {
+  font-family: "Poppins";
+  font-weight: 600;
+  src: url("{{ font_url('Poppins/Poppins-SemiBold.ttf') }}");
+}
+@font-face {
+  font-family: "Poppins";
+  font-weight: 700;
+  src: url("{{ font_url('Poppins/Poppins-Bold.ttf') }}");
+}
+@font-face {
+  font-family: "Poppins";
+  font-weight: 800;
+  src: url("{{ font_url('Poppins/Poppins-ExtraBold.ttf') }}");
+}
+@font-face {
+  font-family: "Poppins";
+  font-weight: 900;
+  src: url("{{ font_url('Poppins/Poppins-Black.ttf') }}");
+}
+
+@font-face {
+  font-family: "Ubuntu";
+  font-weight: 300;
+  src: url("{{ font_url('Ubuntu/Ubuntu-Light.ttf') }}");
+}
+@font-face {
+  font-family: "Ubuntu";
+  font-weight: 400;
+  src: url("{{ font_url('Ubuntu/Ubuntu-Regular.ttf') }}");
+}
+@font-face {
+  font-family: "Ubuntu";
+  font-weight: 500;
+  src: url("{{ font_url('Ubuntu/Ubuntu-Medium.ttf') }}");
+}
+@font-face {
+  font-family: "Ubuntu";
+  font-weight: 700;
+  src: url("{{ font_url('Ubuntu/Ubuntu-Bold.ttf') }}");
+}
+
+:root {
+  --self: #38BDF8;       /* bright sky — self accent (high contrast on purple/blue gradient) */
+  --partner: #FF6585;    /* brighter coral — partner accent, tuned to match --self's pop */
+  --hero: #FFEB3B;       /* vivid yellow — hero callouts */
+  --shared: #C084FC;     /* lavender — shared/neutral accent */
+  --white-90: rgba(255, 255, 255, 0.90);
+  --white-70: rgba(255, 255, 255, 0.70);
+  --white-50: rgba(255, 255, 255, 0.50);
+  --card-bg: rgba(255, 255, 255, 0.20);
+  --card-border: rgba(255, 255, 255, 0.30);
+
+  /* RGB triplets for box-shadow color mixing where rgba() needs a literal channel set. */
+  --self-rgb: 56, 189, 248;
+  --partner-rgb: 255, 101, 133;
+  --hero-rgb: 255, 235, 59;
+  --shared-rgb: 192, 132, 252;
+
+  /* Type scale — every text element picks one of these. Seven sizes, deliberate ranks. */
+  --fs-showcase: 36pt;   /* the very biggest stats: callout values, streak days */
+  --fs-hero: 28pt;       /* the page-1 title */
+  --fs-stat: 22pt;       /* row-2 per-user stats */
+  --fs-section: 18pt;    /* section titles (P2–P4) */
+  --fs-h3: 12pt;         /* card h3, podium title */
+  --fs-body: 10pt;       /* punchline, body prose */
+  --fs-label: 8pt;       /* uppercase labels, fine print */
+
+  /* Spacing scale — every margin/padding picks one of these. */
+  --gap-xs: 4pt;
+  --gap-sm: 8pt;
+  --gap-md: 14pt;
+  --gap-lg: 20pt;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  color: rgba(255, 255, 255, 0.95);
+  font-family: "Ubuntu", sans-serif;
+  font-size: 10pt;
+  line-height: 1.45;
+}
+
+.page {
+  page-break-after: always;
+  padding: 1.2cm 1.2cm 1.2cm 1.2cm;
+  width: 21cm;
+  height: 29.7cm;
+  overflow: hidden;
+}
+.page:last-child { page-break-after: auto; }
+
+/* ---------- Page eyebrow — small label above the section title ----------
+   Each page gets its own accent stripe through the eyebrow + section-heading
+   underline. Set on the body once via the .page--N class on the section. */
+.page-eyebrow {
+  font-family: "Poppins", sans-serif;
+  font-weight: 600;
+  font-size: var(--fs-label);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--white-50);
+  margin: 0 0 var(--gap-xs) 0;
+}
+.page-eyebrow::before {
+  content: "";
+  display: inline-block;
+  width: 14pt;
+  height: 1.2pt;
+  background: var(--page-accent, var(--hero));
+  vertical-align: middle;
+  margin-right: 6pt;
+  box-shadow: 0 0 6pt var(--page-accent, var(--hero));
+}
+.page--1 { --page-accent: var(--hero); }
+.page--2 { --page-accent: var(--self); }
+.page--3 { --page-accent: var(--partner); }
+.page--4 { --page-accent: var(--shared); }
+
+/* ---------- Hero typography ---------- */
+h1.hero {
+  font-family: "Poppins", sans-serif;
+  font-weight: 800;
+  font-size: var(--fs-hero);
+  line-height: 1.1;
+  color: var(--hero);
+  margin: 0 0 var(--gap-md) 0;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+h2.section {
+  font-family: "Poppins", sans-serif;
+  font-weight: 700;
+  font-size: var(--fs-section);
+  color: #FFFFFF;
+  margin: 0 0 var(--gap-md) 0;
+  padding-bottom: var(--gap-xs);
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+  border-bottom: 0.8pt solid var(--page-accent, var(--hero));
+  display: inline-block;
+}
+p.tagline {
+  font-family: "Ubuntu", sans-serif;
+  font-weight: 400;
+  font-size: var(--fs-body);
+  color: var(--white-90);
+  margin: 0 0 var(--gap-lg) 0;
+}
+
+/* ---------- Layout primitives ----------
+   border-spacing would inset the outermost cells from the table edges,
+   which makes 2-col/3-col cards sit narrower than full-width cards above
+   and below them. Move the gap into per-cell padding instead, zero on
+   first/last child, so cell edges remain flush with the table edges. */
+table.grid {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  margin: 0;
+  table-layout: fixed;
+  /* height:1px is the canonical trick that lets td > .card stretch via
+     height:100% — without an explicit table height, cells refuse to
+     resolve a percentage child height. */
+  height: 1px;
+}
+table.grid > tr > td {
+  vertical-align: top;
+  padding: 0 0.175cm;
+  height: inherit;
+}
+table.grid > tr > td:first-child  { padding-left: 0; }
+table.grid > tr > td:last-child   { padding-right: 0; }
+table.grid > tr > td > .card {
+  height: 100%;
+}
+
+/* ---------- Frosted card ---------- */
+.card {
+  background: var(--card-bg);
+  border: 0.6pt solid var(--card-border);
+  border-radius: 14pt;
+  padding: 14pt 16pt;
+  page-break-inside: avoid;
+  break-inside: avoid;
+  position: relative;
+  box-shadow: 0 1pt 8pt rgba(0, 0, 0, 0.18);
+}
+/* Accents replace the hard "floating line" treatment with a 1.5pt edge
+   plus an inset color wash that bleeds into the top ~12pt of the card,
+   tying the colored marker to the content underneath instead of leaving
+   it parked over the card. */
+.card.accent-self {
+  border-top: 1.5pt solid var(--self);
+  box-shadow: 0 1pt 8pt rgba(0, 0, 0, 0.18),
+              inset 0 2pt 18pt rgba(var(--self-rgb), 0.10);
+}
+.card.accent-partner {
+  border-top: 1.5pt solid var(--partner);
+  box-shadow: 0 1pt 8pt rgba(0, 0, 0, 0.18),
+              inset 0 2pt 18pt rgba(var(--partner-rgb), 0.10);
+}
+.card.accent-hero {
+  border-top: 1.5pt solid var(--hero);
+  box-shadow: 0 1pt 8pt rgba(0, 0, 0, 0.18),
+              inset 0 2pt 18pt rgba(var(--hero-rgb), 0.10);
+}
+/* The hero callouts on page 1 deliberately step down by sibling: first
+   one is the headline (full accent + accent-coloured value), the others
+   are quieter siblings (subtle wash, white value). */
+.card.accent-hero.callout--quiet {
+  border-top: 0.6pt solid var(--card-border);
+  box-shadow: 0 1pt 8pt rgba(0, 0, 0, 0.18),
+              inset 0 2pt 18pt rgba(var(--hero-rgb), 0.05);
+}
+
+.card h3 {
+  font-family: "Poppins", sans-serif;
+  font-weight: 700;
+  font-size: var(--fs-h3);
+  margin: 0 0 var(--gap-sm) 0;
+  color: #FFFFFF;
+}
+.card .label {
+  text-transform: uppercase;
+  letter-spacing: 0.10em;
+  font-size: var(--fs-label);
+  font-weight: 600;
+  color: var(--white-70);
+  margin-bottom: var(--gap-xs);
+}
+.card .punchline {
+  font-family: "Ubuntu", sans-serif;
+  font-weight: 500;
+  font-size: var(--fs-body);
+  color: #FFFFFF;
+  margin: 0 0 var(--gap-sm) 0;
+  line-height: 1.4;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+}
+.card .punchline strong {
+  font-weight: 700;
+}
+.card .figure {
+  font-family: "Ubuntu", sans-serif;
+  font-weight: 300;
+  font-size: var(--fs-label);
+  color: var(--white-70);
+  margin: 0;
+  line-height: 1.4;
+}
+
+/* ---------- Stat callout (big number + uppercase label) ---------- */
+.callout {
+  text-align: center;
+  padding: var(--gap-sm) var(--gap-xs) var(--gap-md) var(--gap-xs);
+  min-height: 7rem;
+}
+.callout .value {
+  font-family: "Poppins", sans-serif;
+  font-weight: 800;
+  font-size: var(--fs-showcase);
+  line-height: 1;
+  color: #FFFFFF;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+.callout .value.accent-hero { color: var(--hero); }
+.callout .sublabel {
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-weight: 600;
+  font-size: var(--fs-label);
+  color: var(--white-70);
+  margin-top: var(--gap-xs);
+}
+
+/* ---------- Charts ---------- */
+.chart-frame {
+  text-align: center;
+  margin: var(--gap-xs) 0 0 0;
+}
+.chart-frame img {
+  max-width: 100%;
+  max-height: 8.5cm;
+  height: auto;
+  border-radius: 8pt;
+}
+.chart-frame.tall img { max-height: 11cm; }
+.chart-frame.yearly img { max-height: 3.4cm; }
+
+/* ---------- Per-user mini-stat row ---------- */
+.user-stat {
+  display: table;
+  width: 100%;
+  margin-top: 6pt;
+}
+.user-stat .name {
+  display: table-cell;
+  font-family: "Poppins", sans-serif;
+  font-weight: 700;
+  font-size: 10pt;
+}
+.user-stat .name.self    { color: var(--self); }
+.user-stat .name.partner { color: var(--partner); }
+.user-stat .value {
+  display: table-cell;
+  text-align: right;
+  font-family: "Ubuntu", sans-serif;
+  font-weight: 500;
+  font-size: 10pt;
+  color: #FFFFFF;
+}
+
+/* ---------- Emoji podium ---------- */
+.podium {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+.podium td {
+  padding: 3pt 0;
+  vertical-align: middle;
+}
+.podium .rank {
+  width: 18pt;
+  font-family: "Poppins", sans-serif;
+  font-weight: 700;
+  font-size: var(--fs-h3);
+  color: var(--white-50);
+  font-variant-numeric: tabular-nums;
+}
+.podium .glyph {
+  font-size: 26pt;
+  line-height: 1;
+  width: 40pt;
+  text-align: left;
+}
+.podium .count {
+  text-align: right;
+  padding-right: var(--gap-xs);
+  font-family: "Poppins", sans-serif;
+  font-weight: 700;
+  font-size: var(--fs-h3);
+  color: #FFFFFF;
+  font-variant-numeric: tabular-nums;
+}
+.podium-title {
+  font-family: "Poppins", sans-serif;
+  font-weight: 700;
+  font-size: var(--fs-h3);
+  margin: 0 0 var(--gap-xs) 0;
+}
+.podium-title.self    { color: var(--self); }
+.podium-title.partner { color: var(--partner); }
+
+/* ---------- Footer ---------- */
+.footer {
+  position: absolute;
+  bottom: 0.6cm;
+  left: 1.2cm;
+  right: 1.2cm;
+  font-family: "Ubuntu", sans-serif;
+  font-weight: 400;
+  font-size: var(--fs-label);
+  color: var(--white-70);
+  text-align: center;
+  letter-spacing: 0.06em;
+}
+.footer .pip { color: var(--white-50); margin: 0 1pt; }
+.footer .pip.on {
+  color: var(--page-accent, var(--hero));
+  text-shadow: 0 0 6pt var(--page-accent, var(--hero));
+}
+
+/* ---------- Silence-breaker opener words ---------- */
+.opener-grid {
+  border-spacing: 0;
+}
+.opener-grid > tr > td {
+  padding: 0 0.12cm;
+}
+.opener-grid > tr > td:first-child { padding-left: 0; }
+.opener-grid > tr > td:last-child  { padding-right: 0; }
+.opener-col .opener-title {
+  font-family: "Poppins", sans-serif;
+  font-weight: 700;
+  font-size: var(--fs-label);
+  text-transform: uppercase;
+  letter-spacing: 0.10em;
+  margin-bottom: var(--gap-xs);
+}
+.opener-col .opener-title.self    { color: var(--self); }
+.opener-col .opener-title.partner { color: var(--partner); }
+.opener-col .opener-title.shared  { color: var(--shared); }
+.opener-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.opener-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 1.5pt 0;
+  font-size: var(--fs-label);
+  border-bottom: 0.4pt solid rgba(255, 255, 255, 0.10);
+  gap: 4pt;
+}
+.opener-list li:last-child { border-bottom: 0; }
+.opener-list .opener-word {
+  font-family: "Ubuntu", sans-serif;
+  font-weight: 500;
+  color: var(--white-90);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.opener-list .opener-n {
+  font-family: "Poppins", sans-serif;
+  font-weight: 700;
+  color: #FFFFFF;
+  font-variant-numeric: tabular-nums;
+  flex: 0 0 auto;
+}
+
+/* ---------- Domain list ---------- */
+.domain-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  width: 100%;
+}
+.domain-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 3pt 0;
+  border-bottom: 0.4pt solid rgba(255, 255, 255, 0.10);
+  font-size: var(--fs-body);
+  gap: 6pt;
+}
+.domain-list li:last-child { border-bottom: 0; }
+.domain-list .domain {
+  font-family: "Ubuntu", sans-serif;
+  font-weight: 500;
+  color: var(--white-90);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.domain-list .n {
+  font-family: "Poppins", sans-serif;
+  font-weight: 700;
+  color: #FFFFFF;
+  font-variant-numeric: tabular-nums;
+  flex: 0 0 auto;
+}
+
+/* ---------- Cloud legend — color dots beside names instead of all-colored text ---------- */
+.cloud-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12pt;
+}
+.cloud-legend .swatch {
+  display: inline-flex;
+  align-items: center;
+  gap: 5pt;
+  font-weight: 600;
+  color: var(--white-90);
+  font-size: var(--fs-label);
+  letter-spacing: 0.04em;
+}
+.cloud-legend .dot {
+  display: inline-block;
+  width: 7pt;
+  height: 7pt;
+  border-radius: 50%;
+}
+.cloud-legend .swatch--self    .dot { background: var(--self);    box-shadow: 0 0 5pt rgba(var(--self-rgb), 0.7); }
+.cloud-legend .swatch--partner .dot { background: var(--partner); box-shadow: 0 0 5pt rgba(var(--partner-rgb), 0.7); }
+.cloud-legend .swatch--shared  .dot { background: var(--shared);  box-shadow: 0 0 5pt rgba(var(--shared-rgb), 0.7); }
+
+/* ---------- Inline "stat row" — two side-by-side big numbers in a card ---------- */
+.row-2 {
+  display: table;
+  width: 100%;
+}
+.row-2 > div {
+  display: table-cell;
+  width: 50%;
+  vertical-align: top;
+  padding-right: 8pt;
+}
+.row-2 > div:last-child { padding-right: 0; padding-left: 8pt; }
+
+.row-2 .v {
+  font-family: "Poppins", sans-serif;
+  font-weight: 800;
+  font-size: var(--fs-stat);
+  line-height: 1;
+  color: #FFFFFF;
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+.row-2 .v.self    { color: var(--self); }
+.row-2 .v.partner { color: var(--partner); }
+.row-2 .l {
+  font-size: var(--fs-label);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.10em;
+  color: var(--white-70);
+  margin-top: 3pt;
+}
+
+/* ---------- Streak block ---------- */
+/* Neon-sign treatment: a single thin colored stroke, a soft outer halo
+   that falls off, and a subtle inner colour wash. Replaces the previous
+   "concentric outline + offset solid halo" double-frame look. */
+.streak-card {
+  border: 1pt solid var(--hero);
+  box-shadow: 0 0 22pt rgba(var(--hero-rgb), 0.28),
+              inset 0 0 16pt rgba(var(--hero-rgb), 0.08);
+}
+.streak-card.cool {
+  border-color: var(--self);
+  box-shadow: 0 0 22pt rgba(var(--self-rgb), 0.28),
+              inset 0 0 16pt rgba(var(--self-rgb), 0.08);
+}
+.streak-card.warm {
+  border-color: var(--hero);
+  box-shadow: 0 0 22pt rgba(var(--hero-rgb), 0.32),
+              inset 0 0 16pt rgba(var(--hero-rgb), 0.10);
+}
+.streak {
+  text-align: center;
+  padding: var(--gap-sm) var(--gap-xs);
+}
+.streak .days {
+  font-family: "Poppins", sans-serif;
+  font-weight: 800;
+  font-size: var(--fs-showcase);
+  line-height: 1;
+  color: var(--hero);
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  font-variant-numeric: tabular-nums;
+}
+.streak-card.cool .streak .days { color: var(--self); }
+.streak-card.warm .streak .days { color: var(--hero); }
+.streak .span {
+  font-family: "Ubuntu", sans-serif;
+  font-weight: 400;
+  font-size: var(--fs-label);
+  color: var(--white-70);
+  margin-top: var(--gap-sm);
+  font-variant-numeric: tabular-nums;
+}
+.streak .label {
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-weight: 600;
+  font-size: var(--fs-label);
+  color: var(--white-90);
+}

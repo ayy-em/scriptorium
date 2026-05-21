@@ -1379,6 +1379,132 @@ html.dark .settings-link-btn svg.settings-link-icon { filter: none; opacity: 0.7
 
 .settings-save-btn:active { transform: scale(0.97); }
 
+/* ─── Onboarding modal ──────────────────────────────────────────────────── */
+.onboarding-dialog {
+  position: relative;
+  max-width: 480px;
+  padding: 2.25rem 2rem 1.5rem;
+  text-align: center;
+}
+
+.onboarding-skip {
+  position: absolute;
+  top: 0.85rem;
+  right: 0.85rem;
+}
+
+.onboarding-slide {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+  animation: fadeSlideIn 220ms var(--ease-out) backwards;
+}
+
+.onboarding-art {
+  width: 144px;
+  height: 144px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 0.4rem;
+  color: var(--accent);
+  background: var(--accent-bg);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+}
+
+.onboarding-art svg {
+  width: 96px;
+  height: 96px;
+}
+
+.onboarding-eyebrow {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent-text);
+  margin: 0;
+}
+
+.onboarding-title {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0;
+  line-height: 1.2;
+}
+
+.onboarding-body {
+  font-size: 0.92rem;
+  line-height: 1.55;
+  color: var(--text-muted);
+  margin: 0;
+  max-width: 38ch;
+}
+
+.onboarding-body code {
+  font-family: var(--font-mono);
+  font-size: 0.84em;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+  color: var(--text);
+}
+
+.onboarding-footer {
+  margin-top: 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.onboarding-dots {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.onboarding-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--border);
+  transition: background-color 150ms ease, transform 150ms ease;
+  cursor: pointer;
+}
+
+.onboarding-dot.is-active {
+  background: var(--accent);
+  transform: scale(1.25);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .onboarding-dot:hover:not(.is-active) { background: var(--text-faint); }
+}
+
+.onboarding-next {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.55rem 1.1rem;
+  background: var(--accent);
+  color: white;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 150ms ease, transform 100ms ease-out;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .onboarding-next:hover { background: var(--accent-hover); }
+}
+
+.onboarding-next:active { transform: scale(0.97); }
+
 /* ─── Animated theme toggle (settings modal) ────────────────────────────── */
 .theme-toggle-wrap {
   max-width: 600px;

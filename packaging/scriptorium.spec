@@ -9,7 +9,16 @@ Build from the repo root:
 import os
 from pathlib import Path
 
+from PyInstaller.utils.hooks import collect_all
+
 ROOT = Path(os.path.abspath(os.path.join(SPECPATH, "..")))
+
+# WeasyPrint imports many sub-modules lazily and ships data files (CSS UA stylesheet etc.).
+# collect_all pulls in modules + datas + binaries in one shot. Native libs (pango/cairo/glib)
+# are NOT bundled here — _runtime.py's cffi.dlopen monkey-patch resolves them at runtime
+# under /opt/homebrew/lib (the .app target requires Homebrew pango on the host machine for
+# now; full native-lib bundling for a non-brew machine is a separate task).
+wp_datas, wp_binaries, wp_hidden = collect_all("weasyprint")
 
 # Collect every script sub-package so the registry can discover them at runtime.
 hidden_imports = [
@@ -52,6 +61,15 @@ hidden_imports = [
     "scripts.sitemaps.status_check",
     "scripts.speech",
     "scripts.tabular",
+    "scripts.telegram",
+    "scripts.telegram._charts",
+    "scripts.telegram._metrics",
+    "scripts.telegram._parsing",
+    "scripts.telegram._pdf",
+    "scripts.telegram._runtime",
+    "scripts.telegram._stopwords_en",
+    "scripts.telegram._stopwords_ru",
+    "scripts.telegram.chat_analysis",
     "scripts.web",
     # Third-party libraries that might be lazily imported
     "uvicorn",
@@ -78,19 +96,33 @@ hidden_imports = [
     "ffmpeg",
     "webview",
     "webview.platforms.cocoa",
+    "matplotlib",
+    "matplotlib.backends.backend_agg",
+    "weasyprint",
+    "cffi",
+    "_cffi_backend",
+    "wordcloud",
+    "emoji",
+    "ijson",
+    "ijson.backends",
+    "ijson.backends.python",
 ]
+hidden_imports += wp_hidden
 
 # Data files that must be included in the bundle.
 datas = [
     (str(ROOT / "webapp" / "templates"), "webapp/templates"),
     (str(ROOT / "webapp" / "static"), "webapp/static"),
+    (str(ROOT / "assets"), "assets"),
+    (str(ROOT / "scripts" / "telegram" / "templates"), "scripts/telegram/templates"),
     (str(ROOT / "pyproject.toml"), "."),
 ]
+datas += wp_datas
 
 a = Analysis(
     [str(ROOT / "packaging" / "entrypoint.py")],
     pathex=[str(ROOT)],
-    binaries=[],
+    binaries=wp_binaries,
     datas=datas,
     hiddenimports=hidden_imports,
     hookspath=[],

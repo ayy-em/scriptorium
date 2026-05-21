@@ -1,0 +1,98 @@
+"""Tests for scripts.formats._utils (run_convert + past_inputs integration)."""
+
+from pathlib import Path
+
+import pytest
+
+from core import paths
+from scripts.formats import _utils
+from scripts.formats._utils import BatchConvertError, run_convert
+
+
+@pytest.fixture
+def archive_setup(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, Path]:
+    """Redirect inputs/past_inputs to per-test tmp paths (shared root + processed/)."""
+    inputs = tmp_path / "inputs"
+    past = inputs / "processed"
+    inputs.mkdir(parents=True, exist_ok=True)
+    past.mkdir(parents=True, exist_ok=True)
+
+    monkeypatch.setattr(paths, "inputs_dir", lambda _theme: inputs)
+    monkeypatch.setattr(paths, "past_inputs_dir", lambda _theme: past)
+    return inputs, past
+
+
+def _make(directory: Path, name: str, content: str = "x") -> Path:
+    directory.mkdir(parents=True, exist_ok=True)
+    p = directory / name
+    p.write_text(content, encoding="utf-8")
+    return p
+
+
+class TestRunConvertArchiving:
+    def test_single_file_input_moved_after_success(self, archive_setup: tuple[Path, Path], tmp_path: Path):
+        inputs, past = archive_setup
+        src = _make(inputs, "song.flac", "audio")
+        out_dir = tmp_path / "out"
+
+        def fn(inp: Path, out: Path) -> None:
+            out.write_text(inp.read_text(encoding="utf-8"))
+
+        outputs = run_convert(src, frozenset({".flac"}), out_dir, "mp3", fn)
+
+        assert len(outputs) == 1
+        assert outputs[0].exists()
+        assert not src.exists()
+        assert (past / "song.flac").read_text() == "audio"
+
+    def test_batch_mode_moves_each_processed_input(self, archive_setup: tuple[Path, Path], tmp_path: Path):
+        inputs, past = archive_setup
+        _make(inputs, "a.flac", "alpha")
+        _make(inputs, "b.flac", "beta")
+        out_dir = tmp_path / "out"
+
+        def fn(inp: Path, out: Path) -> None:
+            out.write_text(inp.read_text(encoding="utf-8"))
+
+        outputs = run_convert(inputs, frozenset({".flac"}), out_dir, "mp3", fn)
+
+        assert len(outputs) == 2
+        names = sorted(p.name for p in past.iterdir())
+        assert names == ["a.flac", "b.flac"]
+
+    def test_failed_files_are_not_moved(self, archive_setup: tuple[Path, Path], tmp_path: Path):
+        inputs, past = archive_setup
+        ok = _make(inputs, "ok.flac", "ok")
+        bad = _make(inputs, "bad.flac", "bad")
+        out_dir = tmp_path / "out"
+
+        def fn(inp: Path, out: Path) -> None:
+            if inp.name == "bad.flac":
+                raise RuntimeError("nope")
+            out.write_text("done")
+
+        with pytest.raises(BatchConvertError):
+            run_convert(inputs, frozenset({".flac"}), out_dir, "mp3", fn)
+
+        assert (past / "ok.flac").exists()
+        assert not ok.exists()
+        assert bad.exists()
+        assert not (past / "bad.flac").exists()
+
+    def test_files_outside_inputs_dir_not_moved(self, archive_setup: tuple[Path, Path], tmp_path: Path):
+        _, past = archive_setup
+        external = _make(tmp_path / "elsewhere", "x.flac", "external")
+        out_dir = tmp_path / "out"
+
+        def fn(inp: Path, out: Path) -> None:
+            out.write_text("done")
+
+        outputs = run_convert(external, frozenset({".flac"}), out_dir, "mp3", fn)
+
+        assert len(outputs) == 1
+        assert external.exists()
+        assert not (past / "x.flac").exists()
+
+
+def test_module_exposes_run_convert() -> None:
+    assert _utils.run_convert is run_convert

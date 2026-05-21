@@ -51,8 +51,9 @@ def split(input: Path, timestamps: list[str], outputs_dir: Path) -> list[Path]:
 
 _EXAMPLES = """
 examples:
-  uv run main.py av.split video.mp4 00:01:00
-  uv run main.py av.split video.mp4 00:01:00 00:02:00 00:03:00
+  uv run main.py av.split video.mp4 1:00                    # split at 1m
+  uv run main.py av.split video.mp4 00:23                   # split at 23s
+  uv run main.py av.split video.mp4 1:00 2:00 3:00          # 4 segments
   uv run main.py av.split podcast.mp3 30:00 60:00 --outputs path/to/out/
 """
 
@@ -70,7 +71,7 @@ def get_parser() -> argparse.ArgumentParser:
         "timestamps",
         nargs="+",
         metavar="TIME",
-        help="Split timestamps (HH:MM:SS or seconds); produces N+1 segments",
+        help="Split timestamps (HH:MM:SS, MM:SS, or seconds); produces N+1 segments",
     )
     parser.add_argument(
         "--outputs",

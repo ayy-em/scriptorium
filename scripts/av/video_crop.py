@@ -10,7 +10,7 @@ TITLE = "Crop a video by trimming its edges"
 DESCRIPTION = "Remove pixels from the top, right, bottom, and/or left edges of a video file."
 
 
-def crop(
+def crop(  # noqa: PLR0913
     source: Path,
     output: Path,
     *,
@@ -55,15 +55,9 @@ def crop(
     out_h = src_h - top - bottom
 
     if out_w <= 0:
-        raise ValueError(
-            f"Horizontal crop ({left} + {right} = {left + right}) "
-            f"exceeds source width ({src_w})"
-        )
+        raise ValueError(f"Horizontal crop ({left} + {right} = {left + right}) exceeds source width ({src_w})")
     if out_h <= 0:
-        raise ValueError(
-            f"Vertical crop ({top} + {bottom} = {top + bottom}) "
-            f"exceeds source height ({src_h})"
-        )
+        raise ValueError(f"Vertical crop ({top} + {bottom} = {top + bottom}) exceeds source height ({src_h})")
 
     crop_filter = f"crop={out_w}:{out_h}:{left}:{top}"
     run_ffmpeg(["-i", str(source), "-vf", crop_filter, str(output)])
@@ -106,21 +100,11 @@ def get_parser() -> argparse.ArgumentParser:
         epilog=_EXAMPLES,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    parser.add_argument(
-        "source", type=Path, help="Source video file (bare name resolves to av/inputs/)"
-    )
-    parser.add_argument(
-        "top", type=_non_negative_int, help="Pixels to remove from the top edge"
-    )
-    parser.add_argument(
-        "right", type=_non_negative_int, help="Pixels to remove from the right edge"
-    )
-    parser.add_argument(
-        "bottom", type=_non_negative_int, help="Pixels to remove from the bottom edge"
-    )
-    parser.add_argument(
-        "left", type=_non_negative_int, help="Pixels to remove from the left edge"
-    )
+    parser.add_argument("source", type=Path, help="Source video file (bare name resolves to av/inputs/)")
+    parser.add_argument("top", type=_non_negative_int, help="Pixels to remove from the top edge")
+    parser.add_argument("right", type=_non_negative_int, help="Pixels to remove from the right edge")
+    parser.add_argument("bottom", type=_non_negative_int, help="Pixels to remove from the bottom edge")
+    parser.add_argument("left", type=_non_negative_int, help="Pixels to remove from the left edge")
     parser.add_argument(
         "--output",
         type=Path,

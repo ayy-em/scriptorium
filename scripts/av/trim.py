@@ -4,56 +4,40 @@ import argparse
 from pathlib import Path
 import sys
 
-from scripts.av._utils import av_inputs_dir, run_ffmpeg
+from scripts.av._utils import av_inputs_dir, av_outputs_dir, run_ffmpeg
 
 TITLE = "Trim the media file that's just too damn long"
-DESCRIPTION = "Cut a video or audio file to a start/end timestamp, or trim the first N seconds."
+DESCRIPTION = "Cut a video or audio file by skipping ahead to a start point, optionally stopping at an end point."
+
+_TRIM_SUBDIR = "trim"
+_TRIMMED_SUFFIX = "_trimmed"
 
 
-def trim(
-    input: Path,
-    output: Path,
-    *,
-    start: str = "0",
-    end: str | None = None,
-    seconds: float | None = None,
-) -> None:
-    """Trim a media file by time range or leading duration.
-
-    Exactly one of `end` or `seconds` must be provided. `seconds` is
-    incompatible with both `start` and `end`.
+def trim(input: Path, output: Path, start: str, end: str | None = None) -> None:
+    """Trim a media file by time range.
 
     Args:
         input: Source media file.
         output: Destination file path.
-        start: Start time (HH:MM:SS or seconds float string). Ignored with seconds.
-        end: End time (HH:MM:SS or seconds float string). Mutually exclusive with seconds.
-        seconds: Trim the first N seconds from the beginning. Mutually exclusive with start/end.
+        start: Start time (HH:MM:SS, MM:SS, or seconds). Output begins here.
+        end: Optional end time in the same formats; when omitted, the output
+            runs to the source's end.
 
     Raises:
-        ValueError: If seconds is combined with end or start, or if neither is given.
         subprocess.CalledProcessError: If ffmpeg fails.
     """
-    if seconds is not None and end is not None:
-        raise ValueError("--seconds and --end are mutually exclusive")
-    if seconds is not None and start != "0":
-        raise ValueError("--seconds and --start are mutually exclusive")
-    if seconds is None and end is None:
-        raise ValueError("Provide either --end TIME or --seconds N")
-
-    if seconds is not None:
-        args = ["-i", str(input), "-t", str(seconds), "-c", "copy", str(output)]
-    else:
-        args = ["-i", str(input), "-ss", start, "-to", end, "-c", "copy", str(output)]
-
+    args = ["-i", str(input), "-ss", start]
+    if end is not None:
+        args += ["-to", end]
+    args += ["-c", "copy", str(output)]
     run_ffmpeg(args)
 
 
 _EXAMPLES = """
 examples:
-  uv run main.py av.trim input.mp4 output.mp4 --start 00:00:10 --end 00:00:30
-  uv run main.py av.trim input.mp4 output.mp4 --end 1:45
-  uv run main.py av.trim podcast.mp3 clip.mp3 --seconds 60
+  uv run main.py av.trim input.mp4 00:03                       # skip the first three seconds
+  uv run main.py av.trim input.mp4 1:03 5:04                   # keep 1m03s..5m04s
+  uv run main.py av.trim input.mp4 1:03 5:04 --output cut.mp4  # custom output filename
 """
 
 
@@ -65,18 +49,41 @@ def get_parser() -> argparse.ArgumentParser:
         epilog=_EXAMPLES,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    parser.add_argument("input", type=Path, help="Source media file (bare name resolves to av/inputs/)")
-    parser.add_argument("output", type=Path, help="Destination file")
     parser.add_argument(
-        "--start",
-        default="0",
-        metavar="TIME",
-        help="Start time (HH:MM:SS or seconds); ignored with --seconds",
+        "input",
+        type=Path,
+        help="Source media file (bare name resolves to inputs/)",
     )
-    group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument("--end", metavar="TIME", help="End time (HH:MM:SS or seconds)")
-    group.add_argument("--seconds", type=float, metavar="N", help="Trim the first N seconds")
+    parser.add_argument(
+        "start",
+        metavar="START",
+        help="Start time (HH:MM:SS, MM:SS, or seconds)",
+    )
+    parser.add_argument(
+        "end",
+        nargs="?",
+        default=None,
+        metavar="END",
+        help="Optional end time; defaults to end-of-file",
+    )
+    parser.add_argument(
+        "--output",
+        "-o",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help=f"Destination path; defaults to outputs/av/{_TRIM_SUBDIR}/<input>{_TRIMMED_SUFFIX}<ext>",
+    )
     return parser
+
+
+def _resolve_output(arg: Path | None, input_file: Path) -> Path:
+    default_dir = av_outputs_dir() / _TRIM_SUBDIR
+    if arg is None:
+        return default_dir / f"{input_file.stem}{_TRIMMED_SUFFIX}{input_file.suffix}"
+    if arg.parent == Path("."):
+        return default_dir / arg.name
+    return arg
 
 
 def run() -> None:
@@ -87,9 +94,14 @@ def run() -> None:
     if input_file.parent == Path("."):
         input_file = av_inputs_dir() / input_file.name
 
+    output = _resolve_output(args.output, input_file)
+    output.parent.mkdir(parents=True, exist_ok=True)
+
     try:
-        trim(input_file, args.output, start=args.start, end=args.end, seconds=args.seconds)
-        sys.exit(0)
+        trim(input_file, output, start=args.start, end=args.end)
     except Exception as e:
         print(f"error: {e}", file=sys.stderr)
         sys.exit(1)
+
+    print(output)
+    sys.exit(0)

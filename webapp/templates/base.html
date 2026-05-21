@@ -28,6 +28,8 @@
         updateAvailable: false,
         updateUrl: '',
         latestVersion: '',
+        onboardingOpen: false,
+        onboardingStep: 0,
 
         toggleDark() {
           this.dark = !this.dark;
@@ -75,10 +77,30 @@
             }
           } catch (e) { /* silent */ }
         },
+
+        initOnboarding() {
+          if (!localStorage.getItem('onboarding_seen')) {
+            this.onboardingOpen = true;
+          }
+        },
+
+        nextOnboarding() {
+          if (this.onboardingStep < 2) {
+            this.onboardingStep++;
+          } else {
+            this.finishOnboarding();
+          }
+        },
+
+        finishOnboarding() {
+          localStorage.setItem('onboarding_seen', '1');
+          this.onboardingOpen = false;
+        },
       });
 
       Alpine.store('ui').loadSettings();
       Alpine.store('ui').checkUpdate();
+      Alpine.store('ui').initOnboarding();
     });
   </script>
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/cdn.min.js"></script>
@@ -142,6 +164,7 @@
   </div>
 
   {% include "_settings_modal.html" %}
+  {% include "_onboarding_modal.html" %}
 
   <script>
     /* Ctrl+K / Cmd+K focuses the search input */
