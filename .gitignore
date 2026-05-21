@@ -35,3 +35,30 @@ inputs/
 outputs/
 past_inputs/
 *.json
+
+# various media files cause these could go anywhere and i'm paranoid
+*.mp4
+*.mov
+*.avi
+*.mkv
+*.webm
+*.flv
+*.m4v
+*.mp3
+*.wav
+*.aac
+*.flac
+*.ogg
+*.m4a
+*.wma
+*.opus
+
+# and docs
+*.pdf
+*.docx
+*.doc
+*.txt
+*.xlsx
+*.xls
+*.csv
+*.tsv
