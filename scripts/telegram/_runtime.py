@@ -27,6 +27,11 @@ _MAC_BREW_LIB_PATHS = (
     "/usr/local/lib",  # Intel Mac
 )
 
+_WIN_MSYS2_LIB_PATHS = (
+    r"C:\msys64\ucrt64\bin",
+    r"C:\msys64\mingw64\bin",
+)
+
 
 def ensure_native_lib_resolution() -> None:
     """Install the cffi dlopen fallback patch. Safe to call multiple times."""
@@ -73,5 +78,13 @@ def _candidate_lib_paths() -> tuple[str, ...]:
         for p in _MAC_BREW_LIB_PATHS:
             if os.path.isdir(p):
                 candidates.append(p)
+
+    if sys.platform == "win32":
+        for p in _WIN_MSYS2_LIB_PATHS:
+            if os.path.isdir(p):
+                candidates.append(p)
+                os.add_dll_directory(p)
+                if p not in os.environ.get("PATH", ""):
+                    os.environ["PATH"] = p + os.pathsep + os.environ.get("PATH", "")
 
     return tuple(candidates)

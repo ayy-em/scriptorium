@@ -1,0 +1,797 @@
+/* ============================================================
+   Telegram GROUP chat-analysis PDF — neon infographic style
+   Rendered by WeasyPrint. All assets are passed via file:// URIs
+   resolved at render-time so @font-face and background images
+   work in both dev and frozen modes.
+   ============================================================ */
+
+@page {
+  size: A4 portrait;
+  margin: 0;
+  background: url("{{ bg_url }}") top center / cover no-repeat;
+  background-color: rgba(10, 10, 30, 0.35);
+  background-blend-mode: darken;
+}
+
+@font-face {
+  font-family: "Poppins";
+  font-weight: 400;
+  src: url("{{ font_url('Poppins/Poppins-Regular.ttf') }}");
+}
+@font-face {
+  font-family: "Poppins";
+  font-weight: 600;
+  src: url("{{ font_url('Poppins/Poppins-SemiBold.ttf') }}");
+}
+@font-face {
+  font-family: "Poppins";
+  font-weight: 700;
+  src: url("{{ font_url('Poppins/Poppins-Bold.ttf') }}");
+}
+@font-face {
+  font-family: "Poppins";
+  font-weight: 800;
+  src: url("{{ font_url('Poppins/Poppins-ExtraBold.ttf') }}");
+}
+@font-face {
+  font-family: "Poppins";
+  font-weight: 900;
+  src: url("{{ font_url('Poppins/Poppins-Black.ttf') }}");
+}
+
+@font-face {
+  font-family: "Ubuntu";
+  font-weight: 300;
+  src: url("{{ font_url('Ubuntu/Ubuntu-Light.ttf') }}");
+}
+@font-face {
+  font-family: "Ubuntu";
+  font-weight: 400;
+  src: url("{{ font_url('Ubuntu/Ubuntu-Regular.ttf') }}");
+}
+@font-face {
+  font-family: "Ubuntu";
+  font-weight: 500;
+  src: url("{{ font_url('Ubuntu/Ubuntu-Medium.ttf') }}");
+}
+@font-face {
+  font-family: "Ubuntu";
+  font-weight: 700;
+  src: url("{{ font_url('Ubuntu/Ubuntu-Bold.ttf') }}");
+}
+
+:root {
+  /* Group report accent palette */
+  --color-gold: #FBBF24;
+  --color-sky: #38BDF8;
+  --color-coral: #FF6585;
+  --color-crimson: #EF4444;
+  --color-neon-purp:rgb(87, 231, 123);
+
+  /* Legacy aliases kept for shared base styles */
+  --self: #38BDF8;
+  --partner: #FF6585;
+  --hero: #FBBF24;
+  --shared: #C084FC;
+  --white-90: rgba(255, 255, 255, 0.90);
+  --white-70: rgba(255, 255, 255, 0.70);
+  --white-50: rgba(255, 255, 255, 0.50);
+  --card-bg: rgba(255, 255, 255, 0.20);
+  --card-border: rgba(255, 255, 255, 0.30);
+
+  /* RGB triplets for box-shadow color mixing */
+  --gold-rgb: 251, 191, 36;
+  --sky-rgb: 56, 189, 248;
+  --coral-rgb: 255, 101, 133;
+  --crimson-rgb: 239, 68, 68;
+  --neon-purp-rgb: 168, 85, 247;
+  --self-rgb: 56, 189, 248;
+  --partner-rgb: 255, 101, 133;
+  --hero-rgb: 251, 191, 36;
+  --shared-rgb: 192, 132, 252;
+
+  /* Type scale */
+  --fs-showcase: 36pt;
+  --fs-hero: 28pt;
+  --fs-stat: 22pt;
+  --fs-section: 18pt;
+  --fs-h3: 12pt;
+  --fs-body: 10pt;
+  --fs-label: 8pt;
+
+  /* Spacing scale */
+  --gap-xs: 4pt;
+  --gap-sm: 8pt;
+  --gap-md: 14pt;
+  --gap-lg: 20pt;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  color: rgba(255, 255, 255, 0.95);
+  font-family: "Ubuntu", sans-serif;
+  font-size: 10pt;
+  line-height: 1.45;
+}
+
+.page {
+  page-break-after: always;
+  padding: 1.2cm 1.2cm 1.2cm 1.2cm;
+  width: 21cm;
+  height: 29.7cm;
+  overflow: hidden;
+}
+.page:last-child { page-break-after: auto; }
+
+/* ---------- Page eyebrow ---------- */
+.page-eyebrow {
+  font-family: "Poppins", sans-serif;
+  font-weight: 600;
+  font-size: var(--fs-label);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--white-50);
+  margin: 0 0 var(--gap-xs) 0;
+}
+.page-eyebrow::before {
+  content: "";
+  display: inline-block;
+  width: 14pt;
+  height: 1.2pt;
+  background: var(--page-accent, var(--color-gold));
+  vertical-align: middle;
+  margin-right: 6pt;
+  box-shadow: 0 0 6pt var(--page-accent, var(--color-gold));
+}
+
+/* ---------- Per-page accent variants ---------- */
+.page--1 { --page-accent: var(--color-gold); }
+.page--2 { --page-accent: var(--color-sky); }
+.page--3 { --page-accent: var(--color-coral); }
+.page--4 { --page-accent: var(--color-neon-purp); }
+.page--5 { --page-accent: var(--color-crimson); }
+.page--6 { --page-accent: var(--color-neon-purp); }
+.page--7 { --page-accent: var(--color-neon-purp); }
+
+/* ---------- Hero typography ---------- */
+h1.hero {
+  font-family: "Poppins", sans-serif;
+  font-weight: 800;
+  font-size: var(--fs-hero);
+  line-height: 1.1;
+  color: var(--color-gold);
+  margin: 0 0 var(--gap-md) 0;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+h2.section {
+  font-family: "Poppins", sans-serif;
+  font-weight: 700;
+  font-size: var(--fs-section);
+  color: #FFFFFF;
+  margin: 0 0 var(--gap-md) 0;
+  padding-bottom: var(--gap-xs);
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+  border-bottom: 0.8pt solid var(--page-accent, var(--color-gold));
+  display: inline-block;
+}
+p.tagline {
+  font-family: "Ubuntu", sans-serif;
+  font-weight: 400;
+  font-size: var(--fs-body);
+  color: var(--white-90);
+  margin: 0 0 var(--gap-lg) 0;
+}
+
+/* ---------- Layout primitives ---------- */
+table.grid {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  margin: 0;
+  table-layout: fixed;
+  height: 1px;
+}
+table.grid > tr > td {
+  vertical-align: top;
+  padding: 0 0.175cm;
+  height: inherit;
+}
+table.grid > tr > td:first-child  { padding-left: 0; }
+table.grid > tr > td:last-child   { padding-right: 0; }
+table.grid > tr > td > .card {
+  height: 100%;
+}
+
+/* ---------- Frosted card ---------- */
+.card {
+  background: var(--card-bg);
+  border: 0.6pt solid var(--card-border);
+  border-radius: 14pt;
+  padding: 14pt 16pt;
+  page-break-inside: avoid;
+  break-inside: avoid;
+  position: relative;
+  box-shadow: 0 1pt 8pt rgba(0, 0, 0, 0.18);
+}
+.card.accent-gold {
+  border-top: 1.5pt solid var(--color-gold);
+  box-shadow: 0 1pt 8pt rgba(0, 0, 0, 0.18),
+              inset 0 2pt 18pt rgba(var(--gold-rgb), 0.10);
+}
+.card.accent-sky {
+  border-top: 1.5pt solid var(--color-sky);
+  box-shadow: 0 1pt 8pt rgba(0, 0, 0, 0.18),
+              inset 0 2pt 18pt rgba(var(--sky-rgb), 0.10);
+}
+.card.accent-coral {
+  border-top: 1.5pt solid var(--color-coral);
+  box-shadow: 0 1pt 8pt rgba(0, 0, 0, 0.18),
+              inset 0 2pt 18pt rgba(var(--coral-rgb), 0.10);
+}
+.card.accent-crimson {
+  border-top: 1.5pt solid var(--color-crimson);
+  box-shadow: 0 1pt 8pt rgba(0, 0, 0, 0.18),
+              inset 0 2pt 18pt rgba(var(--crimson-rgb), 0.10);
+}
+.card.accent-neon-purp {
+  border-top: 1.5pt solid var(--color-neon-purp);
+  box-shadow: 0 1pt 8pt rgba(0, 0, 0, 0.18),
+              inset 0 2pt 18pt rgba(var(--neon-purp-rgb), 0.10);
+}
+/* Legacy accent classes for shared base styles */
+.card.accent-hero {
+  border-top: 1.5pt solid var(--hero);
+  box-shadow: 0 1pt 8pt rgba(0, 0, 0, 0.18),
+              inset 0 2pt 18pt rgba(var(--hero-rgb), 0.10);
+}
+.card.accent-hero.callout--quiet {
+  border-top: 0.6pt solid var(--card-border);
+  box-shadow: 0 1pt 8pt rgba(0, 0, 0, 0.18),
+              inset 0 2pt 18pt rgba(var(--hero-rgb), 0.05);
+}
+
+.card h3 {
+  font-family: "Poppins", sans-serif;
+  font-weight: 700;
+  font-size: var(--fs-h3);
+  margin: 0 0 var(--gap-sm) 0;
+  color: #FFFFFF;
+}
+.card .label {
+  text-transform: uppercase;
+  letter-spacing: 0.10em;
+  font-size: var(--fs-label);
+  font-weight: 600;
+  color: var(--white-70);
+  margin-bottom: var(--gap-xs);
+}
+.card .punchline {
+  font-family: "Ubuntu", sans-serif;
+  font-weight: 500;
+  font-size: var(--fs-body);
+  color: #FFFFFF;
+  margin: 0 0 var(--gap-sm) 0;
+  line-height: 1.4;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+}
+.card .punchline strong {
+  font-weight: 700;
+}
+.card .figure {
+  font-family: "Ubuntu", sans-serif;
+  font-weight: 300;
+  font-size: var(--fs-label);
+  color: var(--white-70);
+  margin: 0;
+  line-height: 1.4;
+}
+
+/* ---------- Stat callout (big number + uppercase label) ---------- */
+.callout {
+  text-align: center;
+  padding: var(--gap-sm) var(--gap-xs) var(--gap-md) var(--gap-xs);
+  min-height: 7rem;
+}
+.callout .value {
+  font-family: "Poppins", sans-serif;
+  font-weight: 800;
+  font-size: var(--fs-showcase);
+  line-height: 1;
+  color: #FFFFFF;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+.callout .value.accent-gold { color: var(--color-gold); }
+.callout .value.accent-hero { color: var(--hero); }
+.callout .sublabel {
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-weight: 600;
+  font-size: var(--fs-label);
+  color: var(--white-70);
+  margin-top: var(--gap-xs);
+}
+
+/* ---------- Charts ---------- */
+.chart-frame {
+  text-align: center;
+  margin: var(--gap-xs) 0 0 0;
+}
+.chart-frame img {
+  width: 100%;
+  height: auto;
+  border-radius: 8pt;
+}
+.chart-frame.tall img { max-height: 11cm; width: 100%; }
+.chart-frame.short img { max-height: 7cm; width: 100%; }
+.chart-frame.yearly img { max-height: 4.5cm; width: 100%; }
+
+/* ---------- Inline "stat row" — two side-by-side big numbers ---------- */
+.row-2 {
+  display: table;
+  width: 100%;
+}
+.row-2 > div {
+  display: table-cell;
+  width: 50%;
+  vertical-align: top;
+  padding-right: 8pt;
+}
+.row-2 > div:last-child { padding-right: 0; padding-left: 8pt; }
+
+.row-2 .v {
+  font-family: "Poppins", sans-serif;
+  font-weight: 800;
+  font-size: var(--fs-stat);
+  line-height: 1;
+  color: #FFFFFF;
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+.row-2 .v.gold    { color: var(--color-gold); }
+.row-2 .v.sky     { color: var(--color-sky); }
+.row-2 .v.coral   { color: var(--color-coral); }
+.row-2 .v.crimson { color: var(--color-crimson); }
+.row-2 .v.purp    { color: var(--color-neon-purp); }
+.row-2 .l {
+  font-size: var(--fs-label);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.10em;
+  color: var(--white-70);
+  margin-top: 3pt;
+}
+
+/* ---------- Footer ---------- */
+.footer {
+  position: absolute;
+  bottom: 0.6cm;
+  left: 1.2cm;
+  right: 1.2cm;
+  font-family: "Ubuntu", sans-serif;
+  font-weight: 400;
+  font-size: var(--fs-label);
+  color: var(--white-70);
+  text-align: center;
+  letter-spacing: 0.06em;
+}
+.footer .pip { color: var(--white-50); margin: 0 1pt; }
+.footer .pip.on {
+  color: var(--page-accent, var(--color-gold));
+  text-shadow: 0 0 6pt var(--page-accent, var(--color-gold));
+}
+
+/* ---------- Domain list ---------- */
+.domain-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  width: 100%;
+}
+.domain-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 3pt 0;
+  border-bottom: 0.4pt solid rgba(255, 255, 255, 0.10);
+  font-size: var(--fs-body);
+  gap: 6pt;
+}
+.domain-list li:last-child { border-bottom: 0; }
+.domain-list .domain {
+  font-family: "Ubuntu", sans-serif;
+  font-weight: 500;
+  color: var(--white-90);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.domain-list .n {
+  font-family: "Poppins", sans-serif;
+  font-weight: 700;
+  color: #FFFFFF;
+  font-variant-numeric: tabular-nums;
+  flex: 0 0 auto;
+}
+
+/* ==========================================================
+   GROUP-REPORT-SPECIFIC STYLES
+   ========================================================== */
+
+/* ---------- Archetype grid — CSS table for archetype cards ---------- */
+.archetype-grid {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  margin: 0;
+  table-layout: fixed;
+  height: 1px;
+}
+.archetype-grid > tr > td {
+  vertical-align: top;
+  padding: 0 0.14cm;
+  height: inherit;
+}
+.archetype-grid > tr > td:first-child  { padding-left: 0; }
+.archetype-grid > tr > td:last-child   { padding-right: 0; }
+.archetype-grid > tr > td > .archetype-card {
+  height: 100%;
+}
+
+/* ---------- Archetype card ---------- */
+.archetype-card {
+  background: var(--card-bg);
+  border: 0.6pt solid var(--card-border);
+  border-top: 1.5pt solid var(--color-neon-purp);
+  border-radius: 14pt;
+  padding: 14pt 14pt;
+  page-break-inside: avoid;
+  break-inside: avoid;
+  position: relative;
+  box-shadow: 0 1pt 8pt rgba(0, 0, 0, 0.18),
+              inset 0 2pt 18pt rgba(var(--neon-purp-rgb), 0.10);
+  text-align: center;
+}
+.archetype-card .archetype-icon {
+  font-size: 28pt;
+  line-height: 1;
+  margin-bottom: var(--gap-xs);
+}
+.archetype-card .archetype-title {
+  font-family: "Poppins", sans-serif;
+  font-weight: 700;
+  font-size: var(--fs-h3);
+  color: var(--color-neon-purp);
+  margin: 0 0 var(--gap-xs) 0;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.archetype-card .archetype-winner {
+  font-family: "Poppins", sans-serif;
+  font-weight: 800;
+  font-size: 14pt;
+  color: #FFFFFF;
+  margin: 0 0 var(--gap-xs) 0;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+}
+.archetype-card .archetype-stat {
+  font-family: "Ubuntu", sans-serif;
+  font-weight: 400;
+  font-size: var(--fs-label);
+  color: var(--white-70);
+  margin: 0;
+  line-height: 1.4;
+}
+.archetype-card .archetype-stat strong {
+  font-weight: 700;
+  color: #FFFFFF;
+}
+
+/* ---------- Leaderboard — numbered list for burst starters/killers ---------- */
+.leaderboard {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  width: 100%;
+}
+.leaderboard li {
+  display: flex;
+  align-items: baseline;
+  padding: 4pt 0;
+  border-bottom: 0.4pt solid rgba(255, 255, 255, 0.10);
+  font-size: var(--fs-body);
+  gap: 6pt;
+}
+.leaderboard li:last-child { border-bottom: 0; }
+.leaderboard .rank {
+  font-family: "Poppins", sans-serif;
+  font-weight: 700;
+  font-size: var(--fs-h3);
+  color: var(--white-50);
+  font-variant-numeric: tabular-nums;
+  flex: 0 0 20pt;
+  text-align: right;
+}
+.leaderboard .lb-name {
+  font-family: "Poppins", sans-serif;
+  font-weight: 600;
+  color: #FFFFFF;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.leaderboard .lb-stat {
+  font-family: "Ubuntu", sans-serif;
+  font-weight: 500;
+  color: var(--white-70);
+  font-variant-numeric: tabular-nums;
+  flex: 0 0 auto;
+}
+.leaderboard .lb-stat strong {
+  font-weight: 700;
+  color: #FFFFFF;
+}
+.leaderboard .lb-detail {
+  font-family: "Ubuntu", sans-serif;
+  font-weight: 400;
+  font-size: var(--fs-label);
+  color: var(--white-50);
+  margin-top: 1pt;
+}
+
+/* ---------- Award card — large typography for profanity awards ---------- */
+.award-card {
+  background: var(--card-bg);
+  border: 0.6pt solid var(--card-border);
+  border-top: 1.5pt solid var(--color-crimson);
+  border-radius: 14pt;
+  padding: 16pt 16pt;
+  page-break-inside: avoid;
+  break-inside: avoid;
+  text-align: center;
+  box-shadow: 0 1pt 8pt rgba(0, 0, 0, 0.18),
+              inset 0 2pt 18pt rgba(var(--crimson-rgb), 0.10);
+}
+.award-card .award-icon {
+  font-size: 24pt;
+  line-height: 1;
+  margin-bottom: var(--gap-xs);
+}
+.award-card .award-title {
+  font-family: "Poppins", sans-serif;
+  font-weight: 700;
+  font-size: var(--fs-h3);
+  color: var(--color-crimson);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin: 0 0 var(--gap-xs) 0;
+}
+.award-card .award-winner {
+  font-family: "Poppins", sans-serif;
+  font-weight: 800;
+  font-size: 16pt;
+  color: #FFFFFF;
+  margin: 0 0 var(--gap-xs) 0;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.40);
+}
+.award-card .award-stat {
+  font-family: "Ubuntu", sans-serif;
+  font-weight: 500;
+  font-size: var(--fs-body);
+  color: var(--white-70);
+  margin: 0;
+  line-height: 1.4;
+}
+.award-card .award-stat strong {
+  font-weight: 700;
+  color: #FFFFFF;
+}
+
+/* ---------- Profanity bar — horizontal progress bar ---------- */
+.profanity-bar {
+  width: 100%;
+  height: 8pt;
+  background: rgba(255, 255, 255, 0.10);
+  border-radius: 4pt;
+  overflow: hidden;
+  margin-top: var(--gap-xs);
+}
+.profanity-bar .profanity-bar-fill {
+  height: 100%;
+  border-radius: 4pt;
+  background: var(--color-crimson);
+  box-shadow: 0 0 8pt rgba(var(--crimson-rgb), 0.50);
+}
+
+/* ---------- Peak hour big value ---------- */
+.peak-hour-value {
+  font-family: "Poppins", sans-serif;
+  font-weight: 800;
+  font-size: 22pt;
+  line-height: 1.15;
+  color: var(--color-sky);
+  text-shadow: 0 0 12pt rgba(var(--sky-rgb), 0.50), 0 2px 6px rgba(0, 0, 0, 0.40);
+  margin: 0;
+}
+
+/* ---------- Insomnia big value ---------- */
+.insomnia-value {
+  font-family: "Poppins", sans-serif;
+  font-weight: 900;
+  font-size: 28pt;
+  line-height: 1;
+  color: var(--color-sky);
+  text-shadow: 0 0 14pt rgba(var(--sky-rgb), 0.60), 0 2px 6px rgba(0, 0, 0, 0.40);
+  margin: var(--gap-xs) 0 0 0;
+}
+
+/* ---------- Burst total (big neon number) ---------- */
+.burst-total-value {
+  font-family: "Poppins", sans-serif;
+  font-weight: 900;
+  font-size: var(--fs-showcase);
+  line-height: 1;
+  color: var(--color-neon-purp);
+  text-shadow: 0 0 16pt rgba(var(--neon-purp-rgb), 0.70), 0 2px 8px rgba(0, 0, 0, 0.40);
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Burst columns ---------- */
+.burst-col-title {
+  font-family: "Poppins", sans-serif;
+  font-weight: 800;
+  font-size: 14pt;
+  text-transform: uppercase;
+  letter-spacing: 0.10em;
+  margin-bottom: var(--gap-sm);
+  text-shadow: 0 0 10pt currentColor;
+  color: var(--color-coral);
+}
+
+/* ---------- Opener words inside burst cards ---------- */
+.opener-words {
+  font-family: "Ubuntu", sans-serif;
+  font-weight: 400;
+  font-size: var(--fs-label);
+  color: var(--white-50);
+  margin-top: 2pt;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- Metrics box — used on dynamics page ---------- */
+.metrics-box {
+  background: var(--card-bg);
+  border: 0.6pt solid var(--card-border);
+  border-radius: 14pt;
+  padding: 14pt 16pt;
+  page-break-inside: avoid;
+  break-inside: avoid;
+  box-shadow: 0 1pt 8pt rgba(0, 0, 0, 0.18);
+}
+.metrics-box .metrics-title {
+  font-family: "Poppins", sans-serif;
+  font-weight: 700;
+  font-size: var(--fs-h3);
+  color: var(--color-coral);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin: 0 0 var(--gap-xs) 0;
+}
+.metrics-box .metrics-name {
+  font-family: "Poppins", sans-serif;
+  font-weight: 800;
+  font-size: 14pt;
+  color: #FFFFFF;
+  margin: 0 0 var(--gap-xs) 0;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+}
+.metrics-box .metrics-detail {
+  font-family: "Ubuntu", sans-serif;
+  font-weight: 400;
+  font-size: var(--fs-label);
+  color: var(--white-70);
+  margin: 0;
+  line-height: 1.5;
+}
+.metrics-box .metrics-detail strong {
+  font-weight: 700;
+  color: #FFFFFF;
+}
+
+/* ---------- Word cloud backdrop on page 7 ---------- */
+.cloud-backdrop {
+  margin-top: var(--gap-md);
+  text-align: center;
+}
+.cloud-backdrop img {
+  width: 100%;
+  max-height: 10cm;
+  height: auto;
+  border-radius: 8pt;
+  opacity: 0.85;
+}
+
+/* ---------- Streak values ---------- */
+.streak-value {
+  font-family: "Poppins", sans-serif;
+  font-weight: 800;
+  font-size: var(--fs-stat);
+  line-height: 1;
+  margin: var(--gap-xs) 0;
+}
+.streak-value.gold {
+  color: var(--color-gold);
+  text-shadow: 0 0 10pt rgba(var(--gold-rgb), 0.50);
+}
+.streak-value.coral {
+  color: var(--color-coral);
+  text-shadow: 0 0 10pt rgba(var(--coral-rgb), 0.50);
+}
+
+/* ---------- Favorite words table ---------- */
+.fav-words-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.fav-words-table tr {
+  border-bottom: 0.4pt solid rgba(255, 255, 255, 0.10);
+}
+.fav-words-table tr:last-child {
+  border-bottom: 0;
+}
+.fav-words-table td {
+  padding: 4pt 6pt;
+  vertical-align: middle;
+  font-size: var(--fs-body);
+}
+.fav-user {
+  font-family: "Poppins", sans-serif;
+  font-weight: 700;
+  color: #FFFFFF;
+  width: 28%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.fav-word {
+  width: 24%;
+}
+.fav-token {
+  font-family: "Ubuntu", sans-serif;
+  font-weight: 500;
+  color: var(--color-sky);
+  margin-right: 4pt;
+}
+.fav-count {
+  font-family: "Ubuntu", sans-serif;
+  font-weight: 300;
+  font-size: var(--fs-label);
+  color: var(--white-50);
+}
+
+/* ---------- Glossary — small explanatory text ---------- */
+.glossary {
+  font-family: "Ubuntu", sans-serif;
+  font-weight: 300;
+  font-size: var(--fs-label);
+  color: var(--white-50);
+  line-height: 1.5;
+}
+.glossary p {
+  margin: 0 0 3pt 0;
+}
+.glossary strong {
+  font-weight: 600;
+  color: var(--white-70);
+}

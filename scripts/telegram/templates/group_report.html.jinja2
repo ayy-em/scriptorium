@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Group Analytics — {{ group_name }}</title>
+  <style>{{ css | safe }}</style>
+</head>
+<body>
+
+{# ============================================================
+   PAGE 1 — DASHBOARD
+   ============================================================ #}
+<section class="page page--1">
+  <div class="page-eyebrow">01 &middot; Dashboard</div>
+  <h1 class="hero">{{ group_name }}:<br/>The Anatomy of a Pack</h1>
+  <p class="tagline">
+    Analyzing <strong>{{ humanize(a.totals.messages_all_time) }}</strong> interactions
+    from <strong>{{ a.totals.date_range.start }}</strong>
+    to <strong>{{ a.totals.date_range.end }}</strong>.
+  </p>
+
+  <table class="grid">
+    <tr>
+      <td>
+        <div class="card accent-gold callout">
+          <div class="value accent-gold">{{ humanize(a.totals.messages_all_time) }}</div>
+          <div class="sublabel">Total messages</div>
+        </div>
+      </td>
+      <td>
+        <div class="card accent-hero callout--quiet callout">
+          <div class="value">{{ "{:,}".format(a.totals.active_members_count) }}</div>
+          <div class="sublabel">Active chatterboxes</div>
+        </div>
+      </td>
+      <td>
+        <div class="card accent-hero callout--quiet callout">
+          <div class="value">{{ "{:,}".format(a.totals.date_range.days) }}</div>
+          <div class="sublabel">Group lifespan (days)</div>
+        </div>
+      </td>
+    </tr>
+  </table>
+
+  <div class="card" style="margin-top: var(--gap-md);">
+    <h3>Who dominates the conversation?</h3>
+    <div class="chart-frame tall">
+      <img src="{{ charts.user_share_top10 }}" alt="Top 10 users by message share" />
+    </div>
+  </div>
+
+  <div class="footer">
+    <span class="pip on">&diams;</span><span class="pip">&loz;</span><span class="pip">&loz;</span><span class="pip">&loz;</span><span class="pip">&loz;</span><span class="pip">&loz;</span><span class="pip">&loz;</span>
+    &nbsp;&middot;&nbsp; Scriptorium &middot; chat-local time
+  </div>
+</section>
+
+
+{# ============================================================
+   PAGE 2 — RHYTHMS
+   ============================================================ #}
+<section class="page page--2">
+  <div class="page-eyebrow">02 &middot; Rhythms</div>
+  <h2 class="section">When does the hive mind wake up?</h2>
+
+  <div class="card">
+    <h3>Activity Heatmap</h3>
+    <div class="chart-frame">
+      <img src="{{ charts.activity_heatmap }}" alt="Activity heatmap (7x24)" />
+    </div>
+  </div>
+
+  <table class="grid" style="margin-top: var(--gap-md);">
+    <tr>
+      <td style="width: 50%;">
+        <div class="card accent-sky">
+          <div class="label">Peak hour</div>
+          <div class="peak-hour-value">{{ a.activity_heatmap.peak.day_full }}</div>
+          <div class="peak-hour-value">at {{ gmt1_hour(a.activity_heatmap.peak.hour) }}</div>
+          <p class="figure" style="margin-top: var(--gap-xs);">
+            <strong style="color: #FFFFFF;">{{ "%.1f" | format(a.activity_heatmap.peak.pct_above_avg) }}%</strong> more active than the average time slot
+          </p>
+        </div>
+      </td>
+      <td style="width: 50%;">
+        <div class="card accent-sky">
+          <div class="label">Insomnia index</div>
+          <div class="insomnia-value">{{ pct_float(a.activity_heatmap.insomnia_pct) }}</div>
+          <p class="punchline" style="margin-top: var(--gap-xs);">
+            of all messages sent between 00:00 and 06:00.
+          </p>
+          <p class="figure">The pack never truly sleeps.</p>
+        </div>
+      </td>
+    </tr>
+  </table>
+
+  <div class="card" style="margin-top: var(--gap-md);">
+    <h3>Monthly volume</h3>
+    <div class="chart-frame short">
+      <img src="{{ charts.monthly_volume }}" alt="Monthly message volume" />
+    </div>
+  </div>
+
+  {% if charts.yearly_volume %}
+  <div class="card" style="margin-top: var(--gap-md);">
+    <h3>Messages by year</h3>
+    <div class="chart-frame yearly">
+      <img src="{{ charts.yearly_volume }}" alt="Yearly message volume" />
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="card" style="margin-top: var(--gap-md);">
+    <h3>Engagement over time</h3>
+    <div class="chart-frame short">
+      <img src="{{ charts.sentiment_flow }}" alt="Sentiment and engagement flow" />
+    </div>
+  </div>
+
+  <table class="grid" style="margin-top: var(--gap-md);">
+    <tr>
+      <td style="width: 50%;">
+        <div class="card accent-gold">
+          <div class="label">Longest hot streak</div>
+          <div class="streak-value gold">{{ "{:,}".format(a.streaks.hot_streak.days) }} days</div>
+          {% if a.streaks.hot_streak.start %}
+          <p class="figure">{{ a.streaks.hot_streak.start }} &mdash; {{ a.streaks.hot_streak.end }}</p>
+          {% endif %}
+        </div>
+      </td>
+      <td style="width: 50%;">
+        <div class="card accent-coral">
+          <div class="label">Longest dry spell</div>
+          <div class="streak-value coral">{{ "{:,}".format(a.streaks.dry_spell.days) }} days</div>
+          {% if a.streaks.dry_spell.start %}
+          <p class="figure">{{ a.streaks.dry_spell.start }} &mdash; {{ a.streaks.dry_spell.end }}</p>
+          {% endif %}
+        </div>
+      </td>
+    </tr>
+  </table>
+
+  <div class="footer">
+    <span class="pip">&loz;</span><span class="pip on">&diams;</span><span class="pip">&loz;</span><span class="pip">&loz;</span><span class="pip">&loz;</span><span class="pip">&loz;</span><span class="pip">&loz;</span>
+    &nbsp;&middot;&nbsp; Scriptorium &middot; chat-local time
+  </div>
+</section>
+
+
+{# ============================================================
+   PAGE 3 — DYNAMICS
+   ============================================================ #}
+<section class="page page--3">
+  <div class="page-eyebrow">03 &middot; Dynamics</div>
+  <h2 class="section">Who's talking to who?</h2>
+
+  <div class="card">
+    <h3>Reply network</h3>
+    <div class="chart-frame tall">
+      <img src="{{ charts.reply_network }}" alt="Reply network graph" />
+    </div>
+  </div>
+
+  <table class="grid" style="margin-top: var(--gap-md);">
+    <tr>
+      <td style="width: 33.33%;">
+        <div class="metrics-box">
+          <div class="metrics-title">The Instigator</div>
+          {% if a.interaction_awards.instigator and a.interaction_awards.instigator.user_id %}
+          <div class="metrics-name">{{ name(a.interaction_awards.instigator.user_id) }}</div>
+          <p class="metrics-detail">
+            <strong>{{ "{:,}".format(a.interaction_awards.instigator.total_replies_received) }}</strong> total replies received.
+          </p>
+          {% else %}
+          <div class="metrics-name">No winner</div>
+          {% endif %}
+        </div>
+      </td>
+      <td style="width: 33.33%;">
+        <div class="metrics-box">
+          <div class="metrics-title">The Echo Chamber</div>
+          {% if a.interaction_awards.echo_chamber and a.interaction_awards.echo_chamber.user_a %}
+          <div class="metrics-name">
+            {{ name(a.interaction_awards.echo_chamber.user_a) }} &amp;
+            {{ name(a.interaction_awards.echo_chamber.user_b) }}
+          </div>
+          <p class="metrics-detail">
+            <strong>{{ "%.1f" | format(a.interaction_awards.echo_chamber.mutual_pct) }}%</strong>
+            of their replies go to each other.
+          </p>
+          {% else %}
+          <div class="metrics-name">No pair found</div>
+          {% endif %}
+        </div>
+      </td>
+      <td style="width: 33.33%;">
+        <div class="metrics-box">
+          <div class="metrics-title">Mr Autism</div>
+          {% if a.user_archetypes.mr_autism and a.user_archetypes.mr_autism.user_id %}
+          <div class="metrics-name">{{ name(a.user_archetypes.mr_autism.user_id) }}</div>
+          <p class="metrics-detail">
+            <strong>{{ "{:,}".format(a.user_archetypes.mr_autism.streak_count) }}</strong> solo monologue streaks (5+ consecutive messages).
+          </p>
+          {% else %}
+          <div class="metrics-name">No winner</div>
+          {% endif %}
+        </div>
+      </td>
+    </tr>
+  </table>
+
+  <div class="footer">
+    <span class="pip">&loz;</span><span class="pip">&loz;</span><span class="pip on">&diams;</span><span class="pip">&loz;</span><span class="pip">&loz;</span><span class="pip">&loz;</span><span class="pip">&loz;</span>
+    &nbsp;&middot;&nbsp; Scriptorium &middot; chat-local time
+  </div>
+</section>
+
+
+{# ============================================================
+   PAGE 4 — BURSTS
+   ============================================================ #}
+<section class="page page--4">
+  <div class="page-eyebrow">04 &middot; Bursts</div>
+  <h2 class="section">Sparking Fires &amp; Killing Vibes</h2>
+
+  <div class="card accent-neon-purp" style="margin-bottom: var(--gap-md);">
+    <div class="label">Total conversation bursts detected</div>
+    <div class="row-2">
+      <div>
+        <div class="burst-total-value">{{ "{:,}".format(a.burst_dynamics.total_bursts) }}</div>
+        <div class="l">Bursts</div>
+      </div>
+      <div>
+        <p class="punchline" style="margin: 0;">
+          A burst is a cluster of rapid-fire messages after a quiet period.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <table class="grid">
+    <tr>
+      {# ---------- Left column: Spark Plugs ---------- #}
+      <td style="width: 50%;">
+        <div class="card">
+          <div class="burst-col-title spark">Spark Plugs</div>
+          <p class="figure" style="margin-bottom: var(--gap-sm);">Top 5 burst starters</p>
+          <ol class="leaderboard">
+            {% for s in a.burst_dynamics.starters[:5] %}
+            <li>
+              <span class="rank">{{ loop.index }}.</span>
+              <span class="lb-name">{{ name(s.user_id) }}</span>
+              <span class="lb-stat"><strong>{{ "{:,}".format(s.count) }}</strong> &middot; {{ "%.1f" | format(s.rate_per_k) }}/1k msgs</span>
+            </li>
+            {% endfor %}
+          </ol>
+
+          {% if a.burst_dynamics.starters %}
+          <div style="margin-top: var(--gap-md);">
+            <div class="label">Top opener's favourite opening words</div>
+            {% set top_starter = a.burst_dynamics.starters[0] %}
+            {% if top_starter.top_words %}
+            <ul class="domain-list">
+              {% for w in top_starter.top_words[:3] %}
+              <li><span class="domain">{{ w.word }}</span><span class="n">{{ "{:,}".format(w.count) }}</span></li>
+              {% endfor %}
+            </ul>
+            {% else %}
+            <p class="figure">No opening words recorded.</p>
+            {% endif %}
+          </div>
+          {% endif %}
+        </div>
+      </td>
+
+      {# ---------- Right column: Vibe Killers ---------- #}
+      <td style="width: 50%;">
+        <div class="card">
+          <div class="burst-col-title vibe">Vibe Killers</div>
+          <p class="figure" style="margin-bottom: var(--gap-sm);">Top 5 burst killers</p>
+          <ol class="leaderboard">
+            {% for k in a.burst_dynamics.killers[:5] %}
+            <li>
+              <span class="rank">{{ loop.index }}.</span>
+              <span class="lb-name">{{ name(k.user_id) }}</span>
+              <span class="lb-stat"><strong>{{ "{:,}".format(k.count) }}</strong> &middot; {{ "%.1f" | format(k.rate_per_k) }}/1k msgs</span>
+            </li>
+            {% endfor %}
+          </ol>
+        </div>
+      </td>
+    </tr>
+  </table>
+
+  <div class="glossary" style="margin-top: var(--gap-md);">
+    <p><strong>Spark Plug</strong> — the person who sends the first message after a 4+ hour silence, kick-starting a new conversation burst.</p>
+    <p><strong>Vibe Killer</strong> — the person who sends the last message before the group goes quiet for 4+ hours, ending the burst.</p>
+  </div>
+
+  <div class="footer">
+    <span class="pip">&loz;</span><span class="pip">&loz;</span><span class="pip">&loz;</span><span class="pip on">&diams;</span><span class="pip">&loz;</span><span class="pip">&loz;</span><span class="pip">&loz;</span>
+    &nbsp;&middot;&nbsp; Scriptorium &middot; chat-local time
+  </div>
+</section>
+
+
+{# ============================================================
+   PAGE 5 — PROFANITY
+   ============================================================ #}
+<section class="page page--5">
+  <div class="page-eyebrow">05 &middot; Profanity</div>
+  <h2 class="section">The Filter Breakdown</h2>
+
+  <div class="card">
+    <h3>Profanity Podium</h3>
+    <div class="chart-frame">
+      <img src="{{ charts.profanity_podium }}" alt="Profanity podium chart" />
+    </div>
+  </div>
+
+  <table class="grid" style="margin-top: var(--gap-md);">
+    <tr>
+      <td style="width: 33.33%;">
+        <div class="award-card">
+          <div class="award-icon">&#x1F6A2;</div>
+          <div class="award-title">Sailor Award</div>
+          {% if a.profanity_analytics.sailor_award and a.profanity_analytics.sailor_award.user_id %}
+          <div class="award-winner">{{ name(a.profanity_analytics.sailor_award.user_id) }}</div>
+          <p class="award-stat">
+            Profanity rate: <strong>{{ "%.2f" | format(a.profanity_analytics.sailor_award.rate) }}%</strong>
+          </p>
+          <div class="profanity-bar">
+            <div class="profanity-bar-fill" style="width: {{ [a.profanity_analytics.sailor_award.rate, 100] | min }}%;"></div>
+          </div>
+          {% else %}
+          <div class="award-winner">No winner</div>
+          {% endif %}
+        </div>
+      </td>
+      <td style="width: 33.33%;">
+        <div class="award-card">
+          <div class="award-icon">&#x1F3A9;</div>
+          <div class="award-title">Classy Citizen</div>
+          {% if a.profanity_analytics.classy_citizen and a.profanity_analytics.classy_citizen.user_id %}
+          <div class="award-winner">{{ name(a.profanity_analytics.classy_citizen.user_id) }}</div>
+          <p class="award-stat">
+            Profanity rate: <strong>{{ "%.2f" | format(a.profanity_analytics.classy_citizen.rate) }}%</strong>
+          </p>
+          <div class="profanity-bar">
+            <div class="profanity-bar-fill" style="width: {{ [a.profanity_analytics.classy_citizen.rate, 100] | min }}%;"></div>
+          </div>
+          {% else %}
+          <div class="award-winner">No winner</div>
+          {% endif %}
+        </div>
+      </td>
+      <td style="width: 33.33%;">
+        <div class="award-card">
+          <div class="award-icon">&#x1F30D;</div>
+          <div class="award-title">Bi-Lingual Berserker</div>
+          {% if a.profanity_analytics.bilingual_firebrand and a.profanity_analytics.bilingual_firebrand.user_id %}
+          <div class="award-winner">{{ name(a.profanity_analytics.bilingual_firebrand.user_id) }}</div>
+          <p class="award-stat">
+            EN: <strong>{{ "%.1f" | format(a.profanity_analytics.bilingual_firebrand.en_pct) }}%</strong>
+            &middot;
+            RU: <strong>{{ "%.1f" | format(a.profanity_analytics.bilingual_firebrand.ru_pct) }}%</strong>
+          </p>
+          {% else %}
+          <div class="award-winner">No winner</div>
+          {% endif %}
+        </div>
+      </td>
+    </tr>
+  </table>
+
+  <div class="glossary" style="margin-top: var(--gap-md);">
+    <p><strong>Bi-Lingual Berserker</strong> — the person with the most balanced swearing across English and Russian.</p>
+  </div>
+
+  {% if a.voice_award and a.voice_award.user_id %}
+  <table class="grid" style="margin-top: var(--gap-md);">
+    <tr>
+      <td>
+        <div class="award-card" style="border-top-color: var(--color-gold);">
+          <div class="award-icon">&#x1F54C;</div>
+          <div class="award-title" style="color: var(--color-gold);">1001 Nights</div>
+          <div class="award-winner">{{ name(a.voice_award.user_id) }}</div>
+          <p class="award-stat">
+            Avg voice memo: <strong>{{ format_seconds(a.voice_award.avg_seconds) }}</strong>
+            &middot; <strong>{{ "{:,}".format(a.voice_award.count) }}</strong> voice messages
+          </p>
+        </div>
+      </td>
+    </tr>
+  </table>
+  {% endif %}
+
+  <div class="footer">
+    <span class="pip">&loz;</span><span class="pip">&loz;</span><span class="pip">&loz;</span><span class="pip">&loz;</span><span class="pip on">&diams;</span><span class="pip">&loz;</span><span class="pip">&loz;</span>
+    &nbsp;&middot;&nbsp; Scriptorium &middot; chat-local time
+  </div>
+</section>
+
+
+{# ============================================================
+   PAGE 6 — ARCHETYPES PART 1
+   ============================================================ #}
+<section class="page page--6">
+  <div class="page-eyebrow">06 &middot; Archetypes</div>
+  <h2 class="section">Character Profiles</h2>
+
+  <table class="archetype-grid">
+    <tr>
+      {# --- Ghost --- #}
+      <td style="width: 25%;">
+        <div class="archetype-card">
+          <div class="archetype-icon">&#x1F47B;</div>
+          <div class="archetype-title">Ghost</div>
+          {% if a.user_archetypes.ghost and a.user_archetypes.ghost.user_id %}
+          <div class="archetype-winner">{{ name(a.user_archetypes.ghost.user_id) }}</div>
+          <p class="archetype-stat">
+            <strong>{{ "{:,}".format(a.user_archetypes.ghost.all_time_count) }}</strong> all-time messages
+            but absent for <strong>{{ "{:,}".format(a.user_archetypes.ghost.days_absent) }}</strong> days.
+          </p>
+          {% else %}
+          <div class="archetype-winner">No winner</div>
+          {% endif %}
+        </div>
+      </td>
+
+      {# --- Town Crier --- #}
+      <td style="width: 25%;">
+        <div class="archetype-card">
+          <div class="archetype-icon">&#x1F4E2;</div>
+          <div class="archetype-title">Town Crier</div>
+          {% if a.user_archetypes.town_crier and a.user_archetypes.town_crier.user_id %}
+          <div class="archetype-winner">{{ name(a.user_archetypes.town_crier.user_id) }}</div>
+          <p class="archetype-stat">
+            <strong>{{ "%.1f" | format(a.user_archetypes.town_crier.pct) }}%</strong>
+            of their messages contain links or media.
+          </p>
+          {% else %}
+          <div class="archetype-winner">No winner</div>
+          {% endif %}
+        </div>
+      </td>
+
+      {# --- Machine Gun --- #}
+      <td style="width: 25%;">
+        <div class="archetype-card">
+          <div class="archetype-icon">&#x1F52B;</div>
+          <div class="archetype-title">Machine Gun</div>
+          {% if a.user_archetypes.machine_gun and a.user_archetypes.machine_gun.user_id %}
+          <div class="archetype-winner">{{ name(a.user_archetypes.machine_gun.user_id) }}</div>
+          <p class="archetype-stat">
+            Avg <strong>{{ "%.1f" | format(a.user_archetypes.machine_gun.avg_chars) }}</strong> chars per message.
+            <strong>{{ "{:,}".format(a.user_archetypes.machine_gun.rapid_count) }}</strong> rapid-fire sequences.
+          </p>
+          {% else %}
+          <div class="archetype-winner">No winner</div>
+          {% endif %}
+        </div>
+      </td>
+
+      {# --- Podcaster --- #}
+      <td style="width: 25%;">
+        <div class="archetype-card">
+          <div class="archetype-icon">&#x1F399;</div>
+          <div class="archetype-title">Podcaster</div>
+          {% if a.user_archetypes.podcaster and a.user_archetypes.podcaster.user_id %}
+          <div class="archetype-winner">{{ name(a.user_archetypes.podcaster.user_id) }}</div>
+          <p class="archetype-stat">
+            <strong>{{ "{:,}".format(a.user_archetypes.podcaster.count) }}</strong> voice/video messages
+            (<strong>{{ "%.1f" | format(a.user_archetypes.podcaster.pct) }}%</strong> of total).
+          </p>
+          {% else %}
+          <div class="archetype-winner">No winner</div>
+          {% endif %}
+        </div>
+      </td>
+    </tr>
+  </table>
+
+  <table class="archetype-grid" style="margin-top: var(--gap-md);">
+    <tr>
+      {# --- Midnight Marauder --- #}
+      <td style="width: 33.33%;">
+        <div class="archetype-card">
+          <div class="archetype-icon">&#x1F319;</div>
+          <div class="archetype-title">Midnight Marauder</div>
+          {% if a.user_archetypes.midnight_marauder and a.user_archetypes.midnight_marauder.user_id %}
+          <div class="archetype-winner">{{ name(a.user_archetypes.midnight_marauder.user_id) }}</div>
+          <p class="archetype-stat">
+            <strong>{{ "%.1f" | format(a.user_archetypes.midnight_marauder.pct) }}%</strong> of their messages
+            sent between 00:00 and 05:00.
+          </p>
+          {% else %}
+          <div class="archetype-winner">No winner</div>
+          {% endif %}
+        </div>
+      </td>
+
+      {# --- Essayist --- #}
+      <td style="width: 33.33%;">
+        <div class="archetype-card">
+          <div class="archetype-icon">&#x1F4DD;</div>
+          <div class="archetype-title">Essayist</div>
+          {% if a.user_archetypes.essayist and a.user_archetypes.essayist.user_id %}
+          <div class="archetype-winner">{{ name(a.user_archetypes.essayist.user_id) }}</div>
+          <p class="archetype-stat">
+            <strong>{{ "%.1f" | format(a.user_archetypes.essayist.pct) }}%</strong> of messages over 50 words.
+            <strong>{{ "{:,}".format(a.user_archetypes.essayist.count) }}</strong> long messages total.
+          </p>
+          {% else %}
+          <div class="archetype-winner">No winner</div>
+          {% endif %}
+        </div>
+      </td>
+
+      {# --- Mr Autism --- #}
+      <td style="width: 33.33%;">
+        <div class="archetype-card">
+          <div class="archetype-icon">&#x1F9E9;</div>
+          <div class="archetype-title">Mr Autism</div>
+          {% if a.user_archetypes.mr_autism and a.user_archetypes.mr_autism.user_id %}
+          <div class="archetype-winner">{{ name(a.user_archetypes.mr_autism.user_id) }}</div>
+          <p class="archetype-stat">
+            <strong>{{ "{:,}".format(a.user_archetypes.mr_autism.streak_count) }}</strong> monologue streaks
+            (5+ consecutive messages with no reply).
+          </p>
+          {% else %}
+          <div class="archetype-winner">No winner</div>
+          {% endif %}
+        </div>
+      </td>
+    </tr>
+  </table>
+
+  {% if a.favorite_words %}
+  <div class="card" style="margin-top: var(--gap-md);">
+    <h3>Signature Words</h3>
+    <p class="figure" style="margin-bottom: var(--gap-sm);">Words each person uses disproportionately more than anyone else</p>
+    <table class="fav-words-table">
+      {% for entry in a.favorite_words[:6] %}
+      <tr>
+        <td class="fav-user">{{ name(entry.user_id) }}</td>
+        {% for w in entry.words[:3] %}
+        <td class="fav-word"><span class="fav-token">{{ w.word }}</span><span class="fav-count">{{ "{:,}".format(w.count) }}&times;</span></td>
+        {% endfor %}
+        {% for _ in range(3 - entry.words|length) %}
+        <td class="fav-word"></td>
+        {% endfor %}
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+  {% endif %}
+
+  <div class="footer">
+    <span class="pip">&loz;</span><span class="pip">&loz;</span><span class="pip">&loz;</span><span class="pip">&loz;</span><span class="pip">&loz;</span><span class="pip on">&diams;</span><span class="pip">&loz;</span>
+    &nbsp;&middot;&nbsp; Scriptorium &middot; chat-local time
+  </div>
+</section>
+
+
+{# ============================================================
+   PAGE 7 — WORD CLOUD
+   ============================================================ #}
+<section class="page page--7">
+  <div class="page-eyebrow">07 &middot; Word Cloud</div>
+  <h2 class="section">Most Used Words</h2>
+
+  <div class="cloud-backdrop">
+    <img src="{{ charts.word_cloud }}" alt="Word cloud" />
+  </div>
+
+  <div class="footer">
+    <span class="pip">&loz;</span><span class="pip">&loz;</span><span class="pip">&loz;</span><span class="pip">&loz;</span><span class="pip">&loz;</span><span class="pip">&loz;</span><span class="pip on">&diams;</span>
+    &nbsp;&middot;&nbsp; Scriptorium &middot; chat-local time
+  </div>
+</section>
+
+</body>
+</html>

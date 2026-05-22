@@ -37,6 +37,7 @@ telegram  = [
     "wordcloud>=1.9",
     "emoji>=2.14",
     "ijson>=3.3",
+    "networkx>=3.0",
 ]
 web       = [
     "fastapi>=0.115",
@@ -109,11 +110,17 @@ fixable = ["ALL"]
     "PLR0913", # the synthetic _msg() helper centralizes message construction
     "PLR0915", # build_synthetic_chat is intentionally one long readable script
 ]
+"tests/telegram/test_group_analysis.py" = [
+    "PLR0913", # _msg() helper mirrors conftest pattern
+]
 "scripts/av/to_anim.py" = [
     "PLR0913", # to_anim legitimately needs source, start, end, outputs_dir + 4 optional knobs
 ]
 "scripts/av/filmstrip.py" = [
     "PLR0913", # filmstrip takes source + 5 optional layout/output knobs
+]
+"scripts/telegram/_group_metrics.py" = [
+    "PLR0913", # build_group_analytics takes metadata + messages + sender_lookup + config kwargs
 ]
 
 [tool.ruff.format]

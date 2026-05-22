@@ -75,8 +75,11 @@ def move_to_past_inputs(theme: str, source: Path) -> Path | None:
         source_resolved = source.resolve()
         inputs_root = inputs_dir(theme).resolve()
         past_root = past_inputs_dir(theme).resolve()
+    except OSError:
+        return None
+    try:
         source_resolved.relative_to(inputs_root)
-    except OSError, ValueError:
+    except ValueError:
         return None
     if source_resolved.is_relative_to(past_root):
         return None
@@ -86,7 +89,7 @@ def move_to_past_inputs(theme: str, source: Path) -> Path | None:
         stamp = datetime.now().strftime("%Y%m%dT%H%M%S")
         dest = past_root / f"{source.stem}_{stamp}{source.suffix}"
     try:
-        source.rename(dest)
+        shutil.move(str(source), str(dest))
     except OSError:
         return None
     return dest
