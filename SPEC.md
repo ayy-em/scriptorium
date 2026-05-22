@@ -272,6 +272,25 @@ Scripts resolve a bare filename (no directory component in the path) against
 uv run main.py av.convert clip.mp4 --to mp3   # resolves to inputs/clip.mp4
 ```
 
+### Post-processing: archiving input files
+
+Every script that accepts a file as input **must** move the processed file to
+`inputs/processed/<category>/` after a successful run. The archived filename
+should include a date tag so multiple runs don't collide — the convention is
+`<stem>_DDMMYY<ext>` using the UTC run-start date (with an `_HHMMSS` suffix
+appended on same-day collisions).
+
+Only files that live inside the shared `inputs/` tree are archived — files
+passed via an absolute path outside the inputs root are left in place.
+
+```
+inputs/
+    result.json              ← before run
+    processed/
+        telegram/
+            result_210526.json   ← after successful run (21 May 2026 UTC)
+```
+
 ### `core.paths` — centralized path resolution
 
 All path resolution goes through `core.paths`, which detects whether the app is
