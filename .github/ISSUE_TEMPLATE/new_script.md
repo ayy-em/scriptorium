@@ -110,6 +110,7 @@ BOILERPLATE — usually leave as-is; the agent derives implementation from above
 - [ ] Script works via CLI: `uv run main.py <category>.<script_name> [args]`.
 - [ ] `uv run main.py <category>` lists the script with the correct title and description.
 - [ ] `uv run main.py <category>.<script_name> --help` includes all relevant args/flags, expected types or choices, defaults and copy-pasteable invocation examples.
+- [ ] If the script accepts a file input, it archives the processed file to `inputs/processed/<category>/<stem>_DDMMYY<ext>` after a successful run.
 - [ ] Script works in the frontend, including generated form fields, uploads, submitted args and streamed output.
 - [ ] All new functionality is covered by tests under `tests/<category>/` and/or `tests/webapp/` where relevant.
 - [ ] New dependencies, optional extras or dependency groups are reflected in `pyproject.toml`.
