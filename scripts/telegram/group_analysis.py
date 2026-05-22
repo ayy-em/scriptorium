@@ -6,13 +6,13 @@ import hashlib
 import json
 from pathlib import Path
 import re
+import shutil
 import sys
 import tempfile
 import zipfile
 
 from core.argparse import ScriptoriumParser
 from core.paths import inputs_dir as _core_inputs_dir
-from core.paths import move_to_past_inputs
 from core.paths import outputs_dir as _core_outputs_dir
 from scripts.telegram._group_metrics import DEFAULT_MSG_SHARE_THRESHOLD
 from scripts.telegram._group_parsing import InvalidExportError
@@ -124,8 +124,23 @@ def group_analysis(
         zip_path = outputs_dir / f"group_analysis_{slug}_{stamp}.zip"
         _build_zip(staging, zip_path)
 
-    move_to_past_inputs("telegram", source)
+    _archive_source(source)
     return zip_path
+
+
+def _archive_source(source: Path) -> Path | None:
+    """Move a processed source file to ``inputs/telegram/processed/``."""
+    inputs_root = _core_inputs_dir("telegram").resolve()
+    try:
+        source.resolve().relative_to(inputs_root)
+    except ValueError:
+        return None
+    dest_dir = inputs_root / "telegram" / "processed"
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now().strftime("%d%m%y_%H%M%S")
+    dest = dest_dir / f"result_{stamp}{source.suffix}"
+    shutil.move(str(source), str(dest))
+    return dest
 
 
 def _build_zip(staging: Path, zip_path: Path) -> None:

@@ -349,11 +349,11 @@ class TestArchetypes:
         mc = analytics["user_archetypes"]["main_character"]
         assert mc["user_id"] == "user_a"
 
-    def test_ghost_finds_inactive_below_threshold(self, tmp_path):
-        """Ghost should find users below the share threshold who stopped posting."""
+    def test_ghost_finds_inactive_above_threshold(self, tmp_path):
+        """Ghost should find inactive users who once met the message threshold."""
         mid = 1
         msgs = []
-        for i in range(5):
+        for i in range(20):
             msgs.append(_msg(mid, datetime(2024, 1, 1, 10, 0) + timedelta(days=i), "user_d", f"Diana early {i}"))
             mid += 1
         for i in range(200):
@@ -375,6 +375,31 @@ class TestArchetypes:
         ghost = analytics["user_archetypes"]["ghost"]
         assert ghost["user_id"] == "user_d"
         assert ghost["days_absent"] > 60
+
+    def test_ghost_ignores_trivial_users(self, tmp_path):
+        """Ghost should not pick users who never met the message threshold."""
+        mid = 1
+        msgs = []
+        msgs.append(_msg(mid, datetime(2024, 1, 1, 10, 0), "user_d", "One-off message"))
+        mid += 1
+        for i in range(500):
+            msgs.append(_msg(mid, datetime(2024, 5, 1, 10, 0) + timedelta(hours=i), "user_a", f"Alice msg {i}"))
+            mid += 1
+        for i in range(300):
+            msgs.append(_msg(mid, datetime(2024, 5, 1, 12, 0) + timedelta(hours=i), "user_b", f"Bob msg {i}"))
+            mid += 1
+
+        path = _write_export(tmp_path, _build_group_export(msgs))
+        metadata, messages, sender_lookup, bot_ids = load_group_chat(path)
+        analytics = build_group_analytics(
+            metadata,
+            messages,
+            sender_lookup,
+            msg_share_threshold=1,
+            now=datetime(2024, 5, 25, 12, 0),
+        )
+        ghost = analytics["user_archetypes"]["ghost"]
+        assert ghost["user_id"] is None
 
     def test_mr_autism_detection(self, tmp_path):
         base = datetime(2024, 6, 1, 10, 0)

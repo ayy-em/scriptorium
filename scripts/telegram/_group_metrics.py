@@ -96,7 +96,7 @@ def build_group_analytics(
 
     profanity = _compute_profanity(filtered, active_ids)
     voice_award = _compute_voice_award(filtered, active_ids)
-    archetypes = _compute_archetypes(messages, filtered, active_ids, user_msg_counts, excluded_ids, now)
+    archetypes = _compute_archetypes(messages, filtered, active_ids, user_msg_counts, excluded_ids, min_count, now)
 
     msg_by_id = {m.id: m for m in filtered}
     reply_matrix = _compute_reply_matrix(filtered, active_set, msg_by_id)
@@ -373,12 +373,13 @@ def _compute_archetypes(
     active_ids: list[str],
     all_user_counts: Counter,
     excluded_ids: set[str],
+    min_count: int,
     now: datetime,
 ) -> dict[str, Any]:
     """Compute all 7 behavioral archetypes for Page 6."""
     active_set = set(active_ids)
 
-    ghost = _find_ghost(all_messages, all_user_counts, excluded_ids, now)
+    ghost = _find_ghost(all_messages, all_user_counts, excluded_ids, min_count, now)
     main_character = _find_main_character(messages, active_ids)
     town_crier = _find_town_crier(messages, active_ids)
     mr_autism = _find_mr_autism(messages, active_ids)
@@ -403,13 +404,15 @@ def _find_ghost(
     messages: list[GroupMessage],
     all_counts: Counter,
     excluded_ids: set[str],
+    min_count: int,
     now: datetime,
 ) -> dict[str, Any]:
     """Highest all-time count among users absent for the last GHOST_THRESHOLD_DAYS."""
     cutoff = now - timedelta(days=GHOST_THRESHOLD_DAYS)
     recent_senders = {m.from_id for m in messages if m.date >= cutoff}
+    threshold = max(min_count, 1)
     all_senders = set(all_counts.keys()) - excluded_ids
-    candidates = [uid for uid in all_senders if uid not in recent_senders and all_counts.get(uid, 0) > 0]
+    candidates = [uid for uid in all_senders if uid not in recent_senders and all_counts.get(uid, 0) >= threshold]
     if not candidates:
         return {"user_id": None, "display_name": None, "all_time_count": 0, "days_absent": 0}
     winner = max(candidates, key=lambda u: all_counts.get(u, 0))
