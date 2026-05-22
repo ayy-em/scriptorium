@@ -251,7 +251,7 @@
             <li>
               <span class="rank">{{ loop.index }}.</span>
               <span class="lb-name">{{ name(s.user_id) }}</span>
-              <span class="lb-stat"><strong>{{ "{:,}".format(s.count) }}</strong> &middot; {{ "%.1f" | format(s.rate_per_k) }}/1k msgs</span>
+              <span class="lb-stat">{{ "%.1f" | format(s.rate_per_k) }} per 1k msgs</span>
             </li>
             {% endfor %}
           </ol>
@@ -284,7 +284,7 @@
             <li>
               <span class="rank">{{ loop.index }}.</span>
               <span class="lb-name">{{ name(k.user_id) }}</span>
-              <span class="lb-stat"><strong>{{ "{:,}".format(k.count) }}</strong> &middot; {{ "%.1f" | format(k.rate_per_k) }}/1k msgs</span>
+              <span class="lb-stat">{{ "%.1f" | format(k.rate_per_k) }} per 1k msgs</span>
             </li>
             {% endfor %}
           </ol>
@@ -296,6 +296,7 @@
   <div class="glossary" style="margin-top: var(--gap-md);">
     <p><strong>Spark Plug</strong> — the person who sends the first message after a 4+ hour silence, kick-starting a new conversation burst.</p>
     <p><strong>Vibe Killer</strong> — the person who sends the last message before the group goes quiet for 4+ hours, ending the burst.</p>
+    <p><strong>Per 1k msgs</strong> — how often someone starts or kills a burst relative to their total messages. Ranked this way so prolific posters don't dominate by volume alone. Messages between 01:00 and 07:00 GMT+1 are excluded to avoid counting overnight silence as real bursts.</p>
   </div>
 
   <div class="footer">
@@ -418,7 +419,7 @@
           <div class="archetype-icon">&#x1F47B;</div>
           <div class="archetype-title">Ghost</div>
           {% if a.user_archetypes.ghost and a.user_archetypes.ghost.user_id %}
-          <div class="archetype-winner">{{ name(a.user_archetypes.ghost.user_id) }}</div>
+          <div class="archetype-winner">{{ a.user_archetypes.ghost.display_name }}</div>
           <p class="archetype-stat">
             <strong>{{ "{:,}".format(a.user_archetypes.ghost.all_time_count) }}</strong> all-time messages
             but absent for <strong>{{ "{:,}".format(a.user_archetypes.ghost.days_absent) }}</strong> days.

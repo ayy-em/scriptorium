@@ -9,7 +9,7 @@
   size: A4 portrait;
   margin: 0;
   background: url("{{ bg_url }}") top center / cover no-repeat;
-  background-color: rgba(10, 10, 30, 0.35);
+  background-color: rgba(6, 6, 22, 0.52);
   background-blend-mode: darken;
 }
 
@@ -76,8 +76,8 @@
   --white-90: rgba(255, 255, 255, 0.90);
   --white-70: rgba(255, 255, 255, 0.70);
   --white-50: rgba(255, 255, 255, 0.50);
-  --card-bg: rgba(255, 255, 255, 0.20);
-  --card-border: rgba(255, 255, 255, 0.30);
+  --card-bg: rgba(255, 255, 255, 0.35);
+  --card-border: rgba(255, 255, 255, 0.75);
 
   /* RGB triplets for box-shadow color mixing */
   --gold-rgb: 251, 191, 36;
@@ -201,7 +201,9 @@ table.grid > tr > td {
 }
 table.grid > tr > td:first-child  { padding-left: 0; }
 table.grid > tr > td:last-child   { padding-right: 0; }
-table.grid > tr > td > .card {
+table.grid > tr > td > .card,
+table.grid > tr > td > .award-card,
+table.grid > tr > td > .metrics-box {
   height: 100%;
 }
 
@@ -378,6 +380,9 @@ table.grid > tr > td > .card {
   color: var(--white-70);
   text-align: center;
   letter-spacing: 0.06em;
+  padding: 6pt 10pt;
+  border-radius: 8pt;
+  background: rgba(8, 10, 28, 0.72);
 }
 .footer .pip { color: var(--white-50); margin: 0 1pt; }
 .footer .pip.on {
@@ -457,6 +462,10 @@ table.grid > tr > td > .card {
   box-shadow: 0 1pt 8pt rgba(0, 0, 0, 0.18),
               inset 0 2pt 18pt rgba(var(--neon-purp-rgb), 0.10);
   text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
 }
 .archetype-card .archetype-icon {
   font-size: 28pt;
@@ -559,6 +568,10 @@ table.grid > tr > td > .card {
   text-align: center;
   box-shadow: 0 1pt 8pt rgba(0, 0, 0, 0.18),
               inset 0 2pt 18pt rgba(var(--crimson-rgb), 0.10);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
 }
 .award-card .award-icon {
   font-size: 24pt;
@@ -678,6 +691,10 @@ table.grid > tr > td > .card {
   page-break-inside: avoid;
   break-inside: avoid;
   box-shadow: 0 1pt 8pt rgba(0, 0, 0, 0.18);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
 }
 .metrics-box .metrics-title {
   font-family: "Poppins", sans-serif;

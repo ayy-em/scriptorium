@@ -230,10 +230,11 @@ class TestGroupMetrics:
         assert isinstance(bursts["killers"], list)
         if bursts["starters"]:
             assert "user_id" in bursts["starters"][0]
-            assert "count" in bursts["starters"][0]
             assert "rate_per_k" in bursts["starters"][0]
+            assert "count" not in bursts["starters"][0]
         if bursts["killers"]:
             assert "rate_per_k" in bursts["killers"][0]
+            assert "count" not in bursts["killers"][0]
 
     def test_profanity_structure(self, tmp_path):
         analytics = _build_test_analytics(tmp_path)

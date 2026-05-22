@@ -554,7 +554,7 @@ def render_word_cloud(
     for uid in users_ranked:
         color = user_color_map[uid]
         label = _name(analytics, uid)[:18]
-        handle = plt.Line2D([0], [0], marker="s", color="none", markerfacecolor=color, markersize=10, label=label)
+        handle = plt.Line2D([0], [0], marker="s", color="none", markerfacecolor=color, markersize=14, label=label)
         legend_handles.append(handle)
 
     if legend_handles:
@@ -563,13 +563,13 @@ def render_word_cloud(
             loc="lower center",
             ncol=min(len(legend_handles), 4),
             frameon=False,
-            fontsize=11,
+            fontsize=18,
             labelcolor="white",
             handletextpad=0.5,
             columnspacing=2.0,
             borderaxespad=0.0,
         )
-        fig.subplots_adjust(bottom=0.08)
+        fig.subplots_adjust(bottom=0.10)
 
     _save_transparent(fig, path)
     return path

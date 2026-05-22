@@ -28,6 +28,8 @@ MACHINE_GUN_WINDOW_SECONDS = 10
 CLASSY_CITIZEN_MIN_WORDS = 100
 DEFAULT_MSG_SHARE_THRESHOLD = 1
 MIDNIGHT_HOUR_END = 5
+BURST_QUIET_HOUR_START = 1
+BURST_QUIET_HOUR_END = 7
 FAVORITE_WORD_MIN_COUNT = 5
 FAVORITE_WORD_MIN_FREQ = 0.001
 PROFANITY_WORDS = ENGLISH_PROFANITY | RUSSIAN_PROFANITY
@@ -720,15 +722,18 @@ def _compute_burst_dynamics(
     killers: Counter[str] = Counter()
     starter_words: dict[str, Counter[str]] = defaultdict(Counter)
 
+    def _is_quiet_hour(msg: GroupMessage) -> bool:
+        return BURST_QUIET_HOUR_START <= msg.date.hour < BURST_QUIET_HOUR_END
+
     for session in sessions:
         first = session[0]
         last = session[-1]
-        if first.from_id in active_set:
+        if first.from_id in active_set and not _is_quiet_hour(first):
             starters[first.from_id] += 1
             for tok in _tokenize(first.text):
                 if tok not in STOPWORDS:
                     starter_words[first.from_id][tok] += 1
-        if last.from_id in active_set:
+        if last.from_id in active_set and not _is_quiet_hour(last):
             killers[last.from_id] += 1
 
     total = len(sessions)
@@ -745,8 +750,6 @@ def _compute_burst_dynamics(
         "starters": [
             {
                 "user_id": uid,
-                "count": count,
-                "pct": round(count / total * 100, 1) if total else 0.0,
                 "rate_per_k": round(_rate(uid, count) * 1000, 1),
                 "top_words": [{"word": w, "count": c} for w, c in starter_words.get(uid, Counter()).most_common(3)],
             }
@@ -755,8 +758,6 @@ def _compute_burst_dynamics(
         "killers": [
             {
                 "user_id": uid,
-                "count": count,
-                "pct": round(count / total * 100, 1) if total else 0.0,
                 "rate_per_k": round(_rate(uid, count) * 1000, 1),
             }
             for uid, count in top_killers
