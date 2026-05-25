@@ -142,6 +142,12 @@ run_fn(export, Path("inputs"), Path("outputs/lora/captions.json"))
 
 ## Version History
 
+### v0.5.0
+- **Telegram analysis suite** — group analysis with PDF report, chat analysis with neon infographic, embeddings pipeline
+- **New scripts** — gif.make_gif, av.video_crop, sitemaps.status_check, formats.convert_docs, speech.transcribe, util.notify, util.cleanup
+- **ScriptoriumParser** — mandatory parser with startup arg banner for all scripts; HIDDEN flag to exclude categories from the UI
+- **Quality of life** — first-visit onboarding modal, auto-archive processed inputs, persistent run logger, monoline theme icons
+
 ### v0.4.0
 - **User Settings** — new settings modal with theme and output directory persistence
 - **Modernized UI** — OKLch palette, refined dark mode, custom form labels, streaming output banners

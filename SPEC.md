@@ -235,10 +235,11 @@ Use direct imports only in tests.
 
 Each `scripts/<theme>/` directory is a Python package. Its `__init__.py` must define:
 
-| Name          | Type  | Purpose                                                             |
-|---------------|-------|---------------------------------------------------------------------|
-| `LABEL`       | `str` | Display name used in the web UI sidebar and CLI listings            |
-| `DESCRIPTION` | `str` | One-line tagline shown below the theme name in the web UI and at the top of `uv run main.py <theme>` output |
+| Name          | Type   | Purpose                                                             |
+|---------------|--------|---------------------------------------------------------------------|
+| `LABEL`       | `str`  | Display name used in the web UI sidebar and CLI listings            |
+| `DESCRIPTION` | `str`  | One-line tagline shown below the theme name in the web UI and at the top of `uv run main.py <theme>` output |
+| `HIDDEN`      | `bool` | *(optional, default `False`)* When `True`, the theme is excluded from the UI, CLI listings, and discovery |
 
 The module docstring is conventional documentation — it is not used by the runtime.
 
@@ -251,6 +252,7 @@ DESCRIPTION = "Audio and video processing backed by ffmpeg"
 
 `theme_labels()` and `theme_descriptions()` in `core/registry.py` read these
 attributes at runtime. Both fall back gracefully if an attribute is absent.
+Themes with `HIDDEN = True` are filtered out by all registry functions.
 
 ---
 
