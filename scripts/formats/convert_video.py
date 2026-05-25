@@ -4,6 +4,7 @@ import argparse
 from pathlib import Path
 import sys
 
+from core.argparse import ScriptoriumParser
 from scripts.av._utils import run_ffmpeg
 from scripts.formats._utils import (
     QUALITY_PRESETS,
@@ -81,7 +82,7 @@ examples:
 
 def get_parser() -> argparse.ArgumentParser:
     """Return the argument parser for this script."""
-    parser = argparse.ArgumentParser(
+    parser = ScriptoriumParser(
         description=DESCRIPTION,
         prog="uv run main.py formats.convert_video",
         epilog=_EXAMPLES,

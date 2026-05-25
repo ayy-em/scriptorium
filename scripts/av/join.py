@@ -7,6 +7,7 @@ import shutil
 import sys
 import tempfile
 
+from core.argparse import ScriptoriumParser
 from scripts.av._utils import (
     av_inputs_dir,
     av_outputs_dir,
@@ -128,7 +129,7 @@ examples:
 
 def get_parser() -> argparse.ArgumentParser:
     """Return the argument parser for this script."""
-    parser = argparse.ArgumentParser(
+    parser = ScriptoriumParser(
         description=DESCRIPTION,
         prog="uv run main.py av.join",
         epilog=_EXAMPLES,

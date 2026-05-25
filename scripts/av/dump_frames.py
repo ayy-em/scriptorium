@@ -5,6 +5,7 @@ from pathlib import Path
 import re
 import sys
 
+from core.argparse import ScriptoriumParser
 from scripts.av._utils import av_inputs_dir, av_outputs_dir, run_ffmpeg
 
 TITLE = "Dump all frames from a video clip"
@@ -90,7 +91,7 @@ examples:
 
 def get_parser() -> argparse.ArgumentParser:
     """Return the argument parser for this script."""
-    parser = argparse.ArgumentParser(
+    parser = ScriptoriumParser(
         description=DESCRIPTION,
         prog="uv run main.py av.dump_frames",
         epilog=_EXAMPLES,

@@ -4,6 +4,7 @@ import argparse
 from pathlib import Path
 import sys
 
+from core.argparse import ScriptoriumParser
 from scripts.av._utils import av_inputs_dir, av_outputs_dir, run_ffmpeg
 
 TITLE = "Trim the media file that's just too damn long"
@@ -43,7 +44,7 @@ examples:
 
 def get_parser() -> argparse.ArgumentParser:
     """Return the argument parser for this script."""
-    parser = argparse.ArgumentParser(
+    parser = ScriptoriumParser(
         description=DESCRIPTION,
         prog="uv run main.py av.trim",
         epilog=_EXAMPLES,

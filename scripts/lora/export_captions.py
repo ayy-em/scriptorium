@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 import sys
 
+from core.argparse import ScriptoriumParser
 from core.paths import inputs_dir, outputs_dir
 from scripts.lora._dataset import find_captions
 
@@ -55,7 +56,7 @@ examples:
 
 def get_parser() -> argparse.ArgumentParser:
     """Return the argument parser for this script."""
-    parser = argparse.ArgumentParser(
+    parser = ScriptoriumParser(
         description=DESCRIPTION,
         prog="uv run main.py lora.export_captions",
         epilog=_EXAMPLES,

@@ -376,11 +376,9 @@ too terse, pass `ui_label` to `add_argument()` to override it:
 parser.add_argument("--audio", action="store_true", ui_label="Audio only")
 ```
 
-This requires using `ScriptoriumParser` from `core.argparse` instead of the
-stdlib `ArgumentParser`. `ScriptoriumParser` is a drop-in subclass — it
-accepts the same arguments and behaves identically, except it also supports
-`ui_label`. Scripts that don't need `ui_label` can continue using the
-stdlib parser.
+`ScriptoriumParser` from `core.argparse` is the mandatory parser for all
+scripts. It is a drop-in replacement for the stdlib `ArgumentParser` that
+adds `ui_label` support and the startup arg banner (see Runner middleware).
 
 ### Minimal example
 
@@ -430,10 +428,22 @@ def run() -> None:
 All calls through `run()` or `run_fn()` are timed. Output goes to stderr so it
 does not pollute captured stdout (e.g. JSON output piped to another process).
 
+Every CLI script prints a startup banner before doing any work:
+
 ```
-[lora.export_captions] 0.012s          # CLI label = script key
-[lora.export_captions::export] 0.011s  # programmatic label = module::function
+[lora.export_captions] started at 22-05-26 14:30
+  inputs = inputs/lora
+  output = captions.json
+[lora.export_captions] done in 0.012s
 ```
+
+The first line (timestamp) is emitted by `_timed` in `core/runner.py` — the
+single bottleneck all execution paths pass through. The resolved-arguments block
+is emitted by `ScriptoriumParser.parse_args()` in `core/argparse.py`, which
+prints every argument and its resolved value to stderr immediately after parsing.
+
+All scripts must use `ScriptoriumParser` (from `core.argparse`) instead of the
+stdlib `ArgumentParser` so they inherit the startup banner automatically.
 
 To add cross-cutting behaviour (logging, metrics, retries, …): edit `_timed` in
 `core/runner.py`. It is the single place.
@@ -467,10 +477,10 @@ from scripts.lora._dataset import find_images
 4. Add a module-level `_EXAMPLES` string with 2–4 concrete invocations (include
    all positional args so the reader can copy-paste)
 5. Define `get_parser() -> ArgumentParser` that constructs and returns the parser
-6. Construct `ArgumentParser` inside `get_parser()` with
-   `prog="uv run main.py <theme>.<script>"`, `epilog=_EXAMPLES`, and
-   `formatter_class=argparse.RawDescriptionHelpFormatter`; `run()` calls
-   `get_parser().parse_args()`
+6. Construct the parser inside `get_parser()` using `ScriptoriumParser` (from
+   `core.argparse`) with `prog="uv run main.py <theme>.<script>"`,
+   `epilog=_EXAMPLES`, and `formatter_class=argparse.RawDescriptionHelpFormatter`;
+   `run()` calls `get_parser().parse_args()`
 7. Use `core.paths.inputs_dir("<theme>")` and `core.paths.outputs_dir("<theme>")`
    for default paths; resolve bare filenames inside `run()` before passing to
    public functions

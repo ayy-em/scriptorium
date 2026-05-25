@@ -97,7 +97,7 @@ BOILERPLATE — usually leave as-is; the agent derives implementation from above
 
 ## CLI and Module Conventions
 
-- `get_parser()` uses `prog="uv run main.py <category>.<script_name>"`, `argparse.RawDescriptionHelpFormatter`, and a module-level `_EXAMPLES` string.
+- `get_parser()` uses `ScriptoriumParser` (from `core.argparse`), `prog="uv run main.py <category>.<script_name>"`, `argparse.RawDescriptionHelpFormatter`, and a module-level `_EXAMPLES` string.
 - Put business logic in typed public function(s); keep `run()` limited to parsing, path resolution, dispatch and `sys.exit`.
 - Expose `TITLE`, `DESCRIPTION`, `run()`, and, unless there is a strong reason not to, `get_parser()`.
 - Use `core.paths.inputs_dir()` / `core.paths.outputs_dir()` or existing theme helpers for conventional paths.
@@ -108,6 +108,7 @@ BOILERPLATE — usually leave as-is; the agent derives implementation from above
 
 - [ ] Script is added under `scripts/<category>/<script_name>.py` and appears in `uv run main.py`.
 - [ ] Script works via CLI: `uv run main.py <category>.<script_name> [args]`.
+- [ ] Script prints a startup banner to stderr (timestamp + resolved args) before processing begins (automatic when using `ScriptoriumParser`).
 - [ ] `uv run main.py <category>` lists the script with the correct title and description.
 - [ ] `uv run main.py <category>.<script_name> --help` includes all relevant args/flags, expected types or choices, defaults and copy-pasteable invocation examples.
 - [ ] If the script accepts a file input, it archives the processed file to `inputs/processed/<category>/<stem>_DDMMYY<ext>` after a successful run.

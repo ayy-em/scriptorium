@@ -4,6 +4,7 @@ import argparse
 from pathlib import Path
 import sys
 
+from core.argparse import ScriptoriumParser
 from scripts.av._utils import av_inputs_dir, av_outputs_dir, probe_streams, run_ffmpeg
 
 TITLE = "Crop a video by trimming its edges"
@@ -94,7 +95,7 @@ def _non_negative_int(value: str) -> int:
 
 def get_parser() -> argparse.ArgumentParser:
     """Return the argument parser for this script."""
-    parser = argparse.ArgumentParser(
+    parser = ScriptoriumParser(
         description=DESCRIPTION,
         prog="uv run main.py av.video_crop",
         epilog=_EXAMPLES,

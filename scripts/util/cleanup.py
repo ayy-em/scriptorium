@@ -5,6 +5,8 @@ from datetime import datetime
 from pathlib import Path
 import sys
 
+from core.argparse import ScriptoriumParser
+
 TITLE = "Archive inputs and outputs"
 DESCRIPTION = "Sweep scripts/*/inputs/ and scripts/*/outputs/ into a timestamped archive/ snapshot."
 
@@ -62,7 +64,7 @@ examples:
 
 def get_parser() -> argparse.ArgumentParser:
     """Return the argument parser for this script."""
-    parser = argparse.ArgumentParser(
+    parser = ScriptoriumParser(
         description=DESCRIPTION,
         prog="uv run main.py util.cleanup",
         epilog=_EXAMPLES,

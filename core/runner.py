@@ -44,6 +44,8 @@ def _maybe_notify(label: str, duration_s: float, status: str) -> None:
 
 
 def _timed[T](label: str, fn: Callable[..., T], /, *args: Any, **kwargs: Any) -> T:
+    stamp = datetime.now().strftime("%d-%m-%y %H:%M")
+    print(f"[{label}] started at {stamp}", file=sys.stderr)
     t0 = time.perf_counter()
     try:
         result = fn(*args, **kwargs)

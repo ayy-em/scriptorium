@@ -6,6 +6,8 @@ import sys
 
 import httpx
 
+from core.argparse import ScriptoriumParser
+
 TITLE = "Send a Telegram notification"
 DESCRIPTION = "Post a message to a Telegram chat. Used standalone or as a runner hook for long jobs."
 
@@ -57,7 +59,7 @@ examples:
 
 def get_parser() -> argparse.ArgumentParser:
     """Return the argument parser for this script."""
-    parser = argparse.ArgumentParser(
+    parser = ScriptoriumParser(
         description=DESCRIPTION,
         prog="uv run main.py util.notify",
         epilog=_EXAMPLES,

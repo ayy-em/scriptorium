@@ -7,6 +7,7 @@ import shutil
 import subprocess
 import sys
 
+from core.argparse import ScriptoriumParser
 from scripts.formats._utils import (
     BatchConvertError,
     formats_inputs_dir,
@@ -114,7 +115,7 @@ examples:
 
 def get_parser() -> argparse.ArgumentParser:
     """Return the argument parser for this script."""
-    parser = argparse.ArgumentParser(
+    parser = ScriptoriumParser(
         description=DESCRIPTION,
         prog="uv run main.py formats.convert_docs",
         epilog=_EXAMPLES,

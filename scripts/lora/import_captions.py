@@ -6,6 +6,7 @@ from pathlib import Path
 import re
 import sys
 
+from core.argparse import ScriptoriumParser
 from core.paths import inputs_dir, outputs_dir
 
 TITLE = "Import captions from JSON"
@@ -91,7 +92,7 @@ examples:
 
 def get_parser() -> argparse.ArgumentParser:
     """Return the argument parser for this script."""
-    parser = argparse.ArgumentParser(
+    parser = ScriptoriumParser(
         description=DESCRIPTION,
         prog="uv run main.py lora.import_captions",
         epilog=_EXAMPLES,

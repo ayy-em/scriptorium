@@ -9,6 +9,7 @@ import zipfile
 
 import ijson
 
+from core.argparse import ScriptoriumParser
 from core.paths import inputs_dir, outputs_dir
 
 TITLE = "Preprocess Telegram export for embeddings"
@@ -148,7 +149,7 @@ examples:
 
 def get_parser() -> argparse.ArgumentParser:
     """Return the argument parser for this script."""
-    parser = argparse.ArgumentParser(
+    parser = ScriptoriumParser(
         description=DESCRIPTION,
         prog="uv run main.py telegram.preprocess",
         epilog=_EXAMPLES,

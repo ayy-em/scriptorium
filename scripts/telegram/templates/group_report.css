@@ -76,8 +76,8 @@
   --white-90: rgba(255, 255, 255, 0.90);
   --white-70: rgba(255, 255, 255, 0.70);
   --white-50: rgba(255, 255, 255, 0.50);
-  --card-bg: rgba(255, 255, 255, 0.35);
-  --card-border: rgba(255, 255, 255, 0.75);
+  --card-bg: rgba(255, 255, 255, 0.3);
+  --card-border: rgba(255, 255, 255, 0.25);
 
   /* RGB triplets for box-shadow color mixing */
   --gold-rgb: 251, 191, 36;

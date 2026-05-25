@@ -7,6 +7,7 @@ import shutil
 import sys
 import tempfile
 
+from core.argparse import ScriptoriumParser
 from scripts.av._utils import COVER_SUPPORTED_EXTS, av_inputs_dir, av_outputs_dir, read_tags, run_ffmpeg
 
 TITLE = "Read/write media metadata tags"
@@ -112,7 +113,7 @@ examples:
 
 def get_parser() -> argparse.ArgumentParser:
     """Return the argument parser for this script."""
-    parser = argparse.ArgumentParser(
+    parser = ScriptoriumParser(
         description=DESCRIPTION,
         prog="uv run main.py av.tag",
         epilog=_EXAMPLES,

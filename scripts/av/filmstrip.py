@@ -10,6 +10,7 @@ import sys
 import tempfile
 from typing import TYPE_CHECKING
 
+from core.argparse import ScriptoriumParser
 from scripts.av._utils import av_inputs_dir, av_outputs_dir, run_ffmpeg, run_ffprobe
 
 if TYPE_CHECKING:
@@ -214,7 +215,7 @@ def _load_font(size: int) -> _ImageFontModule.FreeTypeFont:
 
 def get_parser() -> argparse.ArgumentParser:
     """Return the argument parser for this script."""
-    parser = argparse.ArgumentParser(
+    parser = ScriptoriumParser(
         description=DESCRIPTION,
         prog="uv run main.py av.filmstrip",
         epilog=_EXAMPLES,

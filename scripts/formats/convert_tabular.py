@@ -6,6 +6,7 @@ import sys
 
 import pandas as pd
 
+from core.argparse import ScriptoriumParser
 from scripts.formats._utils import (
     TABULAR_EXTS,
     BatchConvertError,
@@ -96,7 +97,7 @@ examples:
 
 def get_parser() -> argparse.ArgumentParser:
     """Return the argument parser for this script."""
-    parser = argparse.ArgumentParser(
+    parser = ScriptoriumParser(
         description=DESCRIPTION,
         prog="uv run main.py formats.convert_tabular",
         epilog=_EXAMPLES,

@@ -6,6 +6,7 @@ import sys
 
 from PIL import Image
 
+from core.argparse import ScriptoriumParser
 from scripts.formats._utils import (
     IMAGE_EXTS,
     BatchConvertError,
@@ -76,7 +77,7 @@ examples:
 
 def get_parser() -> argparse.ArgumentParser:
     """Return the argument parser for this script."""
-    parser = argparse.ArgumentParser(
+    parser = ScriptoriumParser(
         description=DESCRIPTION,
         prog="uv run main.py formats.convert_image",
         epilog=_EXAMPLES,
