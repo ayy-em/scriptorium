@@ -13,7 +13,7 @@ def discover() -> dict[str, ModuleType]:
     """Return {theme.name: module} for every script that exposes TITLE, DESCRIPTION, and run()."""
     result: dict[str, ModuleType] = {}
     for theme in pkgutil.iter_modules(_scripts_pkg.__path__):
-        if theme.name.startswith("_"):
+        if theme.name.startswith("_") or _is_hidden(theme.name):
             continue
         theme_mod = importlib.import_module(f"scripts.{theme.name}")
         for script in pkgutil.iter_modules(theme_mod.__path__):
@@ -28,6 +28,12 @@ def discover() -> dict[str, ModuleType]:
     return result
 
 
+def _is_hidden(theme_name: str) -> bool:
+    """Check if a theme is marked as hidden via its HIDDEN module attribute."""
+    mod = importlib.import_module(f"scripts.{theme_name}")
+    return getattr(mod, "HIDDEN", False)
+
+
 def theme_labels() -> dict[str, str]:
     """Return {theme_key: display_label} for each discovered theme.
 
@@ -38,7 +44,7 @@ def theme_labels() -> dict[str, str]:
     """
     result: dict[str, str] = {}
     for theme in pkgutil.iter_modules(_scripts_pkg.__path__):
-        if theme.name.startswith("_"):
+        if theme.name.startswith("_") or _is_hidden(theme.name):
             continue
         mod = importlib.import_module(f"scripts.{theme.name}")
         result[theme.name] = getattr(mod, "LABEL", theme.name.replace("_", " ").title())
@@ -55,7 +61,7 @@ def theme_descriptions() -> dict[str, str]:
     """
     result: dict[str, str] = {}
     for theme in pkgutil.iter_modules(_scripts_pkg.__path__):
-        if theme.name.startswith("_"):
+        if theme.name.startswith("_") or _is_hidden(theme.name):
             continue
         mod = importlib.import_module(f"scripts.{theme.name}")
         result[theme.name] = getattr(mod, "DESCRIPTION", "")
