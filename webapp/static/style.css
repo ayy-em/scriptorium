@@ -1185,6 +1185,24 @@ html.dark .ffmpeg-banner-title {
 }
 
 /* ─── Settings button ───────────────────────────────────────────────────── */
+.outputs-btn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  color: var(--text-muted);
+  transition: background-color 120ms ease, color 120ms ease, transform 100ms ease-out;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .outputs-btn:hover { background: var(--bg-hover); color: var(--text); }
+}
+
+.outputs-btn:active { transform: scale(0.94); }
+
 .settings-btn {
   position: relative;
   display: flex;
