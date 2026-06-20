@@ -7,7 +7,8 @@ import re
 import sys
 
 from core.argparse import ScriptoriumParser
-from core.paths import inputs_dir, outputs_dir
+from core.outputs import resolve_output_dir
+from core.paths import inputs_dir
 
 TITLE = "Import captions from JSON"
 DESCRIPTION = "Read a captions.json and write individual img_NNN.txt files to outputs/generated_captions/."
@@ -15,12 +16,6 @@ DESCRIPTION = "Read a captions.json and write individual img_NNN.txt files to ou
 
 def _inputs() -> Path:
     return inputs_dir("lora")
-
-
-def _outputs() -> Path:
-    d = outputs_dir("lora") / "generated_captions"
-    d.mkdir(parents=True, exist_ok=True)
-    return d
 
 
 _KEY_RE = re.compile(r"^img_(\d+)\.txt$")
@@ -105,6 +100,13 @@ def get_parser() -> argparse.ArgumentParser:
         metavar="FILE",
         help="source JSON file (default: lora/inputs/captions.json; bare name resolves to lora/inputs/)",
     )
+    parser.add_argument(
+        "--output",
+        "-o",
+        default=None,
+        metavar="PATH",
+        help="Output directory for caption files (default: outputs/lora/)",
+    )
     return parser
 
 
@@ -114,4 +116,5 @@ def run() -> None:
     input_file = args.input or (_inputs() / "captions.json")
     if input_file.parent == Path("."):
         input_file = _inputs() / input_file.name
-    import_captions(input_file, _outputs())
+    out_dir = resolve_output_dir(args.output, theme="lora")
+    import_captions(input_file, out_dir)

@@ -7,15 +7,10 @@ import sys
 import yt_dlp
 
 from core.argparse import ScriptoriumParser
-from core.paths import outputs_dir as _core_outputs_dir
+from core.outputs import resolve_output_dir
 
 TITLE = "Download media from a URL (YouTube, Vimeo, etc.)"
 DESCRIPTION = "Download a video (or extract audio as MP3) from a supported URL using yt-dlp."
-
-
-def _outputs_dir() -> Path:
-    """Return the default downloads outputs directory, creating it if needed."""
-    return _core_outputs_dir("downloads")
 
 
 def download(
@@ -104,11 +99,11 @@ def get_parser() -> argparse.ArgumentParser:
         help="Extract audio as MP3 instead of downloading video.",
     )
     parser.add_argument(
-        "--outputs",
-        type=Path,
+        "--output",
+        "-o",
         default=None,
-        metavar="DIR",
-        help="Output directory (default: downloads/outputs/).",
+        metavar="PATH",
+        help="Output directory (default: outputs/downloads/).",
     )
     return parser
 
@@ -117,7 +112,7 @@ def run() -> None:
     """CLI entrypoint. Parse arguments and dispatch to download()."""
     args = get_parser().parse_args()
 
-    out_dir = args.outputs or _outputs_dir()
+    out_dir = resolve_output_dir(args.output, theme="downloads")
 
     try:
         output = download(args.url, out_dir, filename=args.filename, audio_only=args.audio)

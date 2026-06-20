@@ -11,7 +11,8 @@ import tempfile
 from typing import TYPE_CHECKING
 
 from core.argparse import ScriptoriumParser
-from scripts.av._utils import av_inputs_dir, av_outputs_dir, run_ffmpeg, run_ffprobe
+from core.outputs import resolve_output
+from scripts.av._utils import av_inputs_dir, run_ffmpeg, run_ffprobe
 
 if TYPE_CHECKING:
     from PIL import ImageDraw as _ImageDrawModule
@@ -19,17 +20,6 @@ if TYPE_CHECKING:
 
 TITLE = "Video filmstrip sheet"
 DESCRIPTION = "Extract frames from a video and arrange them on a filmstrip sheet (PDF or PNG)."
-
-_GRIDS: dict[str, tuple[int, int]] = {
-    "2x2": (2, 2),
-    "2x3": (2, 3),
-    "3x3": (3, 3),
-    "3x4": (3, 4),
-    "3x5": (3, 5),
-    "4x4": (4, 4),
-    "4x5": (4, 5),
-    "5x5": (5, 5),
-}
 
 _PAD = 30
 _GAP = 10
@@ -45,19 +35,41 @@ _LABEL_H = 20
 _EXAMPLES = """
 examples:
   uv run main.py av.filmstrip video.mp4
-  uv run main.py av.filmstrip video.mp4 --grid 3x4 --offset 30
+  uv run main.py av.filmstrip video.mp4 --grid 4x5 --offset 30
   uv run main.py av.filmstrip video.mp4 --output my_sheet --format png
   uv run main.py av.filmstrip video.mp4 --grid 2x3 --format pdf
 """
 
 
+def _parse_grid(grid: str) -> tuple[int, int]:
+    """Parse a 'ROWSxCOLS' grid string into (rows, cols).
+
+    Args:
+        grid: Grid specification like '3x3' or '4x5'.
+
+    Returns:
+        Tuple of (rows, cols).
+
+    Raises:
+        ValueError: If the format is invalid or values are out of range.
+    """
+    parts = grid.lower().split("x")
+    if len(parts) != 2:  # noqa: PLR2004
+        raise ValueError(f"grid must be in ROWSxCOLS format (e.g. 3x3), got '{grid}'")
+    try:
+        rows, cols = int(parts[0]), int(parts[1])
+    except ValueError:
+        raise ValueError(f"grid must be in ROWSxCOLS format (e.g. 3x3), got '{grid}'")
+    if rows < 1 or cols < 1:
+        raise ValueError(f"grid rows and cols must be >= 1, got {rows}x{cols}")
+    return rows, cols
+
+
 def filmstrip(
     source: Path,
+    output: Path,
     grid: str = "3x3",
     offset: float = 0.0,
-    output_name: str | None = None,
-    fmt: str = "pdf",
-    outputs_dir: Path | None = None,
 ) -> Path:
     """Extract frames from a video and composite them onto a filmstrip sheet.
 
@@ -65,14 +77,18 @@ def filmstrip(
     grid layout.  A header bar shows the filename, runtime, creation timestamp,
     and branding.
 
+    Args:
+        source: Path to the video file.
+        output: Resolved output file path.
+        grid: Grid layout as 'ROWSxCOLS' (e.g. '3x3', '2x5').
+        offset: Seconds to skip at the start of the video.
+
     Returns:
         Path to the saved filmstrip file.
     """
     from PIL import Image, ImageDraw  # noqa: PLC0415
 
-    if grid not in _GRIDS:
-        raise ValueError(f"unsupported grid '{grid}', choose from: {', '.join(_GRIDS)}")
-    rows, cols = _GRIDS[grid]
+    rows, cols = _parse_grid(grid)
     num_strips = rows * cols
 
     duration, vid_w, vid_h = _probe_video(source)
@@ -80,9 +96,7 @@ def filmstrip(
     if effective <= 0:
         raise ValueError(f"offset ({offset}s) >= video duration ({duration:.1f}s)")
 
-    stem = output_name or source.stem
-    out_dir = outputs_dir or av_outputs_dir()
-    out_path = out_dir / f"{stem}.{fmt}"
+    out_path = output
 
     positions = [offset + (i + 0.5) * effective / num_strips for i in range(num_strips)]
 
@@ -136,7 +150,7 @@ def filmstrip(
             label_w = draw.textlength(label, font=label_font)
             draw.text((label_x - label_w / 2, label_y), label, fill=(130, 130, 138), font=label_font)
 
-    if fmt == "pdf":
+    if out_path.suffix.lower() == ".pdf":
         canvas.save(str(out_path), "PDF", resolution=150)
     else:
         canvas.save(str(out_path), "PNG")
@@ -228,9 +242,9 @@ def get_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--grid",
-        choices=sorted(_GRIDS),
         default="3x3",
-        help="Frame grid layout, rows x cols (default: 3x3)",
+        metavar="RxC",
+        help="Frame grid layout as ROWSxCOLS, e.g. 3x3, 2x5, 4x4 (default: 3x3)",
     )
     parser.add_argument(
         "--offset",
@@ -241,8 +255,10 @@ def get_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--output",
-        metavar="NAME",
-        help="Output filename stem, no extension (default: video filename stem)",
+        "-o",
+        default=None,
+        metavar="PATH",
+        help="Output file or directory (default: timestamp-named in outputs/av/)",
     )
     parser.add_argument(
         "--format",
@@ -261,14 +277,10 @@ def run() -> None:
     if source.parent == Path("."):
         source = av_inputs_dir() / source.name
 
+    output = resolve_output(args.output, theme="av", ext=f".{args.format}")
+
     try:
-        out = filmstrip(
-            source,
-            grid=args.grid,
-            offset=args.offset,
-            output_name=args.output,
-            fmt=args.format,
-        )
+        out = filmstrip(source, output, grid=args.grid, offset=args.offset)
         print(out)
         sys.exit(0)
     except Exception as e:

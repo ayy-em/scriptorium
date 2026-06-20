@@ -1,7 +1,6 @@
 """Generate a descriptive-analytics report from a Telegram personal-chat export."""
 
 import argparse
-from datetime import datetime
 import hashlib
 import json
 from pathlib import Path
@@ -11,8 +10,8 @@ import tempfile
 import zipfile
 
 from core.argparse import ScriptoriumParser
+from core.outputs import resolve_output
 from core.paths import inputs_dir as _core_inputs_dir
-from core.paths import outputs_dir as _core_outputs_dir
 from scripts.telegram._parsing import InvalidExportError, load_chat
 
 TITLE = "Analyze your Telegram chat history and generate a report full of insights"
@@ -27,7 +26,7 @@ _PDF_NAME = "chat_analytics.pdf"
 _EXAMPLES = """
 examples:
   uv run main.py telegram.chat_analysis result.json
-  uv run main.py telegram.chat_analysis /path/to/result.json --outputs /tmp/reports
+  uv run main.py telegram.chat_analysis /path/to/result.json --output /tmp/reports/output.zip
 """
 
 
@@ -44,8 +43,12 @@ def _sha256(path: Path) -> str:
     return h.hexdigest()
 
 
-def chat_analysis(source: Path, outputs_dir: Path) -> Path:
-    """Produce the chat_analysis ``.zip`` for ``source`` under ``outputs_dir``.
+def chat_analysis(source: Path, output: Path) -> Path:
+    """Produce the chat_analysis ``.zip`` for ``source``.
+
+    Args:
+        source: Path to the Telegram export result.json.
+        output: Resolved output zip file path.
 
     Returns the path to the produced archive. Raises ``InvalidExportError`` or
     ``FileNotFoundError`` on bad input.
@@ -53,7 +56,7 @@ def chat_analysis(source: Path, outputs_dir: Path) -> Path:
     if not source.exists():
         raise FileNotFoundError(f"Source file not found: {source}")
 
-    outputs_dir.mkdir(parents=True, exist_ok=True)
+    output.parent.mkdir(parents=True, exist_ok=True)
 
     # Defer heavy plotting/PDF imports until we know we'll need them.
     from scripts.telegram import _charts, _metrics, _pdf  # noqa: PLC0415
@@ -90,12 +93,9 @@ def chat_analysis(source: Path, outputs_dir: Path) -> Path:
         pdf_path = staging / _PDF_NAME
         _pdf.render_pdf(analytics, chart_paths, pdf_path)
 
-        slug = _slugify(metadata.name)
-        stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        zip_path = outputs_dir / f"chat_analysis_{slug}_{stamp}.zip"
-        _build_zip(staging, zip_path)
+        _build_zip(staging, output)
 
-    return zip_path
+    return output
 
 
 def _build_zip(staging: Path, zip_path: Path) -> None:
@@ -122,11 +122,11 @@ def get_parser() -> argparse.ArgumentParser:
         help="Path to the Telegram personal-chat export result.json (bare filename resolves from telegram/inputs/).",
     )
     parser.add_argument(
-        "--outputs",
-        type=Path,
+        "--output",
+        "-o",
         default=None,
-        metavar="DIR",
-        help="Output directory for the report .zip (default: telegram/outputs/).",
+        metavar="PATH",
+        help="Output file or directory (default: timestamp-named in outputs/telegram/).",
     )
     return parser
 
@@ -137,9 +137,9 @@ def run() -> None:
     source: Path = args.source
     if source.parent == Path("."):
         source = _core_inputs_dir("telegram") / source.name
-    out_dir: Path = args.outputs or _core_outputs_dir("telegram")
+    output = resolve_output(args.output, theme="telegram", ext=".zip")
     try:
-        out_path = chat_analysis(source, out_dir)
+        out_path = chat_analysis(source, output)
     except (FileNotFoundError, InvalidExportError) as e:
         print(f"error: {e}", file=sys.stderr)
         sys.exit(1)

@@ -8,7 +8,10 @@ import sys
 import tempfile
 
 from core.argparse import ScriptoriumParser
-from scripts.av._utils import av_inputs_dir, av_outputs_dir, probe_streams, run_ffmpeg
+from core.outputs import resolve_output
+from scripts.av._utils import av_inputs_dir, probe_streams, run_ffmpeg
+
+_CREATION_FLAGS = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
 
 TITLE = "Turn a video segment into an animated GIF/WebP"
 DESCRIPTION = "Convert a video segment to an animated GIF or WebP given start/end timestamps."
@@ -114,16 +117,14 @@ def _sd_scale_filter(src_w: int, src_h: int) -> str | None:
 
 def to_anim(  # noqa: PLR0912, PLR0913
     source: Path,
+    output: Path,
     start: str | None = None,
     end: str | None = None,
-    outputs_dir: Path | None = None,
     *,
-    fmt: str = "webp",
     fps: int = 15,
     width: int | None = None,
     speed: float = 1.0,
     loop: int = 0,
-    filename: str | None = None,
     sd: bool = False,
     optimize_gif: bool = False,
 ) -> Path:
@@ -146,15 +147,13 @@ def to_anim(  # noqa: PLR0912, PLR0913
 
     Args:
         source: Source video file.
+        output: Resolved output file path.
         start: Start timestamp. Defaults to beginning of video.
         end: End timestamp. Defaults to end of video.
-        outputs_dir: Directory where the output file is written. Defaults to av/outputs/.
-        fmt: Output format — "gif" or "webp". Defaults to "webp".
         fps: Frame rate of the output animation. Defaults to 15.
         width: Max output width in pixels; subject to orientation cap. Defaults to cap.
         speed: Playback speed multiplier. 2.0 = twice as fast, 0.5 = half speed. Defaults to 1.0.
         loop: Number of times to loop. 0 = infinite. Defaults to 0.
-        filename: Output file stem (no extension). Defaults to the source file stem.
         sd: Cap output at 600x720 for smaller file sizes. Defaults to False.
         optimize_gif: Aggressively optimize GIF size (fewer colors, diff-rect encoding,
             gifsicle post-processing when available). Defaults to False.
@@ -167,23 +166,19 @@ def to_anim(  # noqa: PLR0912, PLR0913
         subprocess.CalledProcessError: If ffmpeg fails.
         FileNotFoundError: If ffmpeg is not on PATH.
     """
+    fmt = output.suffix.lstrip(".")
     if fmt not in FORMATS:
         raise ValueError(f"Unknown format {fmt!r}. Choose from: {', '.join(FORMATS)}")
     if speed <= 0:
         raise ValueError(f"speed must be > 0, got {speed}")
 
-    if outputs_dir is None:
-        outputs_dir = av_outputs_dir()
-    outputs_dir.mkdir(parents=True, exist_ok=True)
+    output.parent.mkdir(parents=True, exist_ok=True)
 
     time_args: list[str] = []
     if start is not None:
         time_args += ["-ss", start]
     if end is not None:
         time_args += ["-to", end]
-
-    stem = filename or source.stem
-    output = outputs_dir / f"{stem}.{fmt}"
 
     if sd:
         fps = min(fps, _SD_MAX_FPS)
@@ -283,6 +278,8 @@ def _gifsicle_optimize(path: Path) -> None:
     subprocess.run(
         ["gifsicle", "-O3", "--lossy=80", "--batch", str(path)],
         check=True,
+        capture_output=True,
+        creationflags=_CREATION_FLAGS,
     )
 
 
@@ -372,7 +369,6 @@ def get_parser() -> argparse.ArgumentParser:
         metavar="N",
         help="Number of times to loop; 0 = infinite (default: 0)",
     )
-    parser.add_argument("--filename", default=None, metavar="NAME", help="Output file stem (defaults to source stem)")
     parser.add_argument("--sd", action="store_true", help="Cap output at 600x720 for smaller file sizes")
     parser.add_argument(
         "--gif-optimize",
@@ -380,7 +376,11 @@ def get_parser() -> argparse.ArgumentParser:
         help="Aggressively optimize GIF size (128 colors, diff-rect encoding, gifsicle if available)",
     )
     parser.add_argument(
-        "--outputs", type=Path, default=None, metavar="DIR", help="Output directory (default: av/outputs/)"
+        "--output",
+        "-o",
+        default=None,
+        metavar="PATH",
+        help="Output file or directory (default: timestamp-named in outputs/av/)",
     )
     return parser
 
@@ -393,20 +393,18 @@ def run() -> None:
     if source.parent == Path("."):
         source = av_inputs_dir() / source.name
 
-    outputs_dir = args.outputs or av_outputs_dir()
+    output = resolve_output(args.output, theme="av", ext=f".{args.fmt}")
 
     try:
         output = to_anim(
             source,
+            output,
             args.start,
             args.end,
-            outputs_dir,
-            fmt=args.fmt,
             fps=args.fps,
             width=args.width,
             speed=args.speed,
             loop=args.loop,
-            filename=args.filename,
             sd=args.sd,
             optimize_gif=args.gif_optimize,
         )

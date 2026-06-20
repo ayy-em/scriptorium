@@ -17,7 +17,6 @@ def test_convert_single_file(tmp_path):
         result = convert(src, "mp4", out_dir)
     assert len(result) == 1
     assert result[0].suffix == ".mp4"
-    assert result[0].name == "clip.mp4"
 
 
 def test_convert_creates_output_directory(tmp_path):

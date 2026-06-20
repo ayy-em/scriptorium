@@ -3,7 +3,8 @@
 from collections.abc import Callable
 from pathlib import Path
 
-from core.paths import inputs_dir, move_to_past_inputs, outputs_dir
+from core.outputs import deduplicate, default_stem
+from core.paths import inputs_dir, move_to_past_inputs
 
 _ARCHIVE_THEME = "formats"
 
@@ -35,11 +36,6 @@ class BatchConvertError(RuntimeError):
 def formats_inputs_dir() -> Path:
     """Return the default formats inputs directory, creating it if needed."""
     return inputs_dir("formats")
-
-
-def formats_outputs_dir() -> Path:
-    """Return the default formats outputs directory, creating it if needed."""
-    return outputs_dir("formats")
 
 
 def find_files(directory: Path, exts: frozenset[str]) -> list[Path]:
@@ -83,9 +79,10 @@ def run_convert(
     """
     outputs_dir_path.mkdir(parents=True, exist_ok=True)
     out_suffix = f".{ext_out.lstrip('.')}"
+    stem = default_stem()
 
     if source.is_file():
-        output = outputs_dir_path / f"{source.stem}{out_suffix}"
+        output = deduplicate(outputs_dir_path / f"{stem}{out_suffix}")
         fn(source, output)
         move_to_past_inputs(_ARCHIVE_THEME, source)
         return [output]
@@ -94,8 +91,8 @@ def run_convert(
     successes: list[Path] = []
     failures: list[str] = []
 
-    for f in files:
-        output = outputs_dir_path / f"{f.stem}{out_suffix}"
+    for i, f in enumerate(files, 1):
+        output = outputs_dir_path / f"{stem}_{i:03d}{out_suffix}"
         try:
             fn(f, output)
             successes.append(output)

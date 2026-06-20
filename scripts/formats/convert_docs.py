@@ -8,12 +8,14 @@ import subprocess
 import sys
 
 from core.argparse import ScriptoriumParser
+from core.outputs import resolve_output_dir
 from scripts.formats._utils import (
     BatchConvertError,
     formats_inputs_dir,
-    formats_outputs_dir,
     run_convert,
 )
+
+_CREATION_FLAGS = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
 
 TITLE = "Convert documents"
 DESCRIPTION = "Convert documents between docx, rtf, md, html, pdf, and txt formats."
@@ -46,7 +48,7 @@ def _pandoc_convert(source: Path, output: Path) -> None:
     args = ["pandoc", str(source), "-o", str(output), "--standalone"]
     if output.suffix.lower() == ".pdf" and _has_weasyprint():
         args.extend(["--pdf-engine=weasyprint"])
-    subprocess.run(args, check=True, capture_output=True, text=True)
+    subprocess.run(args, check=True, capture_output=True, text=True, creationflags=_CREATION_FLAGS)
 
 
 def _copy(source: Path, output: Path) -> None:
@@ -136,11 +138,11 @@ def get_parser() -> argparse.ArgumentParser:
         help="Target format",
     )
     parser.add_argument(
-        "--outputs",
-        type=Path,
+        "--output",
+        "-o",
         default=None,
-        metavar="DIR",
-        help="Output directory (default: formats/outputs/)",
+        metavar="PATH",
+        help="Output file or directory (default: outputs/formats/)",
     )
     return parser
 
@@ -149,7 +151,7 @@ def run() -> None:
     """CLI entrypoint. Parse arguments and dispatch to convert()."""
     args = get_parser().parse_args()
     source = args.source or formats_inputs_dir()
-    out_dir = args.outputs or formats_outputs_dir()
+    out_dir = resolve_output_dir(args.output, theme="formats")
 
     try:
         outputs = convert(source, args.to_format, out_dir)

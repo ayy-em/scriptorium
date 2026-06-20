@@ -24,10 +24,10 @@ class TestSlugify:
 
 class TestChatAnalysisE2E:
     def test_produces_zip_with_expected_members(self, synthetic_chat_path, tmp_path):
-        out_dir = tmp_path / "outputs"
-        zip_path = chat_analysis(synthetic_chat_path, out_dir)
+        out_file = tmp_path / "outputs" / "result.zip"
+        zip_path = chat_analysis(synthetic_chat_path, out_file)
         assert zip_path.exists()
-        assert zip_path.parent == out_dir
+        assert zip_path == out_file
         assert zip_path.suffix == ".zip"
 
         with zipfile.ZipFile(zip_path) as zf:
@@ -43,15 +43,14 @@ class TestChatAnalysisE2E:
         assert "charts/emoji_cloud.png" in chart_pngs
 
     def test_json_payload_validates(self, synthetic_chat_path, tmp_path):
-        out_dir = tmp_path / "outputs"
-        zip_path = chat_analysis(synthetic_chat_path, out_dir)
+        out_file = tmp_path / "outputs" / "result.zip"
+        zip_path = chat_analysis(synthetic_chat_path, out_file)
         with zipfile.ZipFile(zip_path) as zf:
             with zf.open("chat_analytics.json") as fh:
                 analytics = json.load(fh)
         assert analytics["schema_version"] == 1
         assert analytics["source"]["chat_name"] == "Bob"
         assert analytics["totals"]["messages_all_time"] > 0
-        # The PDF and the chart PNGs are non-empty
         with zipfile.ZipFile(zip_path) as zf:
             pdf_size = zf.getinfo("chat_analytics.pdf").file_size
             heatmap_size = zf.getinfo("charts/activity_heatmap.png").file_size
@@ -61,37 +60,34 @@ class TestChatAnalysisE2E:
 
 class TestCliInvocation:
     def test_cli_runs_against_synthetic_fixture(self, synthetic_chat_path, tmp_path):
-        out_dir = tmp_path / "cli_out"
-        out_dir.mkdir()
+        out_file = tmp_path / "cli_out" / "result.zip"
         result = subprocess.run(
             [
                 sys.executable,
                 "main.py",
                 "telegram.chat_analysis",
                 str(synthetic_chat_path),
-                "--outputs",
-                str(out_dir),
+                "--output",
+                str(out_file),
             ],
             check=False,
             capture_output=True,
             text=True,
         )
         assert result.returncode == 0, result.stderr
-        zips = list(out_dir.glob("*.zip"))
-        assert len(zips) == 1
+        assert out_file.exists()
 
     def test_cli_rejects_invalid_export(self, make_chat_export, tmp_path):
         bad = make_chat_export({"name": "Group", "type": "private_group", "id": 1, "messages": []})
-        out_dir = tmp_path / "cli_out"
-        out_dir.mkdir()
+        out_file = tmp_path / "cli_out" / "result.zip"
         result = subprocess.run(
             [
                 sys.executable,
                 "main.py",
                 "telegram.chat_analysis",
                 str(bad),
-                "--outputs",
-                str(out_dir),
+                "--output",
+                str(out_file),
             ],
             check=False,
             capture_output=True,

@@ -5,13 +5,14 @@ from pathlib import Path
 import sys
 
 from core.argparse import ScriptoriumParser
-from scripts.av._utils import av_inputs_dir, av_outputs_dir, run_ffmpeg
+from core.outputs import default_stem, resolve_output_dir
+from scripts.av._utils import av_inputs_dir, run_ffmpeg
 
 TITLE = "Split media file in multiple segments"
 DESCRIPTION = "Split a media file at one or more timestamp breakpoints into numbered segments."
 
 
-def split(input: Path, timestamps: list[str], outputs_dir: Path) -> list[Path]:
+def split(input: Path, timestamps: list[str], outputs_dir: Path, stem: str | None = None) -> list[Path]:
     """Split a media file at given timestamps into N+1 numbered segments.
 
     Segments are stream-copied (no re-encoding) and named
@@ -21,6 +22,7 @@ def split(input: Path, timestamps: list[str], outputs_dir: Path) -> list[Path]:
         input: Source media file.
         timestamps: One or more split points as HH:MM:SS or seconds strings.
         outputs_dir: Directory where segments are written.
+        stem: Filename stem for segments (default: YYYYMMDD_HHmm timestamp).
 
     Returns:
         List of output segment paths in order.
@@ -29,13 +31,14 @@ def split(input: Path, timestamps: list[str], outputs_dir: Path) -> list[Path]:
         subprocess.CalledProcessError: If ffmpeg fails on any segment.
     """
     outputs_dir.mkdir(parents=True, exist_ok=True)
+    stem = stem or default_stem()
     breakpoints: list[str | None] = [None, *timestamps, None]
     segments: list[Path] = []
 
     for i in range(len(breakpoints) - 1):
         start = breakpoints[i]
         end = breakpoints[i + 1]
-        output = outputs_dir / f"{input.stem}_{i + 1:03d}{input.suffix}"
+        output = outputs_dir / f"{stem}_{i + 1:03d}{input.suffix}"
         segments.append(output)
 
         args = ["-i", str(input)]
@@ -55,7 +58,7 @@ examples:
   uv run main.py av.split video.mp4 1:00                    # split at 1m
   uv run main.py av.split video.mp4 00:23                   # split at 23s
   uv run main.py av.split video.mp4 1:00 2:00 3:00          # 4 segments
-  uv run main.py av.split podcast.mp3 30:00 60:00 --outputs path/to/out/
+  uv run main.py av.split podcast.mp3 30:00 60:00 --output path/to/out/
 """
 
 
@@ -75,11 +78,11 @@ def get_parser() -> argparse.ArgumentParser:
         help="Split timestamps (HH:MM:SS, MM:SS, or seconds); produces N+1 segments",
     )
     parser.add_argument(
-        "--outputs",
-        type=Path,
+        "--output",
+        "-o",
         default=None,
-        metavar="DIR",
-        help="Output directory (default: av/outputs/)",
+        metavar="PATH",
+        help="Output file or directory (default: timestamp-named in outputs/av/)",
     )
     return parser
 
@@ -92,10 +95,10 @@ def run() -> None:
     if input_file.parent == Path("."):
         input_file = av_inputs_dir() / input_file.name
 
-    outputs_dir = args.outputs or av_outputs_dir()
+    out_dir = resolve_output_dir(args.output, theme="av")
 
     try:
-        segments = split(input_file, args.timestamps, outputs_dir)
+        segments = split(input_file, args.timestamps, out_dir)
         for s in segments:
             print(s)
         sys.exit(0)

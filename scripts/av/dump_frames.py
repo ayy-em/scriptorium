@@ -6,7 +6,8 @@ import re
 import sys
 
 from core.argparse import ScriptoriumParser
-from scripts.av._utils import av_inputs_dir, av_outputs_dir, run_ffmpeg
+from core.outputs import resolve_output_dir
+from scripts.av._utils import av_inputs_dir, run_ffmpeg
 
 TITLE = "Dump all frames from a video clip"
 DESCRIPTION = "Extract every frame between two timestamps to JPEG files."
@@ -84,7 +85,7 @@ examples:
   uv run main.py av.dump_frames video.mp4 01:30 02:00
   uv run main.py av.dump_frames video.mp4 0:00 0:10 --format png
   uv run main.py av.dump_frames video.mp4 1m30s 2m0s
-  uv run main.py av.dump_frames video.mp4 90 120 --outputs path/to/out/
+  uv run main.py av.dump_frames video.mp4 90 120 --output path/to/out/
   uv run main.py av.dump_frames video.mp4 01:30
 """
 
@@ -119,11 +120,11 @@ def get_parser() -> argparse.ArgumentParser:
         help="Image format for extracted frames (default: jpg)",
     )
     parser.add_argument(
-        "--outputs",
-        type=Path,
+        "--output",
+        "-o",
         default=None,
-        metavar="DIR",
-        help="Output root directory (default: av/outputs/); frames go into frames/<stem>/<start>-<end>/",
+        metavar="PATH",
+        help="Output directory (default: outputs/av/); frames go into frames/<stem>/<start>-<end>/",
     )
     return parser
 
@@ -136,7 +137,7 @@ def run() -> None:
     if video.parent == Path("."):
         video = av_inputs_dir() / video.name
 
-    outputs_dir = args.outputs or av_outputs_dir()
+    outputs_dir = resolve_output_dir(args.output, theme="av")
 
     try:
         frames = dump_frames(video, outputs_dir, start=args.start, end=args.end, fmt=args.format)

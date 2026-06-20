@@ -48,7 +48,7 @@ class TestConvertTxtMd:
         outputs = convert(src, "md", out_dir)
 
         assert len(outputs) == 1
-        assert outputs[0].name == "notes.md"
+        assert outputs[0].suffix == ".md"
         assert outputs[0].read_text(encoding="utf-8") == "hello\nworld"
 
     def test_md_to_txt_copies_content(self, tmp_path: Path):
@@ -57,7 +57,7 @@ class TestConvertTxtMd:
 
         outputs = convert(src, "txt", out_dir)
 
-        assert outputs[0].name == "doc.txt"
+        assert outputs[0].suffix == ".txt"
         assert outputs[0].read_text(encoding="utf-8") == "# title\n\nbody"
 
 
@@ -73,7 +73,7 @@ class TestConvertPandoc:
         ):
             outputs = convert(src, "pdf", out_dir)
 
-        assert outputs[0].name == "report.pdf"
+        assert outputs[0].suffix == ".pdf"
         args = mock_run.call_args.args[0]
         assert args[0] == "pandoc"
         assert "--standalone" in args
@@ -133,8 +133,8 @@ class TestBatchMode:
 
         outputs = convert(inp, "md", out_dir)
 
-        names = sorted(p.name for p in outputs)
-        assert names == ["a.md", "b.md"]
+        assert len(outputs) == 2
+        assert all(p.suffix == ".md" for p in outputs)
 
 
 class TestErrors:

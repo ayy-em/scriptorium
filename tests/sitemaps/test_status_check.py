@@ -138,6 +138,7 @@ class TestStatusCheck:
     def test_produces_csv_with_correct_columns(self, tmp_path):
         sitemap_resp = self._mock_sitemap_response()
         page_resp = self._mock_page_response()
+        out_file = tmp_path / "output.csv"
 
         with (
             patch(
@@ -146,7 +147,7 @@ class TestStatusCheck:
             ),
             patch("scripts.sitemaps.status_check.time.sleep"),
         ):
-            result = status_check("https://example.com/sitemap.xml", tmp_path, delay=0.0)
+            result = status_check("https://example.com/sitemap.xml", out_file, delay=0.0)
 
         assert result.exists()
         assert result.suffix == ".csv"
@@ -159,9 +160,10 @@ class TestStatusCheck:
         assert "content_type" in header
         assert "content_length" in header
 
-    def test_output_filename_contains_domain(self, tmp_path):
+    def test_output_filename_is_returned(self, tmp_path):
         sitemap_resp = self._mock_sitemap_response()
         page_resp = self._mock_page_response()
+        out_file = tmp_path / "example_check.csv"
 
         with (
             patch(
@@ -170,13 +172,14 @@ class TestStatusCheck:
             ),
             patch("scripts.sitemaps.status_check.time.sleep"),
         ):
-            result = status_check("https://example.com/sitemap.xml", tmp_path, delay=0.0)
+            result = status_check("https://example.com/sitemap.xml", out_file, delay=0.0)
 
-        assert "example.com" in result.name
+        assert result == out_file
 
     def test_delay_jitter_applied_between_requests(self, tmp_path):
         sitemap_resp = self._mock_sitemap_response()
         page_resp = self._mock_page_response()
+        out_file = tmp_path / "output.csv"
 
         with (
             patch(
@@ -185,7 +188,7 @@ class TestStatusCheck:
             ),
             patch("scripts.sitemaps.status_check.time.sleep") as mock_sleep,
         ):
-            status_check("https://example.com/sitemap.xml", tmp_path, delay=1.0)
+            status_check("https://example.com/sitemap.xml", out_file, delay=1.0)
 
         assert mock_sleep.call_count == 2
         for call in mock_sleep.call_args_list:
@@ -195,6 +198,7 @@ class TestStatusCheck:
     def test_resolves_bare_domain_to_sitemap_url(self, tmp_path):
         sitemap_resp = self._mock_sitemap_response()
         page_resp = self._mock_page_response()
+        out_file = tmp_path / "output.csv"
 
         with (
             patch(
@@ -203,18 +207,19 @@ class TestStatusCheck:
             ) as mock_get,
             patch("scripts.sitemaps.status_check.time.sleep"),
         ):
-            status_check("https://example.com", tmp_path, delay=0.0)
+            status_check("https://example.com", out_file, delay=0.0)
 
         first_call_url = mock_get.call_args_list[0][0][0]
         assert first_call_url == "https://example.com/sitemap.xml"
 
     def test_sitemap_fetch_failure_raises(self, tmp_path):
+        out_file = tmp_path / "output.csv"
         with patch(
             "scripts.sitemaps.status_check.requests.get",
             side_effect=requests.ConnectionError("unreachable"),
         ):
             with pytest.raises(requests.ConnectionError):
-                status_check("https://example.com/sitemap.xml", tmp_path)
+                status_check("https://example.com/sitemap.xml", out_file)
 
     def test_no_delay_after_last_url(self, tmp_path):
         single_sitemap = """\
@@ -228,11 +233,12 @@ class TestStatusCheck:
         sitemap_resp.text = single_sitemap
         sitemap_resp.raise_for_status = MagicMock()
         page_resp = self._mock_page_response()
+        out_file = tmp_path / "output.csv"
 
         with (
             patch("scripts.sitemaps.status_check.requests.get", side_effect=[sitemap_resp, page_resp]),
             patch("scripts.sitemaps.status_check.time.sleep") as mock_sleep,
         ):
-            status_check("https://example.com/sitemap.xml", tmp_path, delay=1.0)
+            status_check("https://example.com/sitemap.xml", out_file, delay=1.0)
 
         mock_sleep.assert_not_called()

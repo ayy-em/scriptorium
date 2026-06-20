@@ -1,16 +1,15 @@
 """CLI and programmatic interface for joining media files."""
 
 import argparse
-from datetime import datetime
 from pathlib import Path
 import shutil
 import sys
 import tempfile
 
 from core.argparse import ScriptoriumParser
+from core.outputs import resolve_output
 from scripts.av._utils import (
     av_inputs_dir,
-    av_outputs_dir,
     find_media_files,
     probe_streams,
     run_ffmpeg,
@@ -20,7 +19,7 @@ TITLE = "Join multiple media files"
 DESCRIPTION = "Stitch all media files in inputs/ in sorted order and save to outputs/."
 
 
-def join(inputs_dir: Path, outputs_dir: Path) -> Path:
+def join(inputs_dir: Path, output: Path) -> Path:
     """Concatenate all media files in inputs_dir in lexicographic order.
 
     Checks that all files share the same video codec, audio codec, and
@@ -29,7 +28,7 @@ def join(inputs_dir: Path, outputs_dir: Path) -> Path:
 
     Args:
         inputs_dir: Directory containing source media files (non-recursive).
-        outputs_dir: Directory where the joined file is written.
+        output: Resolved output file path.
 
     Returns:
         Path to the joined output file.
@@ -48,10 +47,7 @@ def join(inputs_dir: Path, outputs_dir: Path) -> Path:
 
     _assert_compatible(files)
 
-    ext = files[0].suffix
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    output = outputs_dir / f"{timestamp}_joined{ext}"
-    outputs_dir.mkdir(parents=True, exist_ok=True)
+    output.parent.mkdir(parents=True, exist_ok=True)
 
     with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False, encoding="utf-8") as tf:
         concat_list = Path(tf.name)
@@ -123,7 +119,7 @@ def _assert_compatible(files: list[Path]) -> None:
 _EXAMPLES = """
 examples:
   uv run main.py av.join
-  uv run main.py av.join --inputs path/to/clips/ --outputs path/to/out/
+  uv run main.py av.join --inputs path/to/clips/ --output path/to/out.mp4
 """
 
 
@@ -143,11 +139,11 @@ def get_parser() -> argparse.ArgumentParser:
         help="Input directory (default: av/inputs/)",
     )
     parser.add_argument(
-        "--outputs",
-        type=Path,
+        "--output",
+        "-o",
         default=None,
-        metavar="DIR",
-        help="Output directory (default: av/outputs/)",
+        metavar="PATH",
+        help="Output file or directory (default: timestamp-named in outputs/av/)",
     )
     return parser
 
@@ -156,11 +152,13 @@ def run() -> None:
     """CLI entrypoint. Parse arguments and dispatch to join()."""
     args = get_parser().parse_args()
 
-    inputs_dir = args.inputs or av_inputs_dir()
-    outputs_dir = args.outputs or av_outputs_dir()
+    src_dir = args.inputs or av_inputs_dir()
+    src_files = find_media_files(src_dir)
+    ext = src_files[0].suffix if src_files else ".mp4"
+    output = resolve_output(args.output, theme="av", ext=ext)
 
     try:
-        output = join(inputs_dir, outputs_dir)
+        output = join(src_dir, output)
         print(f"Joined -> {output}")
         sys.exit(0)
     except Exception as e:

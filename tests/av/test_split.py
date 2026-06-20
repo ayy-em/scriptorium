@@ -26,7 +26,7 @@ def test_split_two_timestamps_produces_three_segments(tmp_path):
 
 def test_split_names_segments_with_zero_padded_index(tmp_path):
     with patch("scripts.av.split.run_ffmpeg"):
-        result = split(Path("video.mp4"), ["00:01:00"], tmp_path)
+        result = split(Path("video.mp4"), ["00:01:00"], tmp_path, stem="video")
     assert result[0].name == "video_001.mp4"
     assert result[1].name == "video_002.mp4"
 

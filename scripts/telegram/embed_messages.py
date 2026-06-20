@@ -9,7 +9,8 @@ import sys
 import zipfile
 
 from core.argparse import ScriptoriumParser
-from core.paths import inputs_dir, outputs_dir
+from core.outputs import resolve_output_dir
+from core.paths import inputs_dir
 
 TITLE = "Embed preprocessed Telegram messages"
 DESCRIPTION = "Embed every message with sliding-window context; write embeddings.jsonl + manifest."
@@ -26,10 +27,6 @@ class MissingCredentialsError(RuntimeError):
 
 def _inputs() -> Path:
     return inputs_dir("telegram")
-
-
-def _outputs() -> Path:
-    return outputs_dir("telegram")
 
 
 def _sha256(path: Path) -> str:
@@ -257,8 +254,8 @@ def get_parser() -> argparse.ArgumentParser:
         "-o",
         type=str,
         default="embeddings",
-        metavar="DIR",
-        help="Subdirectory under telegram/outputs/ (default: embeddings)",
+        metavar="PATH",
+        help="Output directory (default: outputs/telegram/embeddings/)",
     )
     parser.add_argument(
         "--model",
@@ -288,7 +285,7 @@ def run() -> None:
     if source.parent == Path("."):
         source = _inputs() / source.name
 
-    output_dir = _outputs() / args.output
+    output_dir = resolve_output_dir(args.output, theme="telegram")
 
     try:
         manifest_path = embed_messages(

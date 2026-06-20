@@ -3,8 +3,11 @@
 import json
 from pathlib import Path
 import subprocess
+import sys
 
 from core.paths import inputs_dir, outputs_dir
+
+_CREATION_FLAGS = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
 
 MEDIA_EXTS = frozenset(
     {
@@ -75,7 +78,12 @@ def run_ffmpeg(args: list[str]) -> None:
         subprocess.CalledProcessError: If ffmpeg exits non-zero.
         FileNotFoundError: If ffmpeg is not on PATH.
     """
-    subprocess.run(["ffmpeg", "-hide_banner", "-y", *args], check=True)
+    subprocess.run(
+        ["ffmpeg", "-hide_banner", "-y", *args],
+        check=True,
+        capture_output=True,
+        creationflags=_CREATION_FLAGS,
+    )
 
 
 def run_ffprobe(args: list[str]) -> dict:
@@ -96,6 +104,7 @@ def run_ffprobe(args: list[str]) -> dict:
         check=True,
         capture_output=True,
         text=True,
+        creationflags=_CREATION_FLAGS,
     )
     return json.loads(result.stdout)
 

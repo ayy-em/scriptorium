@@ -5,7 +5,8 @@ from pathlib import Path
 import sys
 
 from core.argparse import ScriptoriumParser
-from core.paths import inputs_dir, outputs_dir
+from core.outputs import resolve_output
+from core.paths import inputs_dir
 
 TITLE = "Make a gif"
 DESCRIPTION = "Takes a folder full of sequentially named pics, creates a gif."
@@ -15,10 +16,6 @@ _IMAGE_EXTS = frozenset({".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tiff", ".gi
 
 def _inputs() -> Path:
     return inputs_dir("gif")
-
-
-def _outputs() -> Path:
-    return outputs_dir("gif")
 
 
 def _find_frames(directory: Path) -> list[Path]:
@@ -111,10 +108,9 @@ def get_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--output",
         "-o",
-        type=str,
-        default="out.gif",
-        metavar="NAME",
-        help="Output filename written under gif/outputs/ (default: out.gif)",
+        default=None,
+        metavar="PATH",
+        help="Output file or directory (default: timestamp-named in outputs/gif/)",
     )
     parser.add_argument(
         "--fps",
@@ -146,8 +142,7 @@ def run() -> None:
     if source.parent == Path("."):
         source = _inputs() / source.name
 
-    stem = args.output if args.output.endswith(".gif") else f"{args.output}.gif"
-    output = _outputs() / stem
+    output = resolve_output(args.output, theme="gif", ext=".gif")
 
     try:
         result = generate(source, output, fps=args.fps, width=args.width, loop=args.loop)

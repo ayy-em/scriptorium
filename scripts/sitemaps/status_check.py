@@ -2,7 +2,6 @@
 
 import argparse
 import csv
-from datetime import UTC, datetime
 from pathlib import Path
 import random
 import sys
@@ -13,7 +12,7 @@ import xml.etree.ElementTree as ET
 import requests
 
 from core.argparse import ScriptoriumParser
-from core.paths import outputs_dir as _core_outputs_dir
+from core.outputs import resolve_output
 
 TITLE = "Sitemap Status Check"
 DESCRIPTION = "Check HTTP status and response times for every URL in a sitemap."
@@ -25,11 +24,6 @@ CHROME_USER_AGENT = (
 _SITEMAP_NS = {"sm": "http://www.sitemaps.org/schemas/sitemap/0.9"}
 
 _CSV_COLUMNS = ["url", "status_code", "response_time_ms", "content_type", "content_length", "error"]
-
-
-def _outputs_dir() -> Path:
-    """Return the default sitemaps outputs directory, creating it if needed."""
-    return _core_outputs_dir("sitemaps")
 
 
 def _resolve_sitemap_url(url: str) -> str:
@@ -123,7 +117,7 @@ def _check_url(
 
 def status_check(
     url: str,
-    outputs_dir: Path,
+    output: Path,
     *,
     delay: float = 1.0,
     timeout: float = 10.0,
@@ -139,7 +133,7 @@ def status_check(
 
     Args:
         url: Sitemap URL or bare domain (``/sitemap.xml`` is appended if needed).
-        outputs_dir: Directory where the output CSV is written.
+        output: Resolved output CSV file path.
         delay: Base delay in seconds between requests (jittered 0.8x-1.2x).
         timeout: Per-request timeout in seconds.
         user_agent: User-Agent header for all requests.
@@ -152,16 +146,13 @@ def status_check(
         ValueError: If the sitemap is a sitemap index or contains no URLs.
     """
     sitemap_url = _resolve_sitemap_url(url)
-    outputs_dir.mkdir(parents=True, exist_ok=True)
+    output.parent.mkdir(parents=True, exist_ok=True)
 
     resp = requests.get(sitemap_url, headers={"User-Agent": user_agent}, timeout=timeout)
     resp.raise_for_status()
 
     page_urls = _parse_sitemap_urls(resp.text)
-
-    domain = urlparse(sitemap_url).netloc.replace(":", "_")
-    timestamp = datetime.now(tz=UTC).strftime("%Y%m%d_%H%M%S")
-    output_path = outputs_dir / f"status_{domain}_{timestamp}.csv"
+    output_path = output
 
     with open(output_path, "w", newline="", encoding="utf-8") as fh:
         writer = csv.DictWriter(fh, fieldnames=_CSV_COLUMNS)
@@ -221,11 +212,11 @@ def get_parser() -> argparse.ArgumentParser:
         help="Custom User-Agent header (default: current Chrome UA).",
     )
     parser.add_argument(
-        "--outputs",
-        type=Path,
+        "--output",
+        "-o",
         default=None,
-        metavar="DIR",
-        help="Output directory (default: sitemaps/outputs/).",
+        metavar="PATH",
+        help="Output file or directory (default: timestamp-named in outputs/sitemaps/).",
     )
     return parser
 
@@ -234,13 +225,13 @@ def run() -> None:
     """CLI entrypoint. Parse arguments and dispatch to status_check()."""
     args = get_parser().parse_args()
 
-    out_dir = args.outputs or _outputs_dir()
+    out_path = resolve_output(args.output, theme="sitemaps", ext=".csv")
     user_agent = args.user_agent or CHROME_USER_AGENT
 
     try:
         output = status_check(
             args.url,
-            out_dir,
+            out_path,
             delay=args.delay,
             timeout=args.timeout,
             user_agent=user_agent,

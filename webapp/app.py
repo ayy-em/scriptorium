@@ -17,9 +17,22 @@ from fastapi.templating import Jinja2Templates
 from core.config import UserConfig
 from core.config import load as load_config
 from core.config import save as save_config
-from core.paths import FROZEN, has_ffmpeg, inputs_dir, read_version, static_dir, templates_dir
+from core.env import load_env
+from core.paths import (
+    FROZEN,
+    has_ffmpeg,
+    inputs_dir,
+    outputs_dir,
+    read_version,
+    static_dir,
+    templates_dir,
+)
 from core.registry import discover, discover_themes, theme_descriptions, theme_labels
 from webapp._form import build_argv, fields_from_parser
+
+_CREATION_FLAGS = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
+
+load_env()
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +66,7 @@ def _read_git_hash() -> str:
             cwd=str(_REPO_ROOT),
             timeout=3,
             check=False,
+            creationflags=_CREATION_FLAGS,
         )
         return result.stdout.strip() if result.returncode == 0 else "—"
     except Exception:
@@ -177,6 +191,28 @@ async def post_settings(request: Request) -> JSONResponse:
         outputs_dir=body.get("outputs_dir", ""),
     )
     save_config(cfg)
+    return JSONResponse({"ok": True})
+
+
+@app.post("/api/open-outputs")
+async def open_outputs(request: Request) -> JSONResponse:
+    """Open the outputs folder for a theme in the OS file explorer.
+
+    Args:
+        request: Expects JSON body with optional ``theme`` key.
+
+    Returns:
+        JSON acknowledgement.
+    """
+    body = await request.json()
+    theme = body.get("theme") or "default"
+    folder = outputs_dir(theme)
+    if sys.platform == "win32":
+        subprocess.Popen(["explorer", str(folder)])
+    elif sys.platform == "darwin":
+        subprocess.Popen(["open", str(folder)])
+    else:
+        subprocess.Popen(["xdg-open", str(folder)])
     return JSONResponse({"ok": True})
 
 

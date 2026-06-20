@@ -95,7 +95,7 @@ uv run webapp --port 9000               # custom port
 The web UI lists all scripts grouped by theme, with live search and dark/light mode.
 Clicking a script opens a detail page with an auto-generated form (built from
 `get_parser()`). Path-typed arguments render as drag-and-drop file upload fields
-(except `--outputs` and `--inputs` directory args, which remain text fields).
+(except `--output` and `--inputs` directory args, which remain text fields).
 Submitting the form runs the script and streams its output via SSE.
 
 Uploaded files are saved to the theme's inputs directory via `POST /upload/{theme}`.

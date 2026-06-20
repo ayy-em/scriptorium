@@ -5,7 +5,8 @@ from pathlib import Path
 import sys
 
 from core.argparse import ScriptoriumParser
-from core.paths import inputs_dir, outputs_dir
+from core.outputs import resolve_output
+from core.paths import inputs_dir
 from scripts.speech._providers import (
     DEFAULT_PROVIDER,
     SUPPORTED_PROVIDERS,
@@ -23,10 +24,6 @@ _DEFAULT_FORMAT = "txt"
 
 def _inputs() -> Path:
     return inputs_dir("speech")
-
-
-def _outputs() -> Path:
-    return outputs_dir("speech")
 
 
 def _render(text: str, fmt: str, source_name: str) -> str:
@@ -91,10 +88,9 @@ def get_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--output",
         "-o",
-        type=str,
         default=None,
-        metavar="NAME",
-        help="output filename stem (default: audio stem)",
+        metavar="PATH",
+        help="Output file or directory (default: timestamp-named in outputs/speech/)",
     )
     parser.add_argument(
         "--format",
@@ -121,8 +117,7 @@ def run() -> None:
     if audio.parent == Path("."):
         audio = _inputs() / audio.name
 
-    stem = args.output or audio.stem
-    output_path = _outputs() / f"{stem}.{args.format}"
+    output_path = resolve_output(args.output, theme="speech", ext=f".{args.format}")
 
     try:
         provider = get_provider(args.tts_provider)

@@ -6,7 +6,8 @@ from pathlib import Path
 import sys
 
 from core.argparse import ScriptoriumParser
-from core.paths import inputs_dir, outputs_dir
+from core.outputs import resolve_output
+from core.paths import inputs_dir
 from scripts.lora._dataset import find_captions
 
 TITLE = "Export captions to JSON"
@@ -15,17 +16,6 @@ DESCRIPTION = "Collect all .txt caption files in the dataset and write {filename
 
 def _inputs() -> Path:
     return inputs_dir("lora")
-
-
-def _outputs() -> Path:
-    return outputs_dir("lora")
-
-
-def _resolve_output(name: str | None) -> Path | None:
-    if name is None:
-        return None
-    stem = Path(name).stem  # tolerate 'captions' or 'captions.json'
-    return _outputs() / f"{stem}.json"
 
 
 def export(directory: Path, output: Path | None) -> None:
@@ -73,10 +63,10 @@ def get_parser() -> argparse.ArgumentParser:
         "--output",
         "-o",
         nargs="?",
-        const="captions",
+        const="__default__",
         default=None,
-        metavar="NAME",
-        help="write to outputs/NAME.json (default name: captions); omit flag entirely for stdout",
+        metavar="PATH",
+        help="Output file or directory (omit for stdout; bare flag for timestamp-named in outputs/lora/)",
     )
     return parser
 
@@ -87,4 +77,8 @@ def run() -> None:
     inputs = args.inputs or _inputs()
     if inputs.parent == Path("."):
         inputs = _inputs() / inputs.name
-    export(inputs, _resolve_output(args.output))
+    out = None
+    if args.output is not None:
+        raw = None if args.output == "__default__" else args.output
+        out = resolve_output(raw, theme="lora", ext=".json")
+    export(inputs, out)

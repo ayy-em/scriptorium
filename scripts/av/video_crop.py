@@ -5,7 +5,8 @@ from pathlib import Path
 import sys
 
 from core.argparse import ScriptoriumParser
-from scripts.av._utils import av_inputs_dir, av_outputs_dir, probe_streams, run_ffmpeg
+from core.outputs import resolve_output
+from scripts.av._utils import av_inputs_dir, probe_streams, run_ffmpeg
 
 TITLE = "Crop a video by trimming its edges"
 DESCRIPTION = "Remove pixels from the top, right, bottom, and/or left edges of a video file."
@@ -108,10 +109,10 @@ def get_parser() -> argparse.ArgumentParser:
     parser.add_argument("left", type=_non_negative_int, help="Pixels to remove from the left edge")
     parser.add_argument(
         "--output",
-        type=Path,
+        "-o",
         default=None,
         metavar="PATH",
-        help="Destination file (default: av/outputs/video_crop/<source_name>)",
+        help="Output file or directory (default: timestamp-named in outputs/av/)",
     )
     return parser
 
@@ -124,15 +125,7 @@ def run() -> None:
     if source.parent == Path("."):
         source = av_inputs_dir() / source.name
 
-    output = args.output
-    if output is None:
-        crop_out = av_outputs_dir() / "video_crop"
-        crop_out.mkdir(parents=True, exist_ok=True)
-        output = crop_out / source.name
-    elif output.parent == Path("."):
-        crop_out = av_outputs_dir() / "video_crop"
-        crop_out.mkdir(parents=True, exist_ok=True)
-        output = crop_out / output.name
+    output = resolve_output(args.output, theme="av", ext=source.suffix)
 
     try:
         crop(source, output, top=args.top, right=args.right, bottom=args.bottom, left=args.left)

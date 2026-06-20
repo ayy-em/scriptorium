@@ -8,7 +8,8 @@ import sys
 import tempfile
 
 from core.argparse import ScriptoriumParser
-from scripts.av._utils import COVER_SUPPORTED_EXTS, av_inputs_dir, av_outputs_dir, read_tags, run_ffmpeg
+from core.outputs import resolve_output
+from scripts.av._utils import COVER_SUPPORTED_EXTS, av_inputs_dir, read_tags, run_ffmpeg
 
 TITLE = "Read/write media metadata tags"
 DESCRIPTION = (
@@ -138,11 +139,11 @@ def get_parser() -> argparse.ArgumentParser:
         help="Overwrite source file instead of writing to outputs/",
     )
     parser.add_argument(
-        "--outputs",
-        type=Path,
+        "--output",
+        "-o",
         default=None,
-        metavar="DIR",
-        help="Output directory (default: av/outputs/)",
+        metavar="PATH",
+        help="Output file or directory (default: timestamp-named in outputs/av/)",
     )
     return parser
 
@@ -194,8 +195,7 @@ def run() -> None:
             print(f"error: {e}", file=sys.stderr)
             sys.exit(1)
 
-    outputs_dir = args.outputs or av_outputs_dir()
-    output = outputs_dir / input_file.name
+    output = resolve_output(args.output, theme="av", ext=input_file.suffix)
     try:
         write_tags(
             input_file,

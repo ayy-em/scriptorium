@@ -5,7 +5,8 @@ from pathlib import Path
 import sys
 
 from core.argparse import ScriptoriumParser
-from scripts.av._utils import av_inputs_dir, av_outputs_dir, probe_streams, run_ffmpeg, run_ffprobe
+from core.outputs import resolve_output
+from scripts.av._utils import av_inputs_dir, probe_streams, run_ffmpeg, run_ffprobe
 
 TITLE = "Adjust audio volume, normalize, or apply fade-in/out"
 DESCRIPTION = "Apply composable volume operations in a single ffmpeg pass: amplify -> normalize -> fade-in -> fade-out."
@@ -116,11 +117,11 @@ def get_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("input", type=Path, help="Source media file (bare name resolves to av/inputs/)")
     parser.add_argument(
-        "output",
-        type=Path,
-        nargs="?",
+        "--output",
+        "-o",
         default=None,
-        help="Destination file (default: av/outputs/<input_name>)",
+        metavar="PATH",
+        help="Output file or directory (default: timestamp-named in outputs/av/)",
     )
     parser.add_argument(
         "--normalize",
@@ -147,7 +148,7 @@ def run() -> None:
     if input_file.parent == Path("."):
         input_file = av_inputs_dir() / input_file.name
 
-    output = args.output or (av_outputs_dir() / input_file.name)
+    output = resolve_output(args.output, theme="av", ext=input_file.suffix)
 
     try:
         adjust_volume(

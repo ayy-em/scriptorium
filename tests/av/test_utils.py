@@ -66,6 +66,8 @@ def test_run_ffmpeg_passes_correct_args():
         mock_run.assert_called_once_with(
             ["ffmpeg", "-hide_banner", "-y", "-i", "in.mp4", "out.mp4"],
             check=True,
+            capture_output=True,
+            creationflags=mock_run.call_args.kwargs["creationflags"],
         )
 
 

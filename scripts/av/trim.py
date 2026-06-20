@@ -5,13 +5,11 @@ from pathlib import Path
 import sys
 
 from core.argparse import ScriptoriumParser
-from scripts.av._utils import av_inputs_dir, av_outputs_dir, run_ffmpeg
+from core.outputs import resolve_output
+from scripts.av._utils import av_inputs_dir, run_ffmpeg
 
 TITLE = "Trim the media file that's just too damn long"
 DESCRIPTION = "Cut a video or audio file by skipping ahead to a start point, optionally stopping at an end point."
-
-_TRIM_SUBDIR = "trim"
-_TRIMMED_SUFFIX = "_trimmed"
 
 
 def trim(input: Path, output: Path, start: str, end: str | None = None) -> None:
@@ -70,21 +68,11 @@ def get_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--output",
         "-o",
-        type=Path,
         default=None,
         metavar="PATH",
-        help=f"Destination path; defaults to outputs/av/{_TRIM_SUBDIR}/<input>{_TRIMMED_SUFFIX}<ext>",
+        help="Output file or directory (default: timestamp-named in outputs/av/)",
     )
     return parser
-
-
-def _resolve_output(arg: Path | None, input_file: Path) -> Path:
-    default_dir = av_outputs_dir() / _TRIM_SUBDIR
-    if arg is None:
-        return default_dir / f"{input_file.stem}{_TRIMMED_SUFFIX}{input_file.suffix}"
-    if arg.parent == Path("."):
-        return default_dir / arg.name
-    return arg
 
 
 def run() -> None:
@@ -95,8 +83,7 @@ def run() -> None:
     if input_file.parent == Path("."):
         input_file = av_inputs_dir() / input_file.name
 
-    output = _resolve_output(args.output, input_file)
-    output.parent.mkdir(parents=True, exist_ok=True)
+    output = resolve_output(args.output, theme="av", ext=input_file.suffix)
 
     try:
         trim(input_file, output, start=args.start, end=args.end)

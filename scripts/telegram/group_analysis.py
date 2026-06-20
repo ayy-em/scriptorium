@@ -12,8 +12,8 @@ import tempfile
 import zipfile
 
 from core.argparse import ScriptoriumParser
+from core.outputs import resolve_output
 from core.paths import inputs_dir as _core_inputs_dir
-from core.paths import outputs_dir as _core_outputs_dir
 from scripts.telegram._group_metrics import DEFAULT_MSG_SHARE_THRESHOLD
 from scripts.telegram._group_parsing import InvalidExportError
 
@@ -34,7 +34,7 @@ examples:
   uv run main.py telegram.group_analysis
   uv run main.py telegram.group_analysis /path/to/result.json
   uv run main.py telegram.group_analysis --msg-share-threshold 2
-  uv run main.py telegram.group_analysis --outputs /tmp/reports
+  uv run main.py telegram.group_analysis --output /tmp/reports/output.zip
 """
 
 
@@ -53,15 +53,15 @@ def _sha256(path: Path) -> str:
 
 def group_analysis(
     source: Path,
-    outputs_dir: Path,
+    output: Path,
     msg_share_threshold: int = DEFAULT_MSG_SHARE_THRESHOLD,
     count_bots: bool = False,
 ) -> Path:
-    """Produce the group_analysis ``.zip`` for ``source`` under ``outputs_dir``.
+    """Produce the group_analysis ``.zip`` for ``source``.
 
     Args:
         source: Path to the Telegram group chat export result.json.
-        outputs_dir: Directory to write the output .zip into.
+        output: Resolved output zip file path.
         msg_share_threshold: Minimum % of total messages to include a user.
         count_bots: If True, include detected bot accounts in the analysis.
 
@@ -71,7 +71,7 @@ def group_analysis(
     if not source.exists():
         raise FileNotFoundError(f"Source file not found: {source}")
 
-    outputs_dir.mkdir(parents=True, exist_ok=True)
+    output.parent.mkdir(parents=True, exist_ok=True)
 
     from scripts.telegram import _group_charts, _group_metrics, _group_pdf  # noqa: PLC0415
     from scripts.telegram._group_parsing import load_group_chat  # noqa: PLC0415
@@ -119,13 +119,10 @@ def group_analysis(
         pdf_path = staging / _PDF_NAME
         _group_pdf.render_group_pdf(analytics, chart_paths, pdf_path)
 
-        slug = _slugify(metadata.name)
-        stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        zip_path = outputs_dir / f"group_analysis_{slug}_{stamp}.zip"
-        _build_zip(staging, zip_path)
+        _build_zip(staging, output)
 
     _archive_source(source)
-    return zip_path
+    return output
 
 
 def _archive_source(source: Path) -> Path | None:
@@ -169,11 +166,11 @@ def get_parser() -> argparse.ArgumentParser:
         help=f"Path to the Telegram group-chat export result.json (default: inputs/{_DEFAULT_SOURCE}).",
     )
     parser.add_argument(
-        "--outputs",
-        type=Path,
+        "--output",
+        "-o",
         default=None,
-        metavar="DIR",
-        help="Output directory for the report .zip (default: outputs/telegram/).",
+        metavar="PATH",
+        help="Output file or directory (default: timestamp-named in outputs/telegram/).",
     )
     parser.add_argument(
         "--msg-share-threshold",
@@ -202,11 +199,11 @@ def run() -> None:
         source = _core_inputs_dir("telegram") / _DEFAULT_SOURCE
     elif source.parent == Path("."):
         source = _core_inputs_dir("telegram") / source.name
-    out_dir: Path = args.outputs or _core_outputs_dir("telegram")
+    output = resolve_output(args.output, theme="telegram", ext=".zip")
     try:
         out_path = group_analysis(
             source,
-            out_dir,
+            output,
             msg_share_threshold=args.msg_share_threshold,
             count_bots=args.count_bots,
         )

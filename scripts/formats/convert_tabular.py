@@ -7,11 +7,11 @@ import sys
 import pandas as pd
 
 from core.argparse import ScriptoriumParser
+from core.outputs import resolve_output_dir
 from scripts.formats._utils import (
     TABULAR_EXTS,
     BatchConvertError,
     formats_inputs_dir,
-    formats_outputs_dir,
     run_convert,
 )
 
@@ -124,11 +124,11 @@ def get_parser() -> argparse.ArgumentParser:
         help="Sheet name or index for multi-sheet Excel/ODS input (default: first sheet).",
     )
     parser.add_argument(
-        "--outputs",
-        type=Path,
+        "--output",
+        "-o",
         default=None,
-        metavar="DIR",
-        help="Output directory (default: formats/outputs/)",
+        metavar="PATH",
+        help="Output file or directory (default: outputs/formats/)",
     )
     return parser
 
@@ -137,7 +137,7 @@ def run() -> None:
     """CLI entrypoint. Parse arguments and dispatch to convert()."""
     args = get_parser().parse_args()
     source = args.source or formats_inputs_dir()
-    out_dir = args.outputs or formats_outputs_dir()
+    out_dir = resolve_output_dir(args.output, theme="formats")
 
     try:
         outputs = convert(source, args.to_format, out_dir, sheet=args.sheet)

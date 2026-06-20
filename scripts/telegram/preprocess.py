@@ -10,7 +10,8 @@ import zipfile
 import ijson
 
 from core.argparse import ScriptoriumParser
-from core.paths import inputs_dir, outputs_dir
+from core.outputs import resolve_output
+from core.paths import inputs_dir
 
 TITLE = "Preprocess Telegram export for embeddings"
 DESCRIPTION = "Strip the fat, rename keys, split by year, and emit a single zip ready for embedding."
@@ -31,10 +32,6 @@ _FIELD_MAP: dict[str, str] = {
 
 def _inputs() -> Path:
     return inputs_dir("telegram")
-
-
-def _outputs() -> Path:
-    return outputs_dir("telegram")
 
 
 def _sha256(path: Path) -> str:
@@ -163,10 +160,9 @@ def get_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--output",
         "-o",
-        type=str,
-        default="processed",
-        metavar="NAME",
-        help="Output zip filename stem (default: processed → processed.zip)",
+        default=None,
+        metavar="PATH",
+        help="Output file or directory (default: timestamp-named in outputs/telegram/)",
     )
     parser.add_argument(
         "--keep-service",
@@ -184,8 +180,7 @@ def run() -> None:
     if source.parent == Path("."):
         source = _inputs() / source.name
 
-    stem = args.output if args.output.endswith(".zip") else f"{args.output}.zip"
-    output = _outputs() / stem
+    output = resolve_output(args.output, theme="telegram", ext=".zip")
 
     try:
         result = preprocess(source, output, keep_service=args.keep_service)
