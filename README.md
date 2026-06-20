@@ -142,6 +142,12 @@ run_fn(export, Path("inputs"), Path("outputs/lora/captions.json"))
 
 ## Version History
 
+### v0.5.1
+- **Standardized output paths** — all scripts use a unified `--output` flag with `YYYYMMDD_HHmm.ext` default naming and `_001`–`_999` collision avoidance
+- **Console flickering fix** — windowed app no longer flashes cmd.exe windows when running subprocess-heavy scripts
+- **Freeform filmstrip grid** — `av.filmstrip` now accepts any `ROWSxCOLS` input (e.g. `2x5`, `4x4`)
+- **Webapp** — "Open outputs folder" button in topnav
+
 ### v0.5.0
 - **Telegram analysis suite** — group analysis with PDF report, chat analysis with neon infographic, embeddings pipeline
 - **New scripts** — gif.make_gif, av.video_crop, sitemaps.status_check, formats.convert_docs, speech.transcribe, util.notify, util.cleanup

@@ -21,6 +21,8 @@ scriptorium/
 ├── core/
 │   ├── argparse.py          # ScriptoriumParser with ui_label support
 │   ├── config.py            # user settings persistence (UserConfig, load, save)
+│   ├── env.py               # centralized .env loading
+│   ├── outputs.py           # standardized output path resolution
 │   ├── paths.py             # centralized path resolution (frozen vs dev)
 │   ├── registry.py          # auto-discovers scripts and themes
 │   └── runner.py            # dispatch + middleware (run, run_fn)
@@ -318,6 +320,33 @@ def av_inputs_dir() -> Path:
 `core.paths` also provides `templates_dir()`, `static_dir()`, `has_ffmpeg()`,
 `read_version()`, and the `FROZEN` boolean.
 
+### `core.outputs` — standardized output path resolution
+
+All scripts use `core.outputs` for output file naming and placement. The module
+provides four functions:
+
+| Function | Purpose |
+|----------|---------|
+| `default_stem()` | Returns `YYYYMMDD_HHmm` timestamp string for default filenames |
+| `deduplicate(path)` | Appends `_001`–`_999` suffix if `path` already exists |
+| `resolve_output(output, *, theme, ext)` | Resolves a user-provided `--output` value (or `None`) to a concrete file path |
+| `resolve_output_dir(output, *, theme)` | Same, but resolves to a directory (for multi-file output scripts) |
+
+`resolve_output` handles three input shapes:
+
+| User provides | Behaviour |
+|---------------|-----------|
+| Nothing (`None`) | `outputs/<theme>/YYYYMMDD_HHmm.ext` |
+| Directory path | `<dir>/YYYYMMDD_HHmm.ext` |
+| Filename only (no directory) | `outputs/<theme>/<filename>` |
+| Full path with directory | Used as-is |
+
+All scripts expose a single `--output` / `-o` flag (replacing the former
+`--outputs` directory flag). Scripts that produce a single file use
+`resolve_output()`; scripts that produce multiple files use
+`resolve_output_dir()` combined with `default_stem()` for indexed naming
+(e.g. `20260620_1706_001.mp4`, `20260620_1706_002.mp4`).
+
 ---
 
 ## Script anatomy
@@ -483,9 +512,9 @@ from scripts.lora._dataset import find_images
    `core.argparse`) with `prog="uv run main.py <theme>.<script>"`,
    `epilog=_EXAMPLES`, and `formatter_class=argparse.RawDescriptionHelpFormatter`;
    `run()` calls `get_parser().parse_args()`
-7. Use `core.paths.inputs_dir("<theme>")` and `core.paths.outputs_dir("<theme>")`
-   for default paths; resolve bare filenames inside `run()` before passing to
-   public functions
+7. Use `core.outputs.resolve_output()` or `core.outputs.resolve_output_dir()` for
+   output paths; use `core.paths.inputs_dir("<theme>")` for input defaults; resolve
+   bare filenames inside `run()` before passing to public functions
 8. Verify it appears in `uv run main.py`
 9. Verify `uv run main.py <theme>` lists the script with its title and description
 10. Verify `uv run main.py <theme>.<script> --help` shows the correct usage line,
