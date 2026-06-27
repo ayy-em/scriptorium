@@ -10,6 +10,7 @@ from core.paths import inputs_dir
 
 TITLE = "Make a gif"
 DESCRIPTION = "Takes a folder full of sequentially named pics, creates a gif."
+ACCEPTS: set[str] = {"image"}
 
 _IMAGE_EXTS = frozenset({".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tiff", ".gif"})
 

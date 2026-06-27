@@ -17,6 +17,7 @@ from scripts.formats._utils import (
 
 TITLE = "Convert video"
 DESCRIPTION = "Transcode video files to a different container or codec."
+ACCEPTS: set[str] = {"video"}
 
 _VIDEO_OUT_FORMATS = ["mp4", "mkv", "mov", "avi", "webm"]
 

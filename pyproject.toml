@@ -7,6 +7,7 @@ requires-python = ">=3.14"
 dependencies = [
     "httpx>=0.27",
     "pyyaml>=6.0",
+    "rembg[gpu]>=2.0.76",
 ]
 
 [dependency-groups]
@@ -27,7 +28,7 @@ webapp = "webapp.app:run"
 [project.optional-dependencies]
 av        = ["ffmpeg-python>=0.2", "Pillow>=11.0"]
 downloads = ["yt-dlp>=2024.1.0"]
-photo     = ["Pillow>=11.0"]
+photo     = ["Pillow>=11.0", "rembg>=2.0"]
 sitemaps  = ["requests>=2.32"]
 tabular   = ["pandas>=2.2", "openpyxl>=3.1"]
 telegram  = [

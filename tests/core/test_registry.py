@@ -1,6 +1,13 @@
 """Tests for core.registry — verifies the real on-disk scripts/ tree is discovered."""
 
-from core.registry import discover, discover_themes, theme_descriptions, theme_labels
+from core.registry import (
+    discover,
+    discover_themes,
+    scripts_for_category,
+    scripts_for_file,
+    theme_descriptions,
+    theme_labels,
+)
 
 
 class TestDiscover:
@@ -44,6 +51,44 @@ class TestThemeDescriptions:
 
     def test_themes_match_labels(self):
         assert set(theme_labels()) == set(theme_descriptions())
+
+
+class TestScriptsForCategory:
+    def test_video_returns_results(self):
+        results = scripts_for_category("video")
+        keys = [k for k, _ in results]
+        assert "formats.convert_video" in keys
+
+    def test_audio_includes_transcribe(self):
+        keys = [k for k, _ in scripts_for_category("audio")]
+        assert "speech.transcribe" in keys
+
+    def test_image_includes_make_gif(self):
+        keys = [k for k, _ in scripts_for_category("image")]
+        assert "gif.make_gif" in keys
+
+    def test_unknown_category_returns_empty(self):
+        assert scripts_for_category("spreadsheet") == []
+
+    def test_results_are_sorted(self):
+        results = scripts_for_category("video")
+        keys = [k for k, _ in results]
+        assert keys == sorted(keys)
+
+
+class TestScriptsForFile:
+    def test_mp4_matches_video_scripts(self):
+        results = scripts_for_file("clip.mp4")
+        keys = [k for k, _ in results]
+        assert "formats.convert_video" in keys
+        assert "av.trim" in keys
+
+    def test_unknown_extension_returns_empty(self):
+        assert scripts_for_file("data.xyz") == []
+
+    def test_flac_matches_audio_scripts(self):
+        keys = [k for k, _ in scripts_for_file("song.flac")]
+        assert "formats.convert_audio" in keys
 
 
 class TestDiscoverThemes:

@@ -17,6 +17,7 @@ from scripts.formats._utils import (
 
 TITLE = "Convert image"
 DESCRIPTION = "Convert images to a different format using Pillow."
+ACCEPTS: set[str] = {"image"}
 
 _IMAGE_OUT_FORMATS = ["jpg", "png", "webp", "gif", "bmp", "tiff"]
 _QUALITY_EXTS = frozenset({".jpg", ".jpeg", ".webp"})

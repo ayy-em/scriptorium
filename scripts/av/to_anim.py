@@ -15,6 +15,7 @@ _CREATION_FLAGS = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
 
 TITLE = "Turn a video segment into an animated GIF/WebP"
 DESCRIPTION = "Convert a video segment to an animated GIF or WebP given start/end timestamps."
+ACCEPTS: set[str] = {"video"}
 
 FORMATS = ("gif", "webp")
 

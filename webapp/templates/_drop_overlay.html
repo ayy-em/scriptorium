@@ -1,0 +1,175 @@
+<!-- Drop-to-Discover overlay: shown when user drags a file onto the index page -->
+
+<!-- Drag hover state: full-viewport hint -->
+<div class="drop-overlay drop-hover"
+     x-show="dropping && !overlayPhase"
+     x-transition:enter="drop-fade-enter"
+     x-transition:enter-start="drop-fade-start"
+     x-transition:enter-end="drop-fade-end"
+     x-transition:leave="drop-fade-enter"
+     x-transition:leave-start="drop-fade-end"
+     x-transition:leave-end="drop-fade-start">
+  <div class="drop-hover-inner">
+    <svg class="drop-hover-icon" width="48" height="48" viewBox="0 0 48 48" fill="none" aria-hidden="true">
+      <path d="M24 6v28M14 26l10 10 10-10" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M6 38h36" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+    </svg>
+    <p class="drop-hover-text">Drop to discover</p>
+  </div>
+</div>
+
+<!-- Upload spinner -->
+<div class="drop-overlay drop-uploading"
+     x-show="uploading"
+     x-transition.opacity.duration.150ms>
+  <div class="drop-uploading-inner">
+    <div class="drop-spinner"></div>
+    <p>Uploading…</p>
+  </div>
+</div>
+
+<!-- Preview + script list -->
+<div class="drop-overlay drop-preview-overlay"
+     x-show="overlayPhase === 'preview' || overlayPhase === 'fields'"
+     x-transition:enter="drop-fade-enter"
+     x-transition:enter-start="drop-fade-start"
+     x-transition:enter-end="drop-fade-end"
+     x-transition:leave="drop-fade-enter"
+     x-transition:leave-start="drop-fade-end"
+     x-transition:leave-end="drop-fade-start"
+     @keydown.escape.window="closeDrop()">
+
+  <div class="drop-preview-card">
+    <!-- Close button -->
+    <button class="drop-close-btn" @click="closeDrop()" aria-label="Close">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+        <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+    </button>
+
+    <!-- File preview panel -->
+    <div class="drop-file-info">
+      <template x-if="dropFileType === 'image'">
+        <img :src="dropPreviewUrl" alt="" class="drop-thumb">
+      </template>
+      <template x-if="dropFileType === 'video'">
+        <video :src="dropPreviewUrl" class="drop-thumb" muted preload="metadata"></video>
+      </template>
+      <template x-if="dropFileType !== 'image' && dropFileType !== 'video'">
+        <div class="drop-file-icon">
+          <svg width="40" height="40" viewBox="0 0 40 40" fill="none" aria-hidden="true">
+            <rect x="8" y="4" width="24" height="32" rx="3" stroke="currentColor" stroke-width="1.8"/>
+            <path d="M14 14h12M14 20h12M14 26h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        </div>
+      </template>
+      <p class="drop-filename" x-text="dropFilename"></p>
+      <div class="drop-meta">
+        <span class="drop-badge" x-text="dropCategory || 'unknown'" :class="'drop-badge-' + (dropCategory || 'unknown')"></span>
+        <span class="drop-filesize" x-text="dropFilesize"></span>
+      </div>
+    </div>
+
+    <!-- Script list / fields -->
+    <div class="drop-actions-panel">
+
+      <!-- Phase: script list -->
+      <template x-if="overlayPhase === 'preview'">
+        <div class="drop-script-list">
+          <h3 class="drop-section-title" x-show="dropScripts.length > 0">What would you like to do?</h3>
+
+          <template x-for="s in dropScripts" :key="s.key">
+            <button class="drop-script-item" @click="selectScript(s)">
+              <span class="drop-script-title" x-text="s.title"></span>
+              <span class="drop-script-desc" x-text="s.description"></span>
+            </button>
+          </template>
+
+          <div class="drop-no-scripts" x-show="dropScripts.length === 0">
+            <p>No scripts can process this file type.</p>
+          </div>
+        </div>
+      </template>
+
+      <!-- Phase: selected script + fields -->
+      <template x-if="overlayPhase === 'fields'">
+        <div class="drop-fields-panel">
+          <button class="drop-back-btn" @click="overlayPhase = 'preview'; selectedScript = null; scriptFields = [];">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path d="M10 3L5 8l5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            Back
+          </button>
+
+          <h3 class="drop-selected-title" x-text="selectedScript.title"></h3>
+          <p class="drop-selected-desc" x-text="selectedScript.description"></p>
+
+          <form class="drop-fields-form" @submit.prevent="goToScript()">
+            <template x-for="(field, idx) in scriptFields" :key="field.dest">
+              <div class="drop-field-group">
+                <label class="drop-field-label" :for="'drop-field-' + field.dest" x-text="field.label"></label>
+
+                <!-- Select widget -->
+                <template x-if="field.widget === 'select'">
+                  <select :id="'drop-field-' + field.dest"
+                          class="drop-field-input"
+                          x-model="fieldValues[field.dest]">
+                    <option value="">—</option>
+                    <template x-for="c in field.choices" :key="c">
+                      <option :value="c" x-text="c" :selected="c === field.default"></option>
+                    </template>
+                  </select>
+                </template>
+
+                <!-- Checkbox widget -->
+                <template x-if="field.widget === 'checkbox'">
+                  <input type="checkbox"
+                         :id="'drop-field-' + field.dest"
+                         class="drop-field-checkbox"
+                         x-model="fieldValues[field.dest]">
+                </template>
+
+                <!-- Number widget -->
+                <template x-if="field.widget === 'number'">
+                  <input type="number"
+                         :id="'drop-field-' + field.dest"
+                         class="drop-field-input"
+                         x-model="fieldValues[field.dest]"
+                         :placeholder="field.default || ''">
+                </template>
+
+                <!-- Textarea widget -->
+                <template x-if="field.widget === 'textarea'">
+                  <textarea :id="'drop-field-' + field.dest"
+                            class="drop-field-input drop-field-textarea"
+                            x-model="fieldValues[field.dest]"
+                            rows="3"></textarea>
+                </template>
+
+                <!-- Text widget (default) -->
+                <template x-if="field.widget === 'text'">
+                  <input type="text"
+                         :id="'drop-field-' + field.dest"
+                         class="drop-field-input"
+                         x-model="fieldValues[field.dest]"
+                         :placeholder="field.default || ''"
+                         :required="field.required">
+                </template>
+
+                <p class="drop-field-help" x-show="field.help" x-text="field.help"></p>
+              </div>
+            </template>
+
+            <button type="submit" class="drop-go-btn">
+              Go
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
+          </form>
+        </div>
+      </template>
+
+    </div>
+  </div>
+</div>

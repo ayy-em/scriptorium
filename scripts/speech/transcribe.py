@@ -17,6 +17,7 @@ from scripts.speech._providers import (
 
 TITLE = "Transcribe audio to text"
 DESCRIPTION = "Send an audio file to a speech-to-text provider and write the transcript to outputs/."
+ACCEPTS: set[str] = {"audio"}
 
 _FORMATS = ("txt", "md", "rtf")
 _DEFAULT_FORMAT = "txt"

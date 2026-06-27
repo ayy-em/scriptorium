@@ -10,6 +10,7 @@ from scripts.av._utils import av_inputs_dir, probe_streams, run_ffmpeg, run_ffpr
 
 TITLE = "Adjust audio volume, normalize, or apply fade-in/out"
 DESCRIPTION = "Apply composable volume operations in a single ffmpeg pass: amplify -> normalize -> fade-in -> fade-out."
+ACCEPTS: set[str] = {"video", "audio"}
 
 
 def adjust_volume(  # noqa: PLR0913

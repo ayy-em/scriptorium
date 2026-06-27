@@ -19,6 +19,7 @@ wp_datas, wp_binaries, wp_hidden = collect_all("weasyprint")
 
 hidden_imports = [
     "core",
+    "core.categories",
     "core.paths",
     "core.registry",
     "core.runner",
@@ -42,7 +43,10 @@ hidden_imports = [
     "scripts.formats.convert_audio",
     "scripts.formats.convert_image",
     "scripts.formats.convert_tabular",
+    "scripts.formats.convert_docs",
     "scripts.formats.convert_video",
+    "scripts.gif",
+    "scripts.gif.make_gif",
     "scripts.homeassistant",
     "scripts.llm",
     "scripts.lora",
@@ -56,6 +60,8 @@ hidden_imports = [
     "scripts.sitemaps",
     "scripts.sitemaps.status_check",
     "scripts.speech",
+    "scripts.speech._providers",
+    "scripts.speech.transcribe",
     "scripts.tabular",
     "scripts.telegram",
     "scripts.telegram._charts",

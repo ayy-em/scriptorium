@@ -10,6 +10,7 @@ from scripts.av._utils import av_inputs_dir, run_ffmpeg
 
 TITLE = "Split media file in multiple segments"
 DESCRIPTION = "Split a media file at one or more timestamp breakpoints into numbered segments."
+ACCEPTS: set[str] = {"video", "audio"}
 
 
 def split(input: Path, timestamps: list[str], outputs_dir: Path, stem: str | None = None) -> list[Path]:

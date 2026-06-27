@@ -19,6 +19,7 @@ _CREATION_FLAGS = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
 
 TITLE = "Convert documents"
 DESCRIPTION = "Convert documents between docx, rtf, md, html, pdf, and txt formats."
+ACCEPTS: set[str] = {"document"}
 
 DOCS_EXTS = frozenset({".docx", ".rtf", ".md", ".html", ".htm", ".pdf", ".txt"})
 _OUT_FORMATS = ("pdf", "md", "txt", "rtf", "docx", "html")

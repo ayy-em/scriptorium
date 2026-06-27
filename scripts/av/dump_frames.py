@@ -11,6 +11,7 @@ from scripts.av._utils import av_inputs_dir, run_ffmpeg
 
 TITLE = "Dump all frames from a video clip"
 DESCRIPTION = "Extract every frame between two timestamps to JPEG files."
+ACCEPTS: set[str] = {"video"}
 
 
 def _normalize_timestamp(ts: str) -> str:

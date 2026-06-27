@@ -16,6 +16,7 @@ DESCRIPTION = (
     "Read or write metadata fields (title, artist, album, date, comment) and album art."
     " With no write flags, prints current tags."
 )
+ACCEPTS: set[str] = {"video", "audio"}
 
 
 def get_tags(file: Path) -> dict[str, str]:

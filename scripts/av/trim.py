@@ -10,6 +10,7 @@ from scripts.av._utils import av_inputs_dir, run_ffmpeg
 
 TITLE = "Trim the media file that's just too damn long"
 DESCRIPTION = "Cut a video or audio file by skipping ahead to a start point, optionally stopping at an end point."
+ACCEPTS: set[str] = {"video", "audio"}
 
 
 def trim(input: Path, output: Path, start: str, end: str | None = None) -> None:

@@ -159,6 +159,52 @@ function fileUploadMulti(theme) {
   };
 }
 
+/* Pre-fill form fields from URL query params (used by Drop-to-Discover) */
+(function () {
+  var params = new URLSearchParams(window.location.search);
+  if (!params.has('_prefill_file')) return;
+
+  var filePath = params.get('_prefill_file');
+  var fileName = filePath.split(/[/\\]/).pop();
+
+  /* Find the first file upload widget and pre-fill it */
+  var fileUploads = document.querySelectorAll('.file-upload-wrap');
+  if (fileUploads.length > 0) {
+    var wrap = fileUploads[0];
+    var hidden = wrap.querySelector('input[type="hidden"]');
+    if (hidden) {
+      hidden.value = filePath;
+      hidden.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    var placeholder = wrap.querySelector('.file-placeholder');
+    if (placeholder) placeholder.style.display = 'none';
+    var nameEl = wrap.querySelector('.file-name');
+    if (nameEl) {
+      nameEl.textContent = fileName;
+      nameEl.style.display = '';
+    }
+    var dropLabel = wrap.querySelector('.file-drop');
+    if (dropLabel) dropLabel.classList.add('has-file');
+  }
+
+  /* Pre-fill other fields */
+  params.forEach(function (val, key) {
+    if (key === '_prefill_file') return;
+    var el = document.getElementById('f_' + key);
+    if (!el) return;
+    if (el.type === 'checkbox') {
+      el.checked = (val === 'on' || val === 'true' || val === '1');
+    } else {
+      el.value = val;
+    }
+  });
+
+  /* Clean up URL without reload */
+  if (window.history.replaceState) {
+    window.history.replaceState({}, '', window.location.pathname);
+  }
+}());
+
 (function () {
   var form = document.getElementById('run-form');
   var outputSection = document.getElementById('output-section');

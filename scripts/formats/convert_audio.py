@@ -18,6 +18,7 @@ from scripts.formats._utils import (
 
 TITLE = "Convert audio"
 DESCRIPTION = "Transcode audio files (or extract audio from video) to a different format."
+ACCEPTS: set[str] = {"audio"}
 
 _AUDIO_OUT_FORMATS = ["mp3", "wav", "aac", "flac", "ogg", "m4a", "opus"]
 _LOSSLESS_EXTS = frozenset({".wav", ".flac"})

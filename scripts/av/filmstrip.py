@@ -20,6 +20,7 @@ if TYPE_CHECKING:
 
 TITLE = "Video filmstrip sheet"
 DESCRIPTION = "Extract frames from a video and arrange them on a filmstrip sheet (PDF or PNG)."
+ACCEPTS: set[str] = {"video"}
 
 _PAD = 30
 _GAP = 10

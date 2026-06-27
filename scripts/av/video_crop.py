@@ -10,6 +10,7 @@ from scripts.av._utils import av_inputs_dir, probe_streams, run_ffmpeg
 
 TITLE = "Crop a video by trimming its edges"
 DESCRIPTION = "Remove pixels from the top, right, bottom, and/or left edges of a video file."
+ACCEPTS: set[str] = {"video"}
 
 
 def crop(  # noqa: PLR0913

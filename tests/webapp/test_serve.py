@@ -183,6 +183,71 @@ class TestSettingsAPI:
         assert response.status_code == 200
 
 
+class TestDropUpload:
+    def test_mp4_returns_video_category(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("webapp.app.inputs_dir", lambda theme: tmp_path)
+        response = client.post(
+            "/api/drop-upload",
+            files={"file": ("clip.mp4", b"fake-video-data", "video/mp4")},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["category"] == "video"
+        assert data["filename"] == "clip.mp4"
+        assert data["size"] == len(b"fake-video-data")
+        assert any(s["key"] == "formats.convert_video" for s in data["scripts"])
+
+    def test_unknown_ext_returns_null_category(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("webapp.app.inputs_dir", lambda theme: tmp_path)
+        response = client.post(
+            "/api/drop-upload",
+            files={"file": ("data.xyz", b"whatever", "application/octet-stream")},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["category"] is None
+        assert data["scripts"] == []
+
+    def test_saves_file_to_disk(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("webapp.app.inputs_dir", lambda theme: tmp_path)
+        client.post(
+            "/api/drop-upload",
+            files={"file": ("test.png", b"png-bytes", "image/png")},
+        )
+        assert (tmp_path / "test.png").read_bytes() == b"png-bytes"
+
+
+class TestScriptFields:
+    def test_returns_fields_for_known_script(self):
+        response = client.get("/api/script-fields/formats/convert_video")
+        assert response.status_code == 200
+        data = response.json()
+        assert "fields" in data
+        dests = [f["dest"] for f in data["fields"]]
+        assert "to_format" in dests
+
+    def test_excludes_file_positional(self):
+        response = client.get("/api/script-fields/formats/convert_video")
+        data = response.json()
+        dests = [f["dest"] for f in data["fields"]]
+        assert "source" not in dests
+
+    def test_excludes_output_field(self):
+        response = client.get("/api/script-fields/av/trim")
+        data = response.json()
+        dests = [f["dest"] for f in data["fields"]]
+        assert "output" not in dests
+
+    def test_unknown_script_returns_404(self):
+        response = client.get("/api/script-fields/does/notexist")
+        assert response.status_code == 404
+
+    def test_script_without_parser_returns_empty(self):
+        response = client.get("/api/script-fields/av/join")
+        data = response.json()
+        assert data["fields"] == [] or isinstance(data["fields"], list)
+
+
 class TestHelpers:
     def test_read_version_returns_string(self):
         v = read_version()

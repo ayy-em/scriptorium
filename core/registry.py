@@ -68,6 +68,35 @@ def theme_descriptions() -> dict[str, str]:
     return result
 
 
+def scripts_for_category(category: str) -> list[tuple[str, ModuleType]]:
+    """Return scripts whose ``ACCEPTS`` includes *category*.
+
+    Args:
+        category: A file category name (e.g. ``"video"``).
+
+    Returns:
+        Sorted list of ``(key, module)`` tuples.
+    """
+    return sorted((key, mod) for key, mod in discover().items() if category in getattr(mod, "ACCEPTS", set()))
+
+
+def scripts_for_file(filename: str) -> list[tuple[str, ModuleType]]:
+    """Return scripts applicable to *filename* based on its extension category.
+
+    Args:
+        filename: A filename whose extension is used for category lookup.
+
+    Returns:
+        Sorted list of ``(key, module)`` tuples, empty if extension is unknown.
+    """
+    from core.categories import categorize  # noqa: PLC0415
+
+    cat = categorize(filename)
+    if cat is None:
+        return []
+    return scripts_for_category(cat)
+
+
 def discover_themes() -> dict[str, dict[str, ModuleType]]:
     """Return {theme: {script_name: module}} for all discovered scripts.
 

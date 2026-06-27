@@ -14,6 +14,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
+from core.categories import categorize
 from core.config import UserConfig
 from core.config import load as load_config
 from core.config import save as save_config
@@ -27,7 +28,13 @@ from core.paths import (
     static_dir,
     templates_dir,
 )
-from core.registry import discover, discover_themes, theme_descriptions, theme_labels
+from core.registry import (
+    discover,
+    discover_themes,
+    scripts_for_file,
+    theme_descriptions,
+    theme_labels,
+)
 from webapp._form import build_argv, fields_from_parser
 
 _CREATION_FLAGS = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
@@ -279,6 +286,68 @@ async def update_check() -> JSONResponse:
     except Exception:
         logger.debug("Update check failed", exc_info=True)
         return JSONResponse({"current": current, "update_available": False})
+
+
+def _has_extra_fields(mod) -> bool:
+    """Check whether a script has form fields beyond the file input and --output."""
+    if not hasattr(mod, "get_parser"):
+        return False
+    specs = fields_from_parser(mod.get_parser())
+    return any(not (s.is_positional and s.widget in ("file", "file-multi")) and s.dest != "output" for s in specs)
+
+
+@app.post("/api/drop-upload")
+async def drop_upload(file: UploadFile) -> JSONResponse:
+    """Accept a dropped file, save to inputs/, and return matching scripts."""
+    save_dir = inputs_dir("drop")
+    save_path = save_dir / file.filename
+    content = await file.read()
+    save_path.write_bytes(content)
+
+    category = categorize(file.filename)
+    matches = scripts_for_file(file.filename)
+
+    scripts_data = [
+        {
+            "key": key,
+            "theme": key.split(".")[0],
+            "name": key.split(".")[1],
+            "title": mod.TITLE,
+            "description": mod.DESCRIPTION,
+            "has_extra_fields": _has_extra_fields(mod),
+        }
+        for key, mod in matches
+    ]
+
+    return JSONResponse(
+        {
+            "filename": file.filename,
+            "path": str(save_path),
+            "category": category,
+            "size": len(content),
+            "scripts": scripts_data,
+        }
+    )
+
+
+@app.get("/api/script-fields/{theme}/{script_name}")
+async def script_fields(theme: str, script_name: str) -> JSONResponse:
+    """Return form field specs for a script, excluding the file input and --output."""
+    key = f"{theme}.{script_name}"
+    all_scripts = discover()
+    if key not in all_scripts:
+        raise HTTPException(status_code=404, detail=f"Script {key!r} not found")
+
+    mod = all_scripts[key]
+    if not hasattr(mod, "get_parser"):
+        return JSONResponse({"fields": []})
+
+    specs = fields_from_parser(mod.get_parser())
+    filtered = [s for s in specs if not (s.is_positional and s.widget in ("file", "file-multi")) and s.dest != "output"]
+
+    import dataclasses  # noqa: PLC0415
+
+    return JSONResponse({"fields": [dataclasses.asdict(f) for f in filtered]})
 
 
 async def _stream_script(key: str, argv: list[str]):

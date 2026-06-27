@@ -17,6 +17,7 @@ from scripts.av._utils import (
 
 TITLE = "Join multiple media files"
 DESCRIPTION = "Stitch all media files in inputs/ in sorted order and save to outputs/."
+ACCEPTS: set[str] = {"video", "audio"}
 
 
 def join(inputs_dir: Path, output: Path) -> Path:

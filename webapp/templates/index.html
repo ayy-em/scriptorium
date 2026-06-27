@@ -7,7 +7,11 @@
   window.__THEMES__ = {{ themes_data_json | safe }};
 </script>
 
-<div x-data="scriptBrowser()" x-cloak>
+<div x-data="scriptBrowser()" x-cloak
+     @dragenter.prevent="dragEnter($event)"
+     @dragover.prevent
+     @dragleave="dragLeave($event)"
+     @drop.prevent="handleDrop($event)">
   <div class="page-header">
     <h1>Scripts</h1>
     <button class="sort-btn" title="Sort order">
@@ -103,13 +107,154 @@
       <p class="no-results-sub">Try a different search term or clear the category filter.</p>
     </div>
   </div>
+
+  {% include "_drop_overlay.html" %}
 </div>
 
 <script>
+  function _formatSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / 1048576).toFixed(1) + ' MB';
+  }
+
   function scriptBrowser() {
     return {
       _collapsed: {},
 
+      /* Drop-to-Discover state */
+      _dragCounter: 0,
+      dropping: false,
+      uploading: false,
+      overlayPhase: null,       /* null | 'preview' | 'fields' */
+      dropFile: null,
+      dropFilename: '',
+      dropCategory: null,
+      dropFileType: null,       /* 'image' | 'video' | 'audio' | etc. */
+      dropPreviewUrl: null,
+      dropFilesize: '',
+      dropScripts: [],
+      selectedScript: null,
+      scriptFields: [],
+      fieldValues: {},
+      uploadedPath: '',
+
+      /* Drag counter approach for robust dragover/dragleave */
+      dragEnter(e) {
+        if (!e.dataTransfer || !e.dataTransfer.types.includes('Files')) return;
+        this._dragCounter++;
+        this.dropping = true;
+      },
+
+      dragLeave(e) {
+        this._dragCounter--;
+        if (this._dragCounter <= 0) {
+          this._dragCounter = 0;
+          this.dropping = false;
+        }
+      },
+
+      async handleDrop(e) {
+        this._dragCounter = 0;
+        this.dropping = false;
+
+        var files = e.dataTransfer && e.dataTransfer.files;
+        if (!files || files.length === 0) return;
+
+        var file = files[0];
+        this.dropFile = file;
+        this.dropFilename = file.name;
+        this.uploading = true;
+
+        /* Set local preview */
+        var ext = file.name.split('.').pop().toLowerCase();
+        var imageExts = ['jpg','jpeg','png','webp','gif','bmp','tiff','tif'];
+        var videoExts = ['mp4','mkv','mov','avi','webm','m4v','flv'];
+        if (imageExts.includes(ext)) {
+          this.dropFileType = 'image';
+          this.dropPreviewUrl = URL.createObjectURL(file);
+        } else if (videoExts.includes(ext)) {
+          this.dropFileType = 'video';
+          this.dropPreviewUrl = URL.createObjectURL(file);
+        } else {
+          this.dropFileType = ext;
+          this.dropPreviewUrl = null;
+        }
+
+        /* Upload and get matching scripts */
+        var body = new FormData();
+        body.append('file', file);
+        try {
+          var res = await fetch('/api/drop-upload', { method: 'POST', body: body });
+          var data = await res.json();
+          this.uploadedPath = data.path;
+          this.dropCategory = data.category;
+          this.dropFilesize = _formatSize(data.size);
+          this.dropScripts = data.scripts;
+          this.overlayPhase = 'preview';
+        } catch (err) {
+          console.error('Drop upload failed:', err);
+          this.closeDrop();
+        } finally {
+          this.uploading = false;
+        }
+      },
+
+      async selectScript(s) {
+        this.selectedScript = s;
+        this.fieldValues = {};
+
+        if (s.has_extra_fields) {
+          try {
+            var res = await fetch('/api/script-fields/' + s.theme + '/' + s.name);
+            var data = await res.json();
+            this.scriptFields = data.fields;
+            /* Pre-fill defaults */
+            for (var f of data.fields) {
+              this.fieldValues[f.dest] = f.default || '';
+            }
+          } catch (err) {
+            this.scriptFields = [];
+          }
+        } else {
+          this.scriptFields = [];
+        }
+
+        this.overlayPhase = 'fields';
+      },
+
+      goToScript() {
+        var params = new URLSearchParams();
+        params.set('_prefill_file', this.uploadedPath);
+        for (var f of this.scriptFields) {
+          var val = this.fieldValues[f.dest];
+          if (val !== undefined && val !== '') {
+            params.set(f.dest, val);
+          }
+        }
+        window.location.href = '/scripts/' + this.selectedScript.theme + '/' + this.selectedScript.name + '?' + params.toString();
+      },
+
+      closeDrop() {
+        if (this.dropPreviewUrl) {
+          URL.revokeObjectURL(this.dropPreviewUrl);
+        }
+        this.overlayPhase = null;
+        this.dropping = false;
+        this.dropFile = null;
+        this.dropFilename = '';
+        this.dropCategory = null;
+        this.dropFileType = null;
+        this.dropPreviewUrl = null;
+        this.dropFilesize = '';
+        this.dropScripts = [];
+        this.selectedScript = null;
+        this.scriptFields = [];
+        this.fieldValues = {};
+        this.uploadedPath = '';
+      },
+
+      /* Existing script browser methods */
       isCollapsed(theme) {
         return !!this._collapsed[theme];
       },

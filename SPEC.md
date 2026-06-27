@@ -359,6 +359,19 @@ Every file the registry picks up must expose three names at module level:
 | `DESCRIPTION` | `str`      | Sentence shown in `--help` and theme listing |
 | `run()`       | `Callable` | CLI entrypoint — owns argparse + `sys.exit`  |
 
+### Optional: `ACCEPTS`
+
+Scripts that operate on dropped files declare which file categories they handle:
+
+```python
+ACCEPTS: set[str] = {"video", "audio"}
+```
+
+Valid categories are defined in `core/categories.py`: `video`, `audio`, `image`,
+`tabular`, `document`. When present, the script appears in the Drop-to-Discover
+overlay when a user drops a matching file onto the index page. Scripts without
+`ACCEPTS` are excluded from drop results.
+
 ### Optional: `get_parser()`
 
 Scripts may also expose:
@@ -515,7 +528,9 @@ from scripts.lora._dataset import find_images
 7. Use `core.outputs.resolve_output()` or `core.outputs.resolve_output_dir()` for
    output paths; use `core.paths.inputs_dir("<theme>")` for input defaults; resolve
    bare filenames inside `run()` before passing to public functions
-8. Verify it appears in `uv run main.py`
+8. If the script processes user-supplied files, add `ACCEPTS: set[str]` with the
+   applicable categories (see `core/categories.py`) so it appears in Drop-to-Discover
+9. Verify it appears in `uv run main.py`
 9. Verify `uv run main.py <theme>` lists the script with its title and description
 10. Verify `uv run main.py <theme>.<script> --help` shows the correct usage line,
     arguments, and examples
