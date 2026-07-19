@@ -92,7 +92,7 @@ def filmstrip(
     rows, cols = _parse_grid(grid)
     num_strips = rows * cols
 
-    duration, vid_w, vid_h = _probe_video(source)
+    duration = _probe_duration(source)
     effective = duration - offset
     if effective <= 0:
         raise ValueError(f"offset ({offset}s) >= video duration ({duration:.1f}s)")
@@ -101,52 +101,50 @@ def filmstrip(
 
     positions = [offset + (i + 0.5) * effective / num_strips for i in range(num_strips)]
 
-    box_w, box_h = _FRAME_BOX_LANDSCAPE if vid_w >= vid_h else _FRAME_BOX_PORTRAIT
-    scale = min(box_w / vid_w, box_h / vid_h)
-    frame_w = round(vid_w * scale)
-    frame_h = round(vid_h * scale)
-
-    cell_h = frame_h + _LABEL_H
-    canvas_w = 2 * _PAD + cols * frame_w + (cols - 1) * _GAP
-    shadow_h = len(_SHADOW_LINES)
-    grid_top = _HEADER_H + 1 + shadow_h + _PAD
-    canvas_h = grid_top + rows * cell_h + (rows - 1) * _GAP + _PAD
-
-    canvas = Image.new("RGB", (canvas_w, canvas_h), _BG)
-    draw = ImageDraw.Draw(canvas)
-    label_font = _load_font(16)
-
-    _draw_header(draw, canvas_w, source.name, duration)
-
     with tempfile.TemporaryDirectory() as tmp:
         tmp_dir = Path(tmp)
+
+        # Extract first frame to determine actual display dimensions
+        # (ffmpeg auto-applies rotation, so this reflects the real orientation)
+        _extract_frame(source, positions[0], tmp_dir / "frame_000.jpg")
+        probe_frame = Image.open(tmp_dir / "frame_000.jpg")
+        vid_w, vid_h = probe_frame.size
+        probe_frame.close()
+
+        is_portrait = vid_h > vid_w
+        box_w, box_h = _FRAME_BOX_PORTRAIT if is_portrait else _FRAME_BOX_LANDSCAPE
+        scale = min(box_w / vid_w, box_h / vid_h)
+        frame_w = round(vid_w * scale)
+        frame_h = round(vid_h * scale)
+
+        gap_x = 4 if is_portrait else _GAP
+        pad_x = 14 if is_portrait else _PAD
+        cell_h = frame_h + _LABEL_H
+        canvas_w = 2 * pad_x + cols * frame_w + (cols - 1) * gap_x
+        shadow_h = len(_SHADOW_LINES)
+        grid_top = _HEADER_H + 1 + shadow_h + _PAD
+        canvas_h = grid_top + rows * cell_h + (rows - 1) * _GAP + _PAD
+
+        canvas = Image.new("RGB", (canvas_w, canvas_h), _BG)
+        draw = ImageDraw.Draw(canvas)
+        label_font = _load_font(16)
+
+        _draw_header(draw, canvas_w, source.name, duration, pad_x=pad_x)
+
         for idx, seek in enumerate(positions):
             frame_path = tmp_dir / f"frame_{idx:03d}.jpg"
-            run_ffmpeg(
-                [
-                    "-ss",
-                    f"{seek:.3f}",
-                    "-i",
-                    str(source),
-                    "-frames:v",
-                    "1",
-                    "-update",
-                    "1",
-                    "-q:v",
-                    "2",
-                    str(frame_path),
-                ]
-            )
+            if idx > 0:
+                _extract_frame(source, seek, frame_path)
             frame = Image.open(frame_path)
             frame.thumbnail((frame_w, frame_h), Image.LANCZOS)
             col = idx % cols
             row = idx // cols
-            x = _PAD + col * (frame_w + _GAP) + (frame_w - frame.width) // 2
+            x = pad_x + col * (frame_w + gap_x) + (frame_w - frame.width) // 2
             y = grid_top + row * (cell_h + _GAP) + (frame_h - frame.height) // 2
             canvas.paste(frame, (x, y))
 
             label = _format_duration(seek)
-            label_x = _PAD + col * (frame_w + _GAP) + frame_w // 2
+            label_x = pad_x + col * (frame_w + gap_x) + frame_w // 2
             label_y = grid_top + row * (cell_h + _GAP) + frame_h + 4
             label_w = draw.textlength(label, font=label_font)
             draw.text((label_x - label_w / 2, label_y), label, fill=(130, 130, 138), font=label_font)
@@ -159,7 +157,13 @@ def filmstrip(
     return out_path
 
 
-def _draw_header(draw: _ImageDrawModule.ImageDraw, canvas_w: int, filename: str, duration: float) -> None:
+def _draw_header(
+    draw: _ImageDrawModule.ImageDraw,
+    canvas_w: int,
+    filename: str,
+    duration: float,
+    pad_x: int = _PAD,
+) -> None:
     """Render the header bar with file info, timestamp, and branding."""
     draw.rectangle([(0, 0), (canvas_w, _HEADER_H - 1)], fill=_HEADER_BG)
     draw.line([(0, _HEADER_H), (canvas_w, _HEADER_H)], fill=_HEADER_BORDER, width=1)
@@ -177,22 +181,38 @@ def _draw_header(draw: _ImageDrawModule.ImageDraw, canvas_w: int, filename: str,
     right = f"Created on {now_str} using Scriptorium"
 
     text_y = (_HEADER_H - 22) // 2
-    draw.text((_PAD, text_y), left, fill=(40, 40, 44), font=font)
+    draw.text((pad_x, text_y), left, fill=(40, 40, 44), font=font)
 
     right_w = draw.textlength(right, font=font_sm)
-    draw.text((canvas_w - _PAD - right_w, (_HEADER_H - 13) // 2), right, fill=(110, 110, 118), font=font_sm)
+    draw.text((canvas_w - pad_x - right_w, (_HEADER_H - 13) // 2), right, fill=(110, 110, 118), font=font_sm)
 
 
-def _probe_video(file: Path) -> tuple[float, int, int]:
-    """Return (duration_secs, width, height) for a video file."""
-    data = run_ffprobe(["-show_format", "-show_streams", str(file)])
+def _probe_duration(file: Path) -> float:
+    """Return the duration in seconds for a video file."""
+    data = run_ffprobe(["-show_format", str(file)])
     duration = data.get("format", {}).get("duration")
     if duration is None:
         raise ValueError(f"Cannot determine duration of {file}")
-    for stream in data.get("streams", []):
-        if stream.get("codec_type") == "video":
-            return float(duration), int(stream["width"]), int(stream["height"])
-    raise ValueError(f"No video stream found in {file}")
+    return float(duration)
+
+
+def _extract_frame(source: Path, seek: float, dest: Path) -> None:
+    """Extract a single frame from *source* at *seek* seconds."""
+    run_ffmpeg(
+        [
+            "-ss",
+            f"{seek:.3f}",
+            "-i",
+            str(source),
+            "-frames:v",
+            "1",
+            "-update",
+            "1",
+            "-q:v",
+            "2",
+            str(dest),
+        ]
+    )
 
 
 def _format_duration(seconds: float) -> str:

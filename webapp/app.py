@@ -289,11 +289,11 @@ async def update_check() -> JSONResponse:
 
 
 def _has_extra_fields(mod) -> bool:
-    """Check whether a script has form fields beyond the file input and --output."""
+    """Check whether a script has form fields beyond the file input."""
     if not hasattr(mod, "get_parser"):
         return False
     specs = fields_from_parser(mod.get_parser())
-    return any(not (s.is_positional and s.widget in ("file", "file-multi")) and s.dest != "output" for s in specs)
+    return any(not (s.is_positional and s.widget in ("file", "file-multi")) for s in specs)
 
 
 @app.post("/api/drop-upload")
@@ -332,7 +332,7 @@ async def drop_upload(file: UploadFile) -> JSONResponse:
 
 @app.get("/api/script-fields/{theme}/{script_name}")
 async def script_fields(theme: str, script_name: str) -> JSONResponse:
-    """Return form field specs for a script, excluding the file input and --output."""
+    """Return form field specs for a script, excluding file inputs."""
     key = f"{theme}.{script_name}"
     all_scripts = discover()
     if key not in all_scripts:
@@ -343,7 +343,7 @@ async def script_fields(theme: str, script_name: str) -> JSONResponse:
         return JSONResponse({"fields": []})
 
     specs = fields_from_parser(mod.get_parser())
-    filtered = [s for s in specs if not (s.is_positional and s.widget in ("file", "file-multi")) and s.dest != "output"]
+    filtered = [s for s in specs if not (s.is_positional and s.widget in ("file", "file-multi"))]
 
     import dataclasses  # noqa: PLC0415
 
