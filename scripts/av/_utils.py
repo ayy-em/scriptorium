@@ -46,6 +46,44 @@ AUDIO_ONLY_EXTS = frozenset(
 COVER_SUPPORTED_EXTS = frozenset({".mp4", ".m4v", ".m4a", ".mp3", ".mkv", ".flac"})
 
 
+def parse_time(value: str) -> float:
+    """Parse a timestamp string into seconds.
+
+    Args:
+        value: Time as HH:MM:SS, MM:SS, or bare seconds (int/float).
+
+    Returns:
+        Total seconds as a float.
+
+    Raises:
+        ValueError: If the format is unrecognised.
+    """
+    parts = value.split(":")
+    try:
+        if len(parts) == 3:
+            return int(parts[0]) * 3600 + int(parts[1]) * 60 + float(parts[2])
+        if len(parts) == 2:
+            return int(parts[0]) * 60 + float(parts[1])
+        return float(parts[0])
+    except (ValueError, IndexError):
+        raise ValueError(f"Cannot parse timestamp: {value!r}")
+
+
+def format_time(seconds: float) -> str:
+    """Format seconds into HH:MM:SS.mmm for ffmpeg.
+
+    Args:
+        seconds: Time in seconds.
+
+    Returns:
+        Formatted string like '01:23:04.500'.
+    """
+    h = int(seconds // 3600)
+    m = int((seconds % 3600) // 60)
+    s = seconds % 60
+    return f"{h:02d}:{m:02d}:{s:06.3f}"
+
+
 def av_inputs_dir() -> Path:
     """Return the default av inputs directory, creating it if needed."""
     return inputs_dir("av")

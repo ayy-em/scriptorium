@@ -6,7 +6,7 @@ import sys
 
 from core.argparse import ScriptoriumParser
 from core.outputs import default_stem, resolve_output_dir
-from scripts.av._utils import av_inputs_dir, run_ffmpeg
+from scripts.av._utils import av_inputs_dir, format_time, parse_time, run_ffmpeg
 
 TITLE = "Split media file in multiple segments"
 DESCRIPTION = "Split a media file at one or more timestamp breakpoints into numbered segments."
@@ -42,12 +42,15 @@ def split(input: Path, timestamps: list[str], outputs_dir: Path, stem: str | Non
         output = outputs_dir / f"{stem}_{i + 1:03d}{input.suffix}"
         segments.append(output)
 
-        args = ["-i", str(input)]
+        args = []
         if start is not None:
             args += ["-ss", start]
+        args += ["-i", str(input)]
         if end is not None:
-            args += ["-to", end]
-        args += ["-c", "copy", str(output)]
+            end_secs = parse_time(end)
+            start_secs = parse_time(start) if start is not None else 0.0
+            args += ["-t", format_time(end_secs - start_secs)]
+        args += ["-c", "copy", "-avoid_negative_ts", "make_zero", str(output)]
 
         run_ffmpeg(args)
 
