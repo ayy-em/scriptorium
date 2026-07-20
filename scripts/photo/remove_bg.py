@@ -195,7 +195,7 @@ def remove_bg_batch(  # noqa: PLR0913
     failures: list[str] = []
 
     for i, f in enumerate(files, 1):
-        output = outputs_dir / f"{stamp}_{i:03d}.png"
+        output = deduplicate(outputs_dir / f"{stamp}_{i:03d}.png")
         try:
             remove_bg(f, output, session=session, **removal_options)
             successes.append(output)

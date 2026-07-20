@@ -26,6 +26,7 @@
         <span x-show="uploading" class="file-uploading">Uploading&hellip;</span>
         <span x-show="filenames.length && !uploading" x-text="filenames.length === 1 ? filenames[0] : filenames.length + ' files queued'" class="file-name"></span>
       </label>
+      <input type="hidden" id="f_{{ spec.dest }}" name="{{ spec.dest }}" x-model="batchDir">
     </div>
     {% elif spec.widget == "file" %}
     <label for="f_{{ spec.dest }}">{{ spec.label }}{% if spec.required %}<span class="req">*</span>{% else %}<span class="optional-tag">optional</span>{% endif %}</label>
@@ -146,7 +147,15 @@ function fileUpload(theme) {
 function fileUploadMulti(theme) {
   return {
     filenames: [],
+    batchDir: '',
     uploading: false,
+    init() {
+      if (__prefill && !__prefill._consumed) {
+        this.batchDir = __prefill.path;
+        this.filenames = [__prefill.filename];
+        __prefill._consumed = true;
+      }
+    },
     async upload(event) {
       var files = Array.from(event.target.files);
       if (files.length) await this._sendAll(files);
@@ -158,14 +167,21 @@ function fileUploadMulti(theme) {
     async _sendAll(files) {
       this.uploading = true;
       this.filenames = files.map(function(f) { return f.name; });
+      var batchId = Date.now().toString(36);
+      var self = this;
       try {
-        await Promise.all(files.map(function(file) {
+        var results = await Promise.all(files.map(function(file) {
           var body = new FormData();
           body.append('file', file);
-          return fetch('/upload/' + theme, { method: 'POST', body: body });
+          return fetch('/upload/' + theme + '?subdir=' + batchId, { method: 'POST', body: body })
+            .then(function(r) { return r.json(); });
         }));
+        if (results.length > 0) {
+          self.batchDir = results[0].dir;
+        }
       } catch (e) {
         this.filenames = [];
+        this.batchDir = '';
       } finally {
         this.uploading = false;
       }

@@ -173,13 +173,26 @@ async def run_script(theme: str, script_name: str, request: Request) -> Streamin
 
 
 @app.post("/upload/{theme}")
-async def upload_file(theme: str, file: UploadFile) -> JSONResponse:
-    """Accept a file upload and save it to the theme's inputs directory."""
+async def upload_file(theme: str, file: UploadFile, subdir: str = "") -> JSONResponse:
+    """Accept a file upload and save it to the theme's inputs directory.
+
+    Args:
+        theme: Script theme slug (e.g. "photo").
+        file: Uploaded file.
+        subdir: Optional batch subdirectory inside inputs/ to isolate
+            uploads from different runs.
+    """
     save_dir = inputs_dir(theme)
+    if subdir:
+        safe_name = Path(subdir).name
+        if not safe_name or safe_name in (".", ".."):
+            raise HTTPException(status_code=400, detail="Invalid subdir")
+        save_dir = save_dir / safe_name
+        save_dir.mkdir(parents=True, exist_ok=True)
     save_path = save_dir / file.filename
     content = await file.read()
     save_path.write_bytes(content)
-    return JSONResponse({"path": str(save_path), "filename": file.filename})
+    return JSONResponse({"path": str(save_path), "filename": file.filename, "dir": str(save_dir)})
 
 
 @app.get("/api/settings")

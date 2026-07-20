@@ -1,6 +1,7 @@
 """Tests for scripts.photo.remove_bg."""
 
 import sys
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -288,6 +289,35 @@ def test_remove_bg_batch_reuses_session(mock_pil, tmp_path):
 
     assert len(result) == 3
     mock_rembg.new_session.assert_called_once_with("birefnet-general")
+
+
+@patch("scripts.photo.remove_bg.move_to_past_inputs")
+@patch("scripts.photo.remove_bg.default_stem", return_value="20260720_1505")
+@patch("scripts.photo.remove_bg.Image")
+def test_remove_bg_batch_deduplicates_output_names(mock_pil, _mock_stem, _mock_archive, tmp_path):
+    """Batch outputs get unique names when prior outputs with the same stamp exist."""
+    src_dir = tmp_path / "src"
+    src_dir.mkdir()
+    (src_dir / "a.jpg").touch()
+    (src_dir / "b.png").touch()
+
+    out_dir = tmp_path / "out"
+    out_dir.mkdir()
+    (out_dir / "20260720_1505_001.png").write_bytes(b"old")
+    (out_dir / "20260720_1505_002.png").write_bytes(b"old")
+
+    result_img = _mock_image()
+    result_img.save.side_effect = lambda path, **kw: Path(path).touch()
+    mock_pil.open.return_value = _mock_image()
+    mock_rembg.remove.return_value = result_img
+
+    result = remove_bg_batch(src_dir, out_dir)
+
+    assert len(result) == 2
+    all_outputs = sorted(out_dir.iterdir())
+    assert len(all_outputs) == 4
+    old_files = [p for p in all_outputs if p.read_bytes() == b"old"]
+    assert len(old_files) == 2
 
 
 def test_module_constants():

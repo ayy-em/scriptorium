@@ -94,5 +94,29 @@ class TestRunConvertArchiving:
         assert not (past / "x.flac").exists()
 
 
+class TestRunConvertDeduplication:
+    @pytest.fixture(autouse=True)
+    def _freeze_stem(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(_utils, "default_stem", lambda: "20260720_1505")
+
+    def test_batch_deduplicates_output_names(self, archive_setup: tuple[Path, Path], tmp_path: Path):
+        inputs, _ = archive_setup
+        _make(inputs, "a.flac", "alpha")
+        _make(inputs, "b.flac", "beta")
+        out_dir = tmp_path / "out"
+        out_dir.mkdir()
+        (out_dir / "20260720_1505_001.mp3").write_text("old")
+        (out_dir / "20260720_1505_002.mp3").write_text("old")
+
+        def fn(inp: Path, out: Path) -> None:
+            out.write_text("new")
+
+        outputs = run_convert(inputs, frozenset({".flac"}), out_dir, "mp3", fn)
+
+        assert len(outputs) == 2
+        all_outputs = sorted(out_dir.iterdir())
+        assert len(all_outputs) == 4
+
+
 def test_module_exposes_run_convert() -> None:
     assert _utils.run_convert is run_convert

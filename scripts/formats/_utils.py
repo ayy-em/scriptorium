@@ -92,7 +92,7 @@ def run_convert(
     failures: list[str] = []
 
     for i, f in enumerate(files, 1):
-        output = outputs_dir_path / f"{stem}_{i:03d}{out_suffix}"
+        output = deduplicate(outputs_dir_path / f"{stem}_{i:03d}{out_suffix}")
         try:
             fn(f, output)
             successes.append(output)
