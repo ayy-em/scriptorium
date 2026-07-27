@@ -135,9 +135,10 @@ async def script_detail(theme: str, script_name: str, request: Request):
     mod = scripts[key]
     parser = mod.get_parser() if hasattr(mod, "get_parser") else None
     field_specs = fields_from_parser(parser) if parser else []
+    template_name = getattr(mod, "TEMPLATE", None) or "script.html"
     return templates.TemplateResponse(
         request,
-        "script.html",
+        template_name,
         {
             "key": key,
             "key_path": key.replace(".", "/"),

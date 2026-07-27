@@ -1,0 +1,713 @@
+{% extends "base.html" %}
+{% block title %}{{ key }} — Scriptorium{% endblock %}
+{% block content %}
+
+<style>
+[x-cloak] { display: none !important; }
+
+.waveform-section {
+  margin-top: 1.25rem;
+}
+
+.waveform-wrap {
+  position: relative;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--bg-input);
+  cursor: default;
+  user-select: none;
+}
+
+.waveform-canvas {
+  display: block;
+  width: 100%;
+  height: 128px;
+}
+
+.trim-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.play-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  flex-shrink: 0;
+  transition: background 150ms ease, transform 80ms ease;
+}
+
+.play-btn:hover { background: var(--accent-hover); }
+.play-btn:active { transform: scale(0.93); }
+
+.play-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.trim-time-fields {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.trim-time-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.trim-time-field label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+.trim-time-input {
+  width: 8rem;
+  padding: 0.3rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) - 2px);
+  background: var(--bg-input);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  transition: border-color 150ms ease;
+}
+
+.trim-time-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.trim-time-sep {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  margin-top: 1.1rem;
+}
+
+.trim-duration {
+  color: var(--text-faint);
+  font-size: 0.8rem;
+  font-family: var(--font-mono);
+  margin-top: 1.1rem;
+}
+</style>
+
+<nav class="detail-breadcrumb" aria-label="Breadcrumb">
+  <a href="/">Scriptorium</a>
+  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+    <path d="M4.5 2.5 7.5 6l-3 3.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>
+  <span>{{ key }}</span>
+</nav>
+
+<h1 class="detail-title">{{ mod.TITLE }}</h1>
+<p class="detail-desc">{{ mod.DESCRIPTION }}</p>
+
+<form id="run-form" data-run-url="/scripts/{{ key_path }}/run" x-data="trimApp('{{ key.split('.')[0] }}')">
+
+  <!-- File upload -->
+  <div class="field field--required">
+    <label>Source file<span class="req">*</span></label>
+    <div class="file-upload-wrap">
+      <label class="file-drop" :class="{ 'has-file': filename }" @dragover.prevent @drop.prevent="dropFile($event)">
+        <input type="file" class="file-hidden" @change="upload($event)">
+        <span x-show="!filename && !uploading" class="file-placeholder">Drop an audio or video file here, or click to browse</span>
+        <span x-show="uploading" class="file-uploading">Uploading&hellip;</span>
+        <span x-show="filename && !uploading" x-text="filename" class="file-name"></span>
+      </label>
+      <input type="hidden" id="f_input" name="input" x-model="serverPath">
+    </div>
+  </div>
+
+  <!-- Waveform + playback controls (visible after file is decoded) -->
+  <div class="waveform-section" x-show="audioBuffer !== null" x-cloak>
+
+    <div class="waveform-wrap">
+      <canvas x-ref="canvas" class="waveform-canvas" height="128"
+        @mousedown="onCanvasMouseDown($event)"
+        @mousemove="onCanvasMouseMove($event)"
+        @mouseup="onCanvasMouseUp()"
+        @mouseleave="onCanvasMouseUp()">
+      </canvas>
+    </div>
+
+    <div class="trim-controls">
+      <!-- Play/stop button -->
+      <button type="button" class="play-btn" @click="play()" :title="isPlaying ? 'Stop' : 'Play selection'">
+        <svg x-show="!isPlaying" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <path d="M4 2.5v11l9-5.5z" fill="currentColor"/>
+        </svg>
+        <svg x-show="isPlaying" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <rect x="4" y="3" width="3" height="10" rx="0.5" fill="currentColor"/>
+          <rect x="9" y="3" width="3" height="10" rx="0.5" fill="currentColor"/>
+        </svg>
+      </button>
+
+      <!-- Start / End time fields -->
+      <div class="trim-time-fields">
+        <div class="trim-time-field">
+          <label for="f_start">Start<span class="req">*</span></label>
+          <input type="text" id="f_start" name="start" class="trim-time-input"
+            x-model="startInput"
+            @change="onStartInputChange()"
+            @keydown.enter.prevent="onStartInputChange()">
+        </div>
+        <span class="trim-time-sep">&#8594;</span>
+        <div class="trim-time-field">
+          <label for="f_end">End<span class="optional-tag">optional</span></label>
+          <input type="text" id="f_end" name="end" class="trim-time-input"
+            x-model="endInput"
+            @change="onEndInputChange()"
+            @keydown.enter.prevent="onEndInputChange()">
+        </div>
+        <span class="trim-duration" x-text="duration > 0 ? 'of ' + _formatTime(duration) : ''"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Remaining fields from argparse (output path, etc.) -->
+  {% for spec in field_specs %}
+  {% if spec.dest not in ('input', 'start', 'end') %}
+  <div class="field {{ 'field--required' if spec.required else 'field--optional' }}">
+    <label for="f_{{ spec.dest }}">{{ spec.label }}{% if spec.required %}<span class="req">*</span>{% else %}<span class="optional-tag">optional</span>{% endif %}</label>
+    <input type="text" id="f_{{ spec.dest }}" name="{{ spec.dest }}"
+      {% if spec.default %}value="{{ spec.default }}" placeholder="{{ spec.default }}"{% endif %}
+      {% if spec.required %}required{% endif %}>
+    {% if spec.help %}
+    <div class="hint">{{ spec.help }}</div>
+    {% endif %}
+  </div>
+  {% endif %}
+  {% endfor %}
+
+  <button type="submit" class="run-btn" id="run-btn" :disabled="!serverPath">
+    <svg class="run-btn-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path d="M4 2.5v11l9-5.5z" fill="currentColor"/>
+    </svg>
+    Trim
+  </button>
+</form>
+
+<div id="output-section">
+  <h2>Output</h2>
+  <div id="output"></div>
+  <div id="run-result"></div>
+</div>
+
+<script>
+function trimApp(theme) {
+  return {
+    /* ── File upload state ── */
+    filename: '',
+    serverPath: '',
+    uploading: false,
+
+    /* ── Audio / waveform state ── */
+    audioCtx: null,
+    audioBuffer: null,
+    peaks: null,
+    duration: 0,
+
+    /* ── Selection state ── */
+    selStart: 0,
+    selEnd: 1,
+    startInput: '',
+    endInput: '',
+
+    /* ── Playback state ── */
+    isPlaying: false,
+    playheadPos: 0,
+    _source: null,
+    _rafId: null,
+    _playStartTime: 0,
+    _playStartSecs: 0,
+
+    /* ── Drag state ── */
+    _dragging: null,
+    _dragOffset: 0,
+
+    /* ──────────────── Lifecycle ──────────────── */
+
+    init() {
+      var self = this;
+
+      /* Sync selection bounds → text inputs whenever they change */
+      this.$watch('selStart', function() { self._syncInputs(); });
+      this.$watch('selEnd',   function() { self._syncInputs(); });
+
+      /* Resize canvas to match CSS width when container size changes */
+      this.$nextTick(function() {
+        var canvas = self.$refs.canvas;
+        if (!canvas || typeof ResizeObserver === 'undefined') return;
+        new ResizeObserver(function() {
+          var w = canvas.offsetWidth;
+          if (w > 0 && canvas.width !== w) {
+            canvas.width = w;
+            if (self.peaks) self.drawWaveform();
+          }
+        }).observe(canvas);
+      });
+
+      /* Prefill path from drop-to-discover (no waveform without File object) */
+      var params = new URLSearchParams(window.location.search);
+      if (params.has('_prefill_file')) {
+        var filePath = params.get('_prefill_file');
+        this.serverPath = filePath;
+        this.filename = filePath.split(/[/\\]/).pop();
+        if (window.history.replaceState) {
+          window.history.replaceState({}, '', window.location.pathname);
+        }
+      }
+    },
+
+    /* ──────────────── File upload ──────────────── */
+
+    async upload(event) {
+      var file = event.target.files[0];
+      if (file) await this._send(file);
+    },
+
+    async dropFile(event) {
+      var file = (event.dataTransfer.files || [])[0];
+      if (file) await this._send(file);
+    },
+
+    async _send(file) {
+      this.uploading = true;
+      this.filename = file.name;
+      var body = new FormData();
+      body.append('file', file);
+      try {
+        var res = await fetch('/upload/' + theme, { method: 'POST', body: body });
+        var data = await res.json();
+        this.serverPath = data.path;
+        await this._loadAudio(file);
+      } catch (e) {
+        this.filename = '';
+        this.serverPath = '';
+      } finally {
+        this.uploading = false;
+      }
+    },
+
+    /* ──────────────── Waveform loading ──────────────── */
+
+    async _loadAudio(file) {
+      if (!this.audioCtx) {
+        this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      try {
+        var url = URL.createObjectURL(file);
+        var arrayBuffer = await fetch(url).then(function(r) { return r.arrayBuffer(); });
+        URL.revokeObjectURL(url);
+        var self = this;
+        this.audioBuffer = await new Promise(function(resolve, reject) {
+          self.audioCtx.decodeAudioData(arrayBuffer, resolve, reject);
+        });
+        this.duration = this.audioBuffer.duration;
+        this.peaks = this._computePeaks(this.audioBuffer, 900);
+        this.selStart = 0;
+        this.selEnd = 1;
+        var self = this;
+        this.$nextTick(function() {
+          var canvas = self.$refs.canvas;
+          if (canvas) canvas.width = canvas.offsetWidth;
+          self.drawWaveform();
+        });
+      } catch (e) {
+        console.error('Audio decode failed:', e);
+      }
+    },
+
+    _computePeaks(audioBuffer, n) {
+      var length = audioBuffer.length;
+      var nChannels = audioBuffer.numberOfChannels;
+      var mixed = new Float32Array(length);
+      for (var ch = 0; ch < nChannels; ch++) {
+        var data = audioBuffer.getChannelData(ch);
+        for (var i = 0; i < length; i++) mixed[i] += data[i];
+      }
+      if (nChannels > 1) {
+        for (var i = 0; i < length; i++) mixed[i] /= nChannels;
+      }
+      var blockSize = Math.max(1, Math.floor(length / n));
+      var peaks = new Float32Array(n);
+      for (var i = 0; i < n; i++) {
+        var peak = 0;
+        var end = Math.min(length, (i + 1) * blockSize);
+        for (var j = i * blockSize; j < end; j++) {
+          var abs = mixed[j] < 0 ? -mixed[j] : mixed[j];
+          if (abs > peak) peak = abs;
+        }
+        peaks[i] = peak;
+      }
+      /* Normalise to [0, 1] */
+      var maxPeak = 0;
+      for (var i = 0; i < n; i++) if (peaks[i] > maxPeak) maxPeak = peaks[i];
+      if (maxPeak > 0) for (var i = 0; i < n; i++) peaks[i] /= maxPeak;
+      return peaks;
+    },
+
+    /* ──────────────── Canvas drawing ──────────────── */
+
+    drawWaveform() {
+      var canvas = this.$refs.canvas;
+      if (!canvas || !this.peaks) return;
+      var ctx = canvas.getContext('2d');
+      var W = canvas.width;
+      var H = canvas.height;
+      var cy = H / 2;
+
+      /* Resolve CSS custom properties for current theme */
+      var styles = getComputedStyle(document.documentElement);
+      var accent = styles.getPropertyValue('--accent').trim();
+      var bgColor = styles.getPropertyValue('--bg-input').trim();
+
+      /* Background */
+      ctx.clearRect(0, 0, W, H);
+      ctx.fillStyle = bgColor;
+      ctx.fillRect(0, 0, W, H);
+
+      var n = this.peaks.length;
+      var barW = Math.max(1, W / n);
+      var maxH = cy * 0.88;
+
+      /* Dimmed waveform — full range */
+      ctx.globalAlpha = 0.22;
+      ctx.fillStyle = accent;
+      for (var i = 0; i < n; i++) {
+        var x = (i / n) * W;
+        var h = this.peaks[i] * maxH;
+        ctx.fillRect(x, cy - h, barW - 0.5, h * 2);
+      }
+
+      /* Bright waveform — selection region only, via clipping */
+      var x0 = this.selStart * W;
+      var x1 = this.selEnd * W;
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(x0, 0, x1 - x0, H);
+      ctx.clip();
+      ctx.globalAlpha = 1.0;
+      ctx.fillStyle = accent;
+      for (var i = 0; i < n; i++) {
+        var x = (i / n) * W;
+        var h = this.peaks[i] * maxH;
+        ctx.fillRect(x, cy - h, barW - 0.5, h * 2);
+      }
+      ctx.restore();
+      ctx.globalAlpha = 1.0;
+
+      /* Selection border */
+      ctx.strokeStyle = accent;
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(x0 + 0.75, 0.75, x1 - x0 - 1.5, H - 1.5);
+
+      /* Handles — left and right edges of selection */
+      ctx.fillStyle = accent;
+      ctx.fillRect(x0, 0, 3, H);
+      ctx.fillRect(x1 - 3, 0, 3, H);
+
+      /* Playhead */
+      if (this.isPlaying && this.playheadPos > 0) {
+        var px = this.playheadPos * W;
+        ctx.fillStyle = 'rgba(255,255,255,0.9)';
+        ctx.fillRect(px - 0.75, 0, 1.5, H);
+      }
+    },
+
+    /* ──────────────── Mouse / drag interaction ──────────────── */
+
+    _normX(canvas, clientX) {
+      var rect = canvas.getBoundingClientRect();
+      return Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    },
+
+    onCanvasMouseDown(e) {
+      if (!this.peaks) return;
+      var canvas = this.$refs.canvas;
+      var norm = this._normX(canvas, e.clientX);
+      var tol = 10 / canvas.width;
+      if (Math.abs(norm - this.selStart) <= tol) {
+        this._dragging = 'left';
+      } else if (Math.abs(norm - this.selEnd) <= tol) {
+        this._dragging = 'right';
+      } else if (norm > this.selStart && norm < this.selEnd) {
+        this._dragging = 'body';
+        this._dragOffset = norm - this.selStart;
+      }
+    },
+
+    onCanvasMouseMove(e) {
+      if (!this.peaks) return;
+      var canvas = this.$refs.canvas;
+      var norm = this._normX(canvas, e.clientX);
+      var MIN = 8 / canvas.width;
+
+      if (this._dragging === 'left') {
+        this.selStart = Math.max(0, Math.min(norm, this.selEnd - MIN));
+        this.drawWaveform();
+      } else if (this._dragging === 'right') {
+        this.selEnd = Math.max(this.selStart + MIN, Math.min(1, norm));
+        this.drawWaveform();
+      } else if (this._dragging === 'body') {
+        var w = this.selEnd - this.selStart;
+        var newStart = Math.max(0, Math.min(1 - w, norm - this._dragOffset));
+        this.selStart = newStart;
+        this.selEnd = newStart + w;
+        this.drawWaveform();
+      }
+
+      /* Update cursor */
+      var tol = 10 / canvas.width;
+      if (Math.abs(norm - this.selStart) <= tol || Math.abs(norm - this.selEnd) <= tol) {
+        canvas.style.cursor = 'ew-resize';
+      } else if (norm > this.selStart && norm < this.selEnd) {
+        canvas.style.cursor = this._dragging ? 'grabbing' : 'grab';
+      } else {
+        canvas.style.cursor = 'default';
+      }
+    },
+
+    onCanvasMouseUp() {
+      this._dragging = null;
+    },
+
+    /* ──────────────── Playback ──────────────── */
+
+    async play() {
+      if (!this.audioBuffer) return;
+      if (this.isPlaying) { this._stop(); return; }
+
+      await this.audioCtx.resume();
+
+      var startSecs = this.selStart * this.duration;
+      var endSecs   = this.selEnd   * this.duration;
+      var clipLen   = endSecs - startSecs;
+      if (clipLen <= 0) return;
+
+      this._source = this.audioCtx.createBufferSource();
+      this._source.buffer = this.audioBuffer;
+      this._source.connect(this.audioCtx.destination);
+      var self = this;
+      this._source.onended = function() { if (self.isPlaying) self._stop(); };
+      this._source.start(0, startSecs, clipLen);
+
+      this._playStartTime = this.audioCtx.currentTime;
+      this._playStartSecs = startSecs;
+      this.isPlaying = true;
+
+      var self = this;
+      var tick = function() {
+        if (!self.isPlaying) return;
+        var elapsed = self.audioCtx.currentTime - self._playStartTime;
+        var currentSecs = self._playStartSecs + elapsed;
+        self.playheadPos = currentSecs / self.duration;
+        if (currentSecs >= self.selEnd * self.duration) {
+          self._stop();
+          return;
+        }
+        self.drawWaveform();
+        self._rafId = requestAnimationFrame(tick);
+      };
+      this._rafId = requestAnimationFrame(tick);
+    },
+
+    _stop() {
+      if (this._source) {
+        try { this._source.stop(); } catch (ignore) {}
+        try { this._source.disconnect(); } catch (ignore) {}
+        this._source = null;
+      }
+      if (this._rafId) {
+        cancelAnimationFrame(this._rafId);
+        this._rafId = null;
+      }
+      this.isPlaying = false;
+      this.playheadPos = 0;
+      this.drawWaveform();
+    },
+
+    /* ──────────────── Input ↔ selection sync ──────────────── */
+
+    _syncInputs() {
+      if (!this.audioBuffer) return;
+      this.startInput = this._formatTime(this.selStart * this.duration);
+      /* Leave end empty when selection reaches the very end of the file */
+      this.endInput = this.selEnd >= 0.9999
+        ? ''
+        : this._formatTime(this.selEnd * this.duration);
+    },
+
+    onStartInputChange() {
+      if (!this.audioBuffer) return;
+      var secs = this._parseTime(this.startInput);
+      secs = Math.max(0, Math.min(secs, this.selEnd * this.duration - 0.05));
+      this.selStart = secs / this.duration;
+      this.startInput = this._formatTime(secs);
+      this.drawWaveform();
+    },
+
+    onEndInputChange() {
+      if (!this.audioBuffer) return;
+      var raw = this.endInput.trim();
+      if (!raw) {
+        this.selEnd = 1;
+        this.drawWaveform();
+        return;
+      }
+      var secs = this._parseTime(raw);
+      secs = Math.max(this.selStart * this.duration + 0.05, Math.min(secs, this.duration));
+      this.selEnd = secs / this.duration;
+      this.endInput = secs >= this.duration * 0.9999 ? '' : this._formatTime(secs);
+      this.drawWaveform();
+    },
+
+    /* ──────────────── Time helpers ──────────────── */
+
+    _formatTime(secs) {
+      if (!secs || secs < 0) secs = 0;
+      var h = Math.floor(secs / 3600);
+      var m = Math.floor((secs % 3600) / 60);
+      var s = secs % 60;
+      return h + ':' + String(m).padStart(2, '0') + ':' + s.toFixed(2).padStart(5, '0');
+    },
+
+    _parseTime(str) {
+      str = (str || '').trim();
+      if (!str) return 0;
+      var parts = str.split(':');
+      if (parts.length === 1) return parseFloat(parts[0]) || 0;
+      if (parts.length === 2) return parseInt(parts[0], 10) * 60 + parseFloat(parts[1]);
+      return parseInt(parts[0], 10) * 3600 + parseInt(parts[1], 10) * 60 + parseFloat(parts[2]);
+    }
+  };
+}
+
+/* ── Prefill non-waveform query params (mirrors script.html behaviour) ── */
+(function () {
+  var params = new URLSearchParams(window.location.search);
+  if (!params.has('_prefill_file')) return;
+  params.forEach(function (val, key) {
+    if (key === '_prefill_file') return;
+    var el = document.getElementById('f_' + key);
+    if (!el) return;
+    el.value = val;
+  });
+}());
+
+/* ── SSE run logic (identical to script.html) ── */
+(function () {
+  var form = document.getElementById('run-form');
+  var outputSection = document.getElementById('output-section');
+  var output = document.getElementById('output');
+  var runBtn = document.getElementById('run-btn');
+  var runUrl = form ? form.dataset.runUrl : '/scripts/{{ key_path }}/run';
+  var es;
+  var SAFE_CLASSES = ['stderr', 'exit-ok', 'exit-err'];
+
+  function safeParse(html) {
+    var frag = document.createDocumentFragment();
+    var doc = new DOMParser().parseFromString(html, 'text/html');
+    doc.body.childNodes.forEach(function (node) {
+      if (node.nodeType === 3) {
+        frag.appendChild(document.createTextNode(node.textContent));
+      } else if (node.nodeType === 1 && node.tagName === 'SPAN' &&
+                 SAFE_CLASSES.indexOf(node.className) !== -1) {
+        var span = document.createElement('span');
+        span.className = node.className;
+        span.textContent = node.textContent;
+        frag.appendChild(span);
+      } else {
+        frag.appendChild(document.createTextNode(node.textContent || ''));
+      }
+    });
+    return frag;
+  }
+
+  var resultDiv = document.getElementById('run-result');
+  var RUN_ICON = '<svg class="run-btn-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M4 2.5v11l9-5.5z" fill="currentColor"/></svg>';
+
+  function formatElapsed(s) {
+    if (s < 60) return s.toFixed(1) + 's';
+    var m = Math.floor(s / 60);
+    var sec = Math.round(s % 60);
+    return m + 'm ' + (sec < 10 ? '0' : '') + sec + 's';
+  }
+
+  function showResult(data) {
+    resultDiv.innerHTML = '';
+    var info;
+    try { info = JSON.parse(data); } catch (e) { return; }
+    var ok = info.exit_code === 0;
+    var el = document.createElement('div');
+    el.className = 'run-result ' + (ok ? 'run-result--ok' : 'run-result--err');
+    if (ok) {
+      el.innerHTML = '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8.5l3.5 3.5 6.5-7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+        + 'Completed successfully in ' + formatElapsed(info.elapsed);
+    } else {
+      el.innerHTML = '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.5"/><path d="M5.5 5.5l5 5M10.5 5.5l-5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>'
+        + 'Run failed (exit code ' + info.exit_code + ')';
+    }
+    resultDiv.appendChild(el);
+  }
+
+  function resetBtn() {
+    runBtn.disabled = false;
+    runBtn.classList.remove('is-running');
+    runBtn.innerHTML = RUN_ICON + ' Trim';
+  }
+
+  function startRun(queryString) {
+    if (es) { es.close(); }
+    output.textContent = '';
+    resultDiv.innerHTML = '';
+    outputSection.classList.add('is-visible');
+    runBtn.disabled = true;
+    runBtn.classList.add('is-running');
+    runBtn.innerHTML = RUN_ICON + ' Running&hellip;';
+
+    es = new EventSource(runUrl + (queryString ? '?' + queryString : ''));
+
+    es.onmessage = function (e) {
+      var div = document.createElement('div');
+      div.appendChild(safeParse(e.data));
+      output.appendChild(div);
+      output.scrollTop = output.scrollHeight;
+    };
+
+    es.addEventListener('done', function (e) {
+      es.close();
+      resetBtn();
+      showResult(e.data);
+    });
+
+    es.onerror = function () {
+      es.close();
+      resetBtn();
+    };
+  }
+
+  if (form) {
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      startRun(new URLSearchParams(new FormData(form)).toString());
+    });
+  }
+}());
+</script>
+{% endblock %}
