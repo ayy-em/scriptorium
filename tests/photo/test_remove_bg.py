@@ -1,7 +1,7 @@
 """Tests for scripts.photo.remove_bg."""
 
-import sys
 from pathlib import Path
+import sys
 from unittest.mock import MagicMock, patch
 
 import pytest
