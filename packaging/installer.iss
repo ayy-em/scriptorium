@@ -13,7 +13,7 @@
 #define MyAppName      "Scriptorium"
 #define MyAppVersion   "0.5.1"
 #define MyAppPublisher "ayy-em"
-#define MyAppExeName   "scriptorium.exe"
+#define MyAppExeName   "ScriptoriumApp.exe"
 #define MyAppURL       "https://github.com/ayy-em/scriptorium"
 
 [Setup]

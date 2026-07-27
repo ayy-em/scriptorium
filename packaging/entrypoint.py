@@ -1,9 +1,12 @@
 """Entry point for the frozen Scriptorium app (.app on macOS, .exe on Windows).
 
-Handles two modes:
+Handles three modes:
+  <theme.script> [args...]       Run a script directly from the terminal (CLI
+                                 mode — only active when scriptorium.exe is the
+                                 console-mode build and stdout is attached).
   --run-script <key> [args...]   Run a script via the CLI dispatcher (used
                                  internally by the webapp subprocess runner).
-  (no args)                      Start the web server in a background thread
+  (no args / windowed build)     Start the web server in a background thread
                                  and open a desktop window.  Tries three tiers:
                                  1. pywebview native window
                                  2. Edge/Chrome --app mode (chromeless)
@@ -389,67 +392,26 @@ def _make_closing_handler(window, tray_icon):  # noqa: ANN001, ANN201
     return _handler
 
 
-def _patch_webview2_external_drop() -> None:
-    """Force AllowExternalDrop=True on the WebView2 WinForms control.
+def _run_cli() -> None:
+    """Invoke the CLI dispatcher from main.py."""
+    from main import main as cli_main  # noqa: PLC0415
 
-    WebView2 WinForms SDK 1.0.1340+ exposes AllowExternalDrop on the wrapper
-    control. pywebview never sets it, and some runtime versions silently default
-    it to False, which blocks OS-level file drag-and-drop from reaching the
-    HTML5 drag events used by the drop overlay.
+    cli_main()
+
+
+def _start_gui(logger, url: str, uv_server, server_thread: threading.Thread) -> None:  # noqa: ANN001
+    """Try to open a GUI window, attempting three tiers in order.
+
+    Tier 1: pywebview native window (preferred on desktop installs).
+    Tier 2: Chromium --app mode (chromeless, cross-platform).
+    Tier 3: Default browser fallback (user quits via the in-app Quit button).
+
+    Args:
+        logger: Logger for diagnostic messages.
+        url: The local URL the server is listening on.
+        uv_server: A ``uvicorn.Server`` instance.
+        server_thread: The background thread running the server.
     """
-    try:
-        from webview.platforms import edgechromium as _ec  # noqa: PLC0415
-
-        _orig_init = _ec.EdgeChrome.__init__
-
-        def _patched_init(self, form, window, cache_dir):  # type: ignore[override]
-            _orig_init(self, form, window, cache_dir)
-            try:
-                self.webview.AllowExternalDrop = True
-            except Exception:
-                pass
-
-        _ec.EdgeChrome.__init__ = _patched_init
-    except Exception:
-        pass
-
-
-def main() -> None:
-    """Dispatch to script runner or desktop UI."""
-    _patch_missing_streams()
-
-    if len(sys.argv) > 1 and sys.argv[1] == "--run-script":
-        sys.argv = [sys.argv[0], *sys.argv[2:]]
-        from main import main as cli_main  # noqa: PLC0415
-
-        cli_main()
-        return
-
-    import logging  # noqa: PLC0415
-
-    import uvicorn  # noqa: PLC0415
-
-    from webapp.app import app  # noqa: PLC0415
-
-    logging.basicConfig(level=logging.WARNING)
-    logger = logging.getLogger("scriptorium.entrypoint")
-
-    port = _find_free_port()
-    url = f"http://127.0.0.1:{port}"
-
-    config = uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning")
-    uv_server = uvicorn.Server(config)
-
-    app.state.uv_server = uv_server
-
-    server_thread = threading.Thread(target=_run_server, args=(uv_server,), daemon=True)
-    server_thread.start()
-
-    if not _wait_for_server(uv_server):
-        logger.error("Server failed to start within timeout")
-        sys.exit(1)
-
-    # Tier 1: pywebview native window
     try:
         import webview  # noqa: PLC0415
     except ImportError:
@@ -477,7 +439,6 @@ def main() -> None:
             uv_server.should_exit = False
             logger.exception("pywebview failed — trying Chromium app mode")
 
-    # Tier 2: Chromium --app mode (cross-platform)
     try:
         _chromium_app_window(url, uv_server, logger)
         server_thread.join(timeout=5.0)
@@ -485,9 +446,79 @@ def main() -> None:
     except Exception:
         logger.exception("Chromium app mode failed — falling back to browser")
 
-    # Tier 3: plain browser fallback (quit via /api/quit)
     _browser_fallback(url, server_thread, logger)
     server_thread.join(timeout=5.0)
+
+
+def _patch_webview2_external_drop() -> None:
+    """Force AllowExternalDrop=True on the WebView2 WinForms control.
+
+    WebView2 WinForms SDK 1.0.1340+ exposes AllowExternalDrop on the wrapper
+    control. pywebview never sets it, and some runtime versions silently default
+    it to False, which blocks OS-level file drag-and-drop from reaching the
+    HTML5 drag events used by the drop overlay.
+    """
+    try:
+        from webview.platforms import edgechromium as _ec  # noqa: PLC0415
+
+        _orig_init = _ec.EdgeChrome.__init__
+
+        def _patched_init(self, form, window, cache_dir):  # type: ignore[override]
+            _orig_init(self, form, window, cache_dir)
+            try:
+                self.webview.AllowExternalDrop = True
+            except Exception:
+                pass
+
+        _ec.EdgeChrome.__init__ = _patched_init
+    except Exception:
+        pass
+
+
+def main() -> None:
+    """Dispatch to CLI or start the desktop GUI.
+
+    Console-mode build (scriptorium.exe, console=True): always routes to CLI.
+    Windowed build (ScriptoriumApp.exe, console=False): starts the GUI server.
+    Both builds support --run-script for internal subprocess dispatch.
+    """
+    _console_mode = sys.stdout is not None  # check BEFORE patching streams
+    _patch_missing_streams()
+
+    if len(sys.argv) > 1 and sys.argv[1] == "--run-script":
+        sys.argv = [sys.argv[0], *sys.argv[2:]]
+        _run_cli()
+        return
+
+    if _console_mode:
+        _run_cli()
+        return
+
+    import logging  # noqa: PLC0415
+
+    import uvicorn  # noqa: PLC0415
+
+    from webapp.app import app  # noqa: PLC0415
+
+    logging.basicConfig(level=logging.WARNING)
+    logger = logging.getLogger("scriptorium.entrypoint")
+
+    port = _find_free_port()
+    url = f"http://127.0.0.1:{port}"
+
+    config = uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning")
+    uv_server = uvicorn.Server(config)
+
+    app.state.uv_server = uv_server
+
+    server_thread = threading.Thread(target=_run_server, args=(uv_server,), daemon=True)
+    server_thread.start()
+
+    if not _wait_for_server(uv_server):
+        logger.error("Server failed to start within timeout")
+        sys.exit(1)
+
+    _start_gui(logger, url, uv_server, server_thread)
 
 
 if __name__ == "__main__":

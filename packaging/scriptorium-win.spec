@@ -139,7 +139,21 @@ a = Analysis(
 
 pyz = PYZ(a.pure)
 
-exe = EXE(
+exe_gui = EXE(
+    pyz,
+    a.scripts,
+    [],
+    exclude_binaries=True,
+    name="ScriptoriumApp",
+    debug=False,
+    bootloader_ignore_signals=False,
+    strip=False,
+    upx=False,
+    console=False,
+    icon=str(ROOT / "packaging" / "logo.ico"),
+)
+
+exe_cli = EXE(
     pyz,
     a.scripts,
     [],
@@ -149,12 +163,13 @@ exe = EXE(
     bootloader_ignore_signals=False,
     strip=False,
     upx=False,
-    console=False,
+    console=True,
     icon=str(ROOT / "packaging" / "logo.ico"),
 )
 
 coll = COLLECT(
-    exe,
+    exe_gui,
+    exe_cli,
     a.binaries,
     a.datas,
     strip=False,
