@@ -18,48 +18,74 @@ set NODE_OPTIONS=--no-deprecation
 
 cd /d "%~dp0.."
 
-echo Initiating build. Target artifact: ScriptoriumSetup.exe
+echo.
+echo Scriptorium build ^| Windows ^| target: ScriptoriumSetup.exe
+echo Started: %DATE% %TIME%
 echo.
 
-echo ==^> [1/5] Checking prerequisites...
+echo ==^> [1/5] [%TIME%] Checking prerequisites...
 where uv >nul 2>&1
 if errorlevel 1 (
     echo ERROR: uv not found on PATH.
     echo Install uv from: https://docs.astral.sh/uv/
     exit /b 1
 )
-echo     uv found
+for /f "tokens=*" %%v in ('uv --version 2^>^&1') do echo     uv: %%v
 where iscc >nul 2>&1
 if errorlevel 1 (
     echo ERROR: Inno Setup compiler ^(iscc^) not found on PATH.
     echo.
     echo Install Inno Setup 6+ from: https://jrsoftware.org/issetup.php
-    echo Then ensure the install directory is on your PATH.
+    echo Then ensure its install directory is on your PATH.
     exit /b 1
 )
-echo     iscc found
-
+echo     iscc: found
+for /f "tokens=*" %%v in ('uv run python --version 2^>^&1') do echo     Python: %%v
+echo     Dir: %CD%
 echo.
-echo ==^> [2/5] Installing dependencies (uv sync --all-extras)...
-uv sync --all-extras || exit /b 1
 
+echo ==^> [2/5] [%TIME%] Installing Python dependencies...
+echo     Running: uv sync --all-extras
 echo.
-echo ==^> [3/5] Cleaning previous build artifacts...
-if exist dist rmdir /s /q dist
-if exist build rmdir /s /q build
-echo     Done.
+uv sync --all-extras
+if errorlevel 1 exit /b 1
+echo.
 
+echo ==^> [3/5] [%TIME%] Cleaning previous build artifacts...
+if exist dist (
+    echo     Removing: dist\
+    rmdir /s /q dist
+)
+if exist build (
+    echo     Removing: build\
+    rmdir /s /q build
+)
+echo     Clean.
 echo.
-echo ==^> [4/5] Building application bundle (this may take a while)...
-uv pip install pyinstaller || exit /b 1
-uv run pyinstaller packaging/scriptorium-win.spec --noconfirm --clean || exit /b 1
 
+echo ==^> [4/5] [%TIME%] Installing PyInstaller and building application bundle...
+uv pip install pyinstaller
+if errorlevel 1 exit /b 1
+for /f "tokens=*" %%v in ('uv run pyinstaller --version 2^>^&1') do echo     PyInstaller: %%v
 echo.
-echo ==^> [5/5] Building installer (Inno Setup)...
-iscc packaging\installer.iss || exit /b 1
+echo     Spec:      packaging\scriptorium-win.spec
+echo     Output:    dist\scriptorium\
+echo     Log level: INFO  (analysis + collection progress shown below)
+echo.
+uv run pyinstaller packaging/scriptorium-win.spec --noconfirm --clean --log-level INFO
+if errorlevel 1 exit /b 1
+echo.
+
+echo ==^> [5/5] [%TIME%] Building installer (Inno Setup)...
+echo     Script:    packaging\installer.iss
+echo     Output:    dist\ScriptoriumSetup.exe
+echo     Verbosity: /V5
+echo.
+iscc /V5 packaging\installer.iss
+if errorlevel 1 exit /b 1
 
 echo.
 echo ========================================
-echo   BUILD COMPLETE
+echo   BUILD COMPLETE  ^| %TIME%
 echo   Output: dist\ScriptoriumSetup.exe
 echo ========================================
