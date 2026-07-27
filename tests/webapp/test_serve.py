@@ -183,6 +183,22 @@ class TestSettingsAPI:
         assert response.status_code == 200
 
 
+class TestOpenOutputs:
+    def test_opens_the_outputs_root_not_a_theme_subdir(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("webapp.app.outputs_root", lambda: tmp_path)
+        with patch("webapp.app.subprocess.Popen") as popen:
+            response = client.post("/api/open-outputs")
+        assert response.status_code == 200
+        opened = popen.call_args[0][0][-1]
+        assert opened == str(tmp_path)
+        assert not opened.endswith("default")
+
+    def test_requires_no_request_body(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("webapp.app.outputs_root", lambda: tmp_path)
+        with patch("webapp.app.subprocess.Popen"):
+            assert client.post("/api/open-outputs").status_code == 200
+
+
 class TestDropUpload:
     def test_mp4_returns_video_category(self, tmp_path, monkeypatch):
         monkeypatch.setattr("webapp.app.drop_session_dir", lambda sid: tmp_path)

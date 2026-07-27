@@ -133,19 +133,20 @@
 
     <div class="topnav-actions">
       <button class="outputs-btn"
-              @click="fetch('/api/open-outputs', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({theme: $store.ui.activeCategory || 'default'})
-              })"
+              @click="fetch('/api/open-outputs', { method: 'POST' })"
               aria-label="Open outputs folder">
         <img src="/static/icons/icon-folder.png" class="icon-img" width="18" height="18" alt="" aria-hidden="true">
       </button>
+      {# Sun shows in dark mode, moon in light mode — each indicates the mode you
+         switch to. x-show is authoritative; the opacity rules in style.css cover
+         the first paint before Alpine initialises. #}
       <button class="dark-toggle"
               @click="$store.ui.toggleDark()"
               :aria-label="$store.ui.dark ? 'Switch to light mode' : 'Switch to dark mode'">
-        <img src="/static/icons/icon-day.png" class="icon-img icon-day" width="18" height="18" alt="" aria-hidden="true">
-        <img src="/static/icons/icon-night.png" class="icon-img icon-night" width="18" height="18" alt="" aria-hidden="true">
+        <img src="/static/icons/icon-day.png" class="icon-img icon-day" width="18" height="18"
+             x-show="$store.ui.dark" alt="" aria-hidden="true">
+        <img src="/static/icons/icon-night.png" class="icon-img icon-night" width="18" height="18"
+             x-show="!$store.ui.dark" alt="" aria-hidden="true">
       </button>
       <button class="settings-btn"
               @click="$store.ui.settingsOpen = true"

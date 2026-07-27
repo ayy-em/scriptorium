@@ -123,6 +123,30 @@ def logs_dir() -> Path:
     return d
 
 
+def outputs_root() -> Path:
+    """Return the root outputs directory, creating it if needed.
+
+    Unlike outputs_dir(), no theme subdirectory is appended. Used by the
+    "open outputs folder" button, which reveals every theme's results at once
+    rather than guessing at one.
+
+    Returns:
+        The outputs root — the user's configured directory if set, otherwise
+        the default location for this install.
+    """
+    from core.config import load as _load_config  # noqa: PLC0415
+
+    custom = _load_config().outputs_dir
+    if custom:
+        d = Path(custom)
+    elif FROZEN:
+        d = _user_data_dir() / "outputs"
+    else:
+        d = _bundle_dir() / "outputs"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
 def outputs_dir(theme: str) -> Path:
     """Return the outputs directory for a theme, creating it if needed.
 
@@ -130,15 +154,7 @@ def outputs_dir(theme: str) -> Path:
     as the root (with a theme subdirectory). Otherwise the default location
     is used.
     """
-    from core.config import load as _load_config  # noqa: PLC0415
-
-    custom = _load_config().outputs_dir
-    if custom:
-        d = Path(custom) / theme
-    elif FROZEN:
-        d = _user_data_dir() / "outputs" / theme
-    else:
-        d = _bundle_dir() / "outputs" / theme
+    d = outputs_root() / theme
     d.mkdir(parents=True, exist_ok=True)
     return d
 

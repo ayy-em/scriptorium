@@ -26,7 +26,7 @@ from core.paths import (
     drop_session_dir,
     has_ffmpeg,
     inputs_dir,
-    outputs_dir,
+    outputs_root,
     read_version,
     static_dir,
     templates_dir,
@@ -229,18 +229,16 @@ async def post_settings(request: Request) -> JSONResponse:
 
 
 @app.post("/api/open-outputs")
-async def open_outputs(request: Request) -> JSONResponse:
-    """Open the outputs folder for a theme in the OS file explorer.
+async def open_outputs() -> JSONResponse:
+    """Open the outputs root folder in the OS file explorer.
 
-    Args:
-        request: Expects JSON body with optional ``theme`` key.
+    Opens the root rather than a per-theme subdirectory, so the user sees
+    every theme's results at once.
 
     Returns:
         JSON acknowledgement.
     """
-    body = await request.json()
-    theme = body.get("theme") or "default"
-    folder = outputs_dir(theme)
+    folder = outputs_root()
     if sys.platform == "win32":
         subprocess.Popen(["explorer", str(folder)])
     elif sys.platform == "darwin":

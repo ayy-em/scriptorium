@@ -116,6 +116,38 @@ class TestPathHelpers:
         assert result == tmp_path / "outputs" / "lora"
         assert result.exists()
 
+    def test_outputs_root_has_no_theme_subdir(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        from core.config import UserConfig  # noqa: PLC0415
+
+        monkeypatch.setattr(paths, "_bundle_dir", lambda: tmp_path)
+        monkeypatch.setattr(paths, "FROZEN", False)
+        monkeypatch.setattr("core.config.load", UserConfig)
+
+        result = paths.outputs_root()
+
+        assert result == tmp_path / "outputs"
+        assert result.exists()
+
+    def test_outputs_root_honours_custom_dir(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        from core.config import UserConfig  # noqa: PLC0415
+
+        custom = tmp_path / "elsewhere"
+        monkeypatch.setattr(paths, "FROZEN", False)
+        monkeypatch.setattr("core.config.load", lambda: UserConfig(outputs_dir=str(custom)))
+
+        assert paths.outputs_root() == custom
+
+    def test_drop_session_dir_is_isolated_per_session(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setattr(paths, "_bundle_dir", lambda: tmp_path)
+        monkeypatch.setattr(paths, "FROZEN", False)
+
+        first = paths.drop_session_dir("20260101-000000-aaaaaa")
+        second = paths.drop_session_dir("20260101-000001-bbbbbb")
+
+        assert first == tmp_path / "inputs" / "drop" / "20260101-000000-aaaaaa"
+        assert first.exists()
+        assert first != second
+
     def test_logs_dir_is_created(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.setattr(paths, "_bundle_dir", lambda: tmp_path)
         monkeypatch.setattr(paths, "FROZEN", False)
