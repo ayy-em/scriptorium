@@ -200,7 +200,7 @@ async def upload_file(theme: str, file: UploadFile, subdir: str = "") -> JSONRes
 async def get_settings() -> JSONResponse:
     """Return current user settings."""
     cfg = load_config()
-    return JSONResponse({"theme": cfg.theme, "outputs_dir": cfg.outputs_dir})
+    return JSONResponse({"theme": cfg.theme, "outputs_dir": cfg.outputs_dir, "close_behavior": cfg.close_behavior})
 
 
 @app.post("/api/settings")
@@ -210,6 +210,7 @@ async def post_settings(request: Request) -> JSONResponse:
     cfg = UserConfig(
         theme=body.get("theme", "light"),
         outputs_dir=body.get("outputs_dir", ""),
+        close_behavior=body.get("close_behavior", "close"),
     )
     save_config(cfg)
     return JSONResponse({"ok": True})

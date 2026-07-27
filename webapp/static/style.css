@@ -164,8 +164,15 @@ body {
 .topnav-actions {
   display: flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: 0.5rem;
   margin-left: auto;
+}
+
+.icon-img {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+  display: block;
 }
 
 /* ─── App layout ─────────────────────────────────────────────────────────── */
@@ -822,7 +829,7 @@ html.dark .sidebar-github-logo { filter: invert(1); opacity: 0.6; }
 .dark-toggle:active { transform: scale(0.94); }
 
 /* Icon crossfade: always in DOM, CSS controls visibility */
-.dark-toggle svg {
+.dark-toggle img {
   position: absolute;
   top: 50%;
   left: 50%;
@@ -831,10 +838,10 @@ html.dark .sidebar-github-logo { filter: invert(1); opacity: 0.6; }
   pointer-events: none;
 }
 
-.icon-sun  { opacity: 0; }
-.icon-moon { opacity: 1; }
-html.dark .icon-sun  { opacity: 1; }
-html.dark .icon-moon { opacity: 0; }
+.icon-day   { opacity: 0; }
+.icon-night { opacity: 1; }
+html.dark .icon-day   { opacity: 1; }
+html.dark .icon-night { opacity: 0; }
 
 /* ─── Focus states ───────────────────────────────────────────────────────── */
 :focus-visible {
@@ -1334,6 +1341,20 @@ html.dark .modal-dialog {
 .settings-input:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px color-mix(in oklch, var(--accent) 15%, transparent);
+}
+
+.settings-radio-group {
+  display: flex;
+  gap: 1.25rem;
+  margin-top: 0.5rem;
+}
+
+.settings-radio-item {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.875rem;
+  cursor: pointer;
 }
 
 .settings-divider {

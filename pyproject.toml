@@ -47,7 +47,7 @@ web       = [
     "python-multipart>=0.0.9",
     "uvicorn[standard]>=0.30",
 ]
-desktop   = ["pywebview>=5.0"]
+desktop   = ["pywebview>=5.0", "pystray>=0.19", "pillow>=11.0"]
 speech = [
     "openai>=1.50",
 ]

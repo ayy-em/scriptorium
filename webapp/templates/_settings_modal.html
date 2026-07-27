@@ -47,6 +47,21 @@
         </div>
       </div>
 
+      <!-- Window close behavior -->
+      <div class="settings-section">
+        <label class="settings-label">Window close button</label>
+        <div class="settings-radio-group">
+          <label class="settings-radio-item">
+            <input type="radio" x-model="$store.ui.closeBehavior" value="close">
+            <span>Close app</span>
+          </label>
+          <label class="settings-radio-item">
+            <input type="radio" x-model="$store.ui.closeBehavior" value="tray">
+            <span>Minimize to tray</span>
+          </label>
+        </div>
+      </div>
+
       <!-- Outputs directory -->
       <div class="settings-section">
         <label class="settings-label" for="settings-outputs-dir">Default outputs directory</label>

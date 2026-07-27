@@ -99,6 +99,8 @@ hidden_imports = [
     "webview",
     "webview.platforms.edgechromium",
     "webview.platforms.winforms",
+    "pystray",
+    "pystray._win32",
     "matplotlib",
     "matplotlib.backends.backend_agg",
     "weasyprint",

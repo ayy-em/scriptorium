@@ -104,6 +104,13 @@
   font-family: var(--font-mono);
   margin-top: 1.1rem;
 }
+
+.trim-no-waveform {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  margin: 0.6rem 0 0;
+  font-style: italic;
+}
 </style>
 
 <nav class="detail-breadcrumb" aria-label="Breadcrumb">
@@ -133,10 +140,11 @@
     </div>
   </div>
 
-  <!-- Waveform + playback controls (visible after file is decoded) -->
-  <div class="waveform-section" x-show="audioBuffer !== null" x-cloak>
+  <!-- Waveform + time controls: shown as soon as a file is uploaded -->
+  <div class="waveform-section" x-show="serverPath" x-cloak>
 
-    <div class="waveform-wrap">
+    <!-- Canvas: only when audio decoded successfully -->
+    <div class="waveform-wrap" x-show="audioBuffer !== null">
       <canvas x-ref="canvas" class="waveform-canvas" height="128"
         @mousedown="onCanvasMouseDown($event)"
         @mousemove="onCanvasMouseMove($event)"
@@ -145,9 +153,12 @@
       </canvas>
     </div>
 
+    <!-- Shown when file is uploaded but audio decode failed (e.g. unsupported codec) -->
+    <p class="trim-no-waveform" x-show="audioBuffer === null">Waveform unavailable — enter times manually.</p>
+
     <div class="trim-controls">
-      <!-- Play/stop button -->
-      <button type="button" class="play-btn" @click="play()" :title="isPlaying ? 'Stop' : 'Play selection'">
+      <!-- Play/stop button: only when waveform is available -->
+      <button type="button" class="play-btn" x-show="audioBuffer !== null" @click="play()" :title="isPlaying ? 'Stop' : 'Play selection'">
         <svg x-show="!isPlaying" viewBox="0 0 16 16" fill="none" aria-hidden="true">
           <path d="M4 2.5v11l9-5.5z" fill="currentColor"/>
         </svg>
@@ -157,7 +168,7 @@
         </svg>
       </button>
 
-      <!-- Start / End time fields -->
+      <!-- Start / End time fields: always visible when file is loaded -->
       <div class="trim-time-fields">
         <div class="trim-time-field">
           <label for="f_start">Start<span class="req">*</span></label>
@@ -262,12 +273,14 @@ function trimApp(theme) {
         }).observe(canvas);
       });
 
-      /* Prefill path from drop-to-discover (no waveform without File object) */
+      /* Prefill path (and optional start/end) from drop-to-discover overlay */
       var params = new URLSearchParams(window.location.search);
       if (params.has('_prefill_file')) {
         var filePath = params.get('_prefill_file');
         this.serverPath = filePath;
         this.filename = filePath.split(/[/\\]/).pop();
+        if (params.has('start')) this.startInput = params.get('start');
+        if (params.has('end')) this.endInput = params.get('end');
         if (window.history.replaceState) {
           window.history.replaceState({}, '', window.location.pathname);
         }

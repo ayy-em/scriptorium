@@ -12,25 +12,11 @@
   <path d="M9.5 3 6.5 13"/>
 </svg>
 {% elif theme == 'av' %}
-{# [▶] — bracketed play glyph #}
-<svg width="{{ size }}" height="{{ size }}" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-  <rect x="1.5" y="3" width="13" height="10" rx="1"/>
-  <path d="M7 6.2v3.6L10 8 7 6.2Z" fill="currentColor" stroke="none"/>
-</svg>
+<img src="/static/icons/icon-audio.png" width="{{ size }}" height="{{ size }}" style="display:inline-block;vertical-align:middle;object-fit:contain" alt="" aria-hidden="true">
 {% elif theme == 'downloads' %}
-{# [↓] — arrow into tray #}
-<svg width="{{ size }}" height="{{ size }}" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-  <path d="M8 2.5v7.5"/>
-  <path d="M5 7.5 8 10.5l3-3"/>
-  <path d="M2 13.5h12"/>
-</svg>
+<img src="/static/icons/icon-download.png" width="{{ size }}" height="{{ size }}" style="display:inline-block;vertical-align:middle;object-fit:contain" alt="" aria-hidden="true">
 {% elif theme == 'formats' %}
-{# [A]→[B] — two bracket-boxes with a join #}
-<svg width="{{ size }}" height="{{ size }}" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-  <path d="M3 3.5v9M1.5 3.5h3M1.5 12.5h3"/>
-  <path d="M13 3.5v9M14.5 3.5h-3M14.5 12.5h-3"/>
-  <path d="M6 8h4M8.5 6.5 10 8 8.5 9.5"/>
-</svg>
+<img src="/static/icons/icon-doc.png" width="{{ size }}" height="{{ size }}" style="display:inline-block;vertical-align:middle;object-fit:contain" alt="" aria-hidden="true">
 {% elif theme == 'homeassistant' %}
 {# /\ over [_] — minimal house, ASCII-flavoured #}
 <svg width="{{ size }}" height="{{ size }}" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -39,25 +25,11 @@
   <path d="M6.5 13.5v-3h3v3"/>
 </svg>
 {% elif theme == 'llm' %}
-{# >_ — terminal prompt #}
-<svg width="{{ size }}" height="{{ size }}" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-  <path d="M2 5 5 8l-3 3"/>
-  <path d="M7.5 11.5h6.5"/>
-</svg>
+<img src="/static/icons/icon-ai.png" width="{{ size }}" height="{{ size }}" style="display:inline-block;vertical-align:middle;object-fit:contain" alt="" aria-hidden="true">
 {% elif theme == 'lora' %}
-{# [N] — bracketed N (Network) #}
-<svg width="{{ size }}" height="{{ size }}" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-  <path d="M4 2.5h-2v11h2M12 2.5h2v11h-2"/>
-  <path d="M5.5 11V5l5 6V5"/>
-</svg>
+<img src="/static/icons/icon-ai.png" width="{{ size }}" height="{{ size }}" style="display:inline-block;vertical-align:middle;object-fit:contain" alt="" aria-hidden="true">
 {% elif theme == 'photo' %}
-{# [○] — camera as bracketed lens #}
-<svg width="{{ size }}" height="{{ size }}" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-  <rect x="1.5" y="4" width="13" height="9.5" rx="0.5"/>
-  <path d="M6 4 6.8 2.5h2.4L10 4"/>
-  <circle cx="8" cy="8.75" r="2.4"/>
-  <path d="M12.4 6h.3"/>
-</svg>
+<img src="/static/icons/icon-camera.png" width="{{ size }}" height="{{ size }}" style="display:inline-block;vertical-align:middle;object-fit:contain" alt="" aria-hidden="true">
 {% elif theme == 'printing' %}
 {# ≡ on paper — lines on a sheet #}
 <svg width="{{ size }}" height="{{ size }}" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -67,24 +39,11 @@
   <path d="M3.5 7.5h1.5"/>
 </svg>
 {% elif theme == 'sitemaps' %}
-{# 2x2 grid — sitemap as connected blocks #}
-<svg width="{{ size }}" height="{{ size }}" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-  <rect x="1.5" y="1.5" width="5" height="5"/>
-  <rect x="9.5" y="1.5" width="5" height="5"/>
-  <rect x="1.5" y="9.5" width="5" height="5"/>
-  <rect x="9.5" y="9.5" width="5" height="5"/>
-  <path d="M6.5 4h3M6.5 12h3M4 6.5v3M12 6.5v3"/>
-</svg>
+<img src="/static/icons/icon-map.png" width="{{ size }}" height="{{ size }}" style="display:inline-block;vertical-align:middle;object-fit:contain" alt="" aria-hidden="true">
 {% elif theme == 'speech' %}
-{# ~ — sine wave (audio signal) #}
-<svg width="{{ size }}" height="{{ size }}" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-  <path d="M1.5 8c1.2-3 2.4-3 3.6 0s2.4 3 3.6 0 2.4-3 3.6 0M14.5 8h0"/>
-</svg>
+<img src="/static/icons/icon-speech.png" width="{{ size }}" height="{{ size }}" style="display:inline-block;vertical-align:middle;object-fit:contain" alt="" aria-hidden="true">
 {% elif theme == 'telegram' %}
-{# Brand glyph — preserved (recognisable mark). Made monoline-friendly. #}
-<svg width="{{ size }}" height="{{ size }}" viewBox="0 0 48 48" fill="currentColor" aria-hidden="true">
-  <path d="M41.4193 7.30899C41.4193 7.30899 45.3046 5.79399 44.9808 9.47328C44.8729 10.9883 43.9016 16.2908 43.1461 22.0262L40.5559 39.0159C40.5559 39.0159 40.3401 41.5048 38.3974 41.9377C36.4547 42.3705 33.5408 40.4227 33.0011 39.9898C32.5694 39.6652 24.9068 34.7955 22.2086 32.4148C21.4531 31.7655 20.5897 30.4669 22.3165 28.9519L33.6487 18.1305C34.9438 16.8319 36.2389 13.8019 30.8426 17.4812L15.7331 27.7616C15.7331 27.7616 14.0063 28.8437 10.7686 27.8698L3.75342 25.7055C3.75342 25.7055 1.16321 24.0823 5.58815 22.459C16.3807 17.3729 29.6555 12.1786 41.4193 7.30899Z"/>
-</svg>
+<img src="/static/icons/icon-telegram.png" width="{{ size }}" height="{{ size }}" style="display:inline-block;vertical-align:middle;object-fit:contain" alt="" aria-hidden="true">
 {% elif theme == 'tabular' %}
 {# # — grid of cells (3x3) #}
 <svg width="{{ size }}" height="{{ size }}" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">

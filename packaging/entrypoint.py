@@ -16,7 +16,7 @@ import threading
 import time
 
 
-def _find_free_port(start: int = 8000, end: int = 8100) -> int:
+def _find_free_port(start: int = 57200, end: int = 57300) -> int:
     """Find the first available TCP port in the given range.
 
     Args:
@@ -308,6 +308,112 @@ def _browser_fallback(url: str, server_thread: threading.Thread, logger) -> None
         logger.info("Interrupted — shutting down")
 
 
+def _load_tray_icon():  # noqa: ANN201
+    """Load the app icon for the system tray from the static icons directory.
+
+    Returns:
+        A PIL ``Image`` instance, or ``None`` if loading fails.
+    """
+    try:
+        import PIL.Image  # noqa: PLC0415
+
+        from core.paths import static_dir  # noqa: PLC0415
+
+        icon_path = static_dir() / "icons" / "icon-night.png"
+        if icon_path.exists():
+            img = PIL.Image.open(icon_path).convert("RGBA").resize((64, 64), PIL.Image.LANCZOS)
+            return img
+    except Exception:
+        pass
+    return None
+
+
+def _create_tray_icon(window):  # noqa: ANN001, ANN201
+    """Create and start a system tray icon with Show/Quit menu items.
+
+    Args:
+        window: The pywebview window to show/hide.
+
+    Returns:
+        Running ``pystray.Icon`` instance, or ``None`` if pystray is unavailable.
+    """
+    try:
+        import pystray  # noqa: PLC0415
+
+        icon_image = _load_tray_icon()
+        if icon_image is None:
+            return None
+
+        def on_show(icon, item):  # noqa: ANN001
+            window.show()
+
+        def on_quit(icon, item):  # noqa: ANN001
+            icon.stop()
+            import os  # noqa: PLC0415
+
+            os._exit(0)  # noqa: SLF001
+
+        menu = pystray.Menu(
+            pystray.MenuItem("Show Scriptorium", on_show, default=True),
+            pystray.MenuItem("Quit", on_quit),
+        )
+        tray = pystray.Icon("Scriptorium", icon_image, "Scriptorium", menu)
+        t = threading.Thread(target=tray.run, daemon=True)
+        t.start()
+        return tray
+    except Exception:
+        return None
+
+
+def _make_closing_handler(window, tray_icon):  # noqa: ANN001, ANN201
+    """Return a ``window.events.closing`` handler that respects close_behavior.
+
+    Args:
+        window: The pywebview window to show/hide.
+        tray_icon: Running ``pystray.Icon`` instance, or ``None``.
+
+    Returns:
+        A no-arg function that returns ``False`` to cancel close when
+        ``close_behavior`` is ``"tray"``, or ``None`` to allow it.
+    """
+
+    def _handler():  # noqa: ANN202
+        from core.config import load as load_config  # noqa: PLC0415
+
+        cfg = load_config()
+        if cfg.close_behavior == "tray" and tray_icon is not None:
+            window.hide()
+            return False
+        return None
+
+    return _handler
+
+
+def _patch_webview2_external_drop() -> None:
+    """Force AllowExternalDrop=True on the WebView2 WinForms control.
+
+    WebView2 WinForms SDK 1.0.1340+ exposes AllowExternalDrop on the wrapper
+    control. pywebview never sets it, and some runtime versions silently default
+    it to False, which blocks OS-level file drag-and-drop from reaching the
+    HTML5 drag events used by the drop overlay.
+    """
+    try:
+        from webview.platforms import edgechromium as _ec  # noqa: PLC0415
+
+        _orig_init = _ec.EdgeChrome.__init__
+
+        def _patched_init(self, form, window, cache_dir):  # type: ignore[override]
+            _orig_init(self, form, window, cache_dir)
+            try:
+                self.webview.AllowExternalDrop = True
+            except Exception:
+                pass
+
+        _ec.EdgeChrome.__init__ = _patched_init
+    except Exception:
+        pass
+
+
 def main() -> None:
     """Dispatch to script runner or desktop UI."""
     _patch_missing_streams()
@@ -352,11 +458,21 @@ def main() -> None:
 
     if webview is not None:
         try:
+            import os  # noqa: PLC0415
+
+            _patch_webview2_external_drop()
             window = webview.create_window("Scriptorium", url, width=1200, height=800)
+
+            tray_icon = _create_tray_icon(window)
+            window.events.closing += _make_closing_handler(window, tray_icon)
+
             webview.start()
+
+            if tray_icon is not None:
+                tray_icon.stop()
             uv_server.should_exit = True
             server_thread.join(timeout=5.0)
-            return
+            os._exit(0)  # noqa: SLF001
         except Exception:
             uv_server.should_exit = False
             logger.exception("pywebview failed — trying Chromium app mode")

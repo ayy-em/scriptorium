@@ -20,10 +20,13 @@ class UserConfig:
         theme: Color scheme — ``"light"`` or ``"dark"``.
         outputs_dir: Custom root directory for script outputs, or empty string
             for the default.
+        close_behavior: What the window close button does — ``"close"`` exits
+            the app, ``"tray"`` hides it to the system tray.
     """
 
     theme: str = "light"
     outputs_dir: str = ""
+    close_behavior: str = "close"
 
 
 def load() -> UserConfig:
@@ -39,6 +42,7 @@ def load() -> UserConfig:
         return UserConfig(
             theme=raw.get("theme", "light"),
             outputs_dir=raw.get("outputs_dir", ""),
+            close_behavior=raw.get("close_behavior", "close"),
         )
     except Exception:
         logger.warning("Failed to read %s, using defaults", _CONFIG_PATH)
