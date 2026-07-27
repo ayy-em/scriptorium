@@ -11,7 +11,10 @@
      @dragenter.prevent="dragEnter($event)"
      @dragover.prevent
      @dragleave="dragLeave($event)"
-     @drop.prevent="handleDrop($event)">
+     @drop.prevent="handleDrop($event)"
+     @paste.window="handlePaste($event)">
+
+  <div class="browse-pane" :class="{ 'is-hidden': chooserOpen }">
   <div class="page-header">
     <h1>Scripts</h1>
     <button class="sort-btn" title="Sort order">
@@ -107,8 +110,12 @@
       <p class="no-results-sub">Try a different search term or clear the category filter.</p>
     </div>
   </div>
+  </div>
 
+  {% include "_drop_chooser.html" %}
+  {% include "_drop_runner.html" %}
   {% include "_drop_overlay.html" %}
+  {% include "_howto_modal.html" %}
 </div>
 
 <script>
@@ -118,35 +125,302 @@
     return (bytes / 1048576).toFixed(1) + ' MB';
   }
 
+  var IMAGE_EXTS = ['jpg','jpeg','png','webp','gif','bmp','tiff','tif'];
+  var VIDEO_EXTS = ['mp4','mkv','mov','avi','webm','m4v','flv'];
+
+  /* Wheel geometry. SLOTS is how many cards sit on the arc at once; the rest
+     are reachable by rotating. ARC_SPAN is the total sweep in degrees. */
+  var SLOTS = 7;
+  var ARC_SPAN = 108;
+  var CARD_PITCH = 74;      /* px of drag travel that advances one card */
+  var SNAP_MS = 260;
+
+  function _reducedMotion() {
+    return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  }
+
+  /* Word-boundary truncation — never cuts mid-word. */
+  function _truncate(text, limit) {
+    if (!text) return '';
+    var flat = String(text).replace(/\s+/g, ' ').trim();
+    if (flat.length <= limit) return flat;
+    var cut = flat.slice(0, limit);
+    var lastSpace = cut.lastIndexOf(' ');
+    if (lastSpace > limit * 0.5) cut = cut.slice(0, lastSpace);
+    return cut.replace(/[\s,;:.\-]+$/, '') + '…';
+  }
+
+  /* Decode one SSE payload into console text plus an optional CSS class. */
+  function _parseRunLine(payload) {
+    var doc = new DOMParser().parseFromString(payload, 'text/html');
+    var el = doc.body.firstElementChild;
+    var known = ['stderr', 'exit-ok', 'exit-err'];
+    if (el && el.tagName === 'SPAN' && known.indexOf(el.className) !== -1) {
+      return { text: el.textContent, cls: el.className };
+    }
+    return { text: doc.body.textContent, cls: '' };
+  }
+
   function scriptBrowser() {
     return {
       _collapsed: {},
 
-      /* Drop-to-Discover state */
+      /* ── Drag / staging ─────────────────────────────────────────────── */
       _dragCounter: 0,
       dropping: false,
       uploading: false,
-      overlayPhase: null,       /* null | 'preview' | 'fields' */
-      dropFile: null,
+      uploadLabel: 'Uploading…',
+      dropError: '',
+      _errorTimer: null,
+
+      chooserOpen: false,
+      sessionDir: '',
+      fileNames: [],
+      filePaths: [],
+      batchCount: 0,
+      totalSizeLabel: '',
+      typeLabel: '',
       dropFilename: '',
       dropCategory: null,
-      dropFileType: null,       /* 'image' | 'video' | 'audio' | etc. */
+      categoryIcon: null,
+      dropFileType: null,
       dropPreviewUrl: null,
-      dropFilesize: '',
       dropScripts: [],
-      selectedScript: null,
-      scriptFields: [],
-      fieldValues: {},
-      uploadedPath: '',
 
-      /* Drag counter approach for robust dragover/dragleave */
+      /* ── Wheel ──────────────────────────────────────────────────────── */
+      rotation: 0,
+      visibleSlots: SLOTS,
+      /* Seeded so the arc is sane on first paint, before the stage is measured. */
+      stageW: 900,
+      stageH: 560,
+      _dragging: false,
+      _dragY: 0,
+      _dragRot: 0,
+      _lastY: 0,
+      _velocity: 0,
+      _raf: null,
+      expandingIndex: null,
+
+      /* ── Runner ─────────────────────────────────────────────────────── */
+      runnerOpen: false,
+      selectedScript: null,
+      runnerFields: [],
+      fieldValues: {},
+      running: false,
+      runLines: [],
+      runResult: '',
+      runOk: false,
+      _es: null,
+
+      /* ── Chrome ─────────────────────────────────────────────────────── */
+      howtoOpen: false,
+      tipVisible: false,
+      tipText: 'You can also drag & drop several files of the same type to process them together.',
+      _tipTimer: null,
+      _tipShown: false,
+
+      init() {
+        /* A ResizeObserver keeps the arc correct through window resizes and,
+           importantly, fires the first real measurement once the chooser
+           becomes visible — the stage has no dimensions while it is hidden. */
+        var stage = this.$refs.stage;
+        if (stage && window.ResizeObserver) {
+          this._ro = new ResizeObserver(() => this._measure());
+          this._ro.observe(stage);
+        }
+        this._onResize = () => this._measure();
+        window.addEventListener('resize', this._onResize);
+        this._measure();
+      },
+
+      _measure() {
+        var stage = this.$refs.stage;
+        if (!stage) return;
+        var r = stage.getBoundingClientRect();
+        if (!r.width || !r.height) return;
+        this.stageW = r.width;
+        this.stageH = r.height;
+      },
+
+      /* ── Geometry ───────────────────────────────────────────────────── */
+      get originX() { return this.stageW * 0.26; },
+      get originY() { return this.stageH * 0.5; },
+      get radius() { return Math.max(150, Math.min(this.stageW * 0.44, this.stageH * 0.52)); },
+      get maxRotation() { return Math.max(0, this.dropScripts.length - SLOTS); },
+      get canRotate() { return this.dropScripts.length > SLOTS; },
+
+      /* Angle in radians for a card sitting at fractional slot position. */
+      _angleAt(slot) {
+        var t = SLOTS > 1 ? slot / (SLOTS - 1) : 0.5;
+        return (-ARC_SPAN / 2 + t * ARC_SPAN) * Math.PI / 180;
+      },
+
+      _pointAt(slot, r) {
+        var a = this._angleAt(slot);
+        return { x: this.originX + r * Math.cos(a), y: this.originY + r * Math.sin(a) };
+      },
+
+      /* Normalised distance from the arc centre: 0 dead centre, 1 at an end. */
+      _edgeFactor(slot) {
+        var mid = (SLOTS - 1) / 2;
+        return Math.min(1, Math.abs(slot - mid) / mid);
+      },
+
+      cardStyle(i) {
+        var slot = i - this.rotation;
+        if (slot < -1.2 || slot > SLOTS + 0.2) {
+          return 'opacity:0;pointer-events:none;transform:translateY(-50%) scale(0.8);left:0;top:0;';
+        }
+        var p = this._pointAt(slot, this.radius);
+        var d = this._edgeFactor(slot);
+        var scale = 1 - 0.12 * d;
+        var opacity = 1 - 0.55 * d * d;
+        return 'left:' + p.x.toFixed(1) + 'px;top:' + p.y.toFixed(1) + 'px;'
+             + 'transform:translateY(-50%) scale(' + scale.toFixed(3) + ');'
+             + 'opacity:' + opacity.toFixed(3) + ';'
+             + 'z-index:' + (100 - Math.round(d * 50)) + ';';
+      },
+
+      connectorDot(i) {
+        var p = this._pointAt(i - this.rotation, this.radius);
+        return { x: p.x - 13, y: p.y };
+      },
+
+      connectorOpacity(i) {
+        var slot = i - this.rotation;
+        if (slot < -1.2 || slot > SLOTS + 0.2) return 0;
+        return (1 - 0.75 * this._edgeFactor(slot)).toFixed(3);
+      },
+
+      connectorPath(i) {
+        var slot = i - this.rotation;
+        var start = this._pointAt(slot, Math.min(118, this.radius * 0.38));
+        var end = this.connectorDot(i);
+        var c1x = start.x + 46;
+        var c2x = end.x - 46;
+        return 'M' + start.x.toFixed(1) + ',' + start.y.toFixed(1)
+             + ' C' + c1x.toFixed(1) + ',' + start.y.toFixed(1)
+             + ' ' + c2x.toFixed(1) + ',' + end.y.toFixed(1)
+             + ' ' + end.x.toFixed(1) + ',' + end.y.toFixed(1);
+      },
+
+      /* ── Wheel input ────────────────────────────────────────────────── */
+      _clampRotation(v) {
+        return Math.max(0, Math.min(this.maxRotation, v));
+      },
+
+      wheelScroll(e) {
+        if (!this.canRotate) return;
+        this._stopInertia();
+        this.rotation = this._clampRotation(this.rotation + e.deltaY / 260);
+        this._scheduleSnap();
+      },
+
+      stepWheel(delta) {
+        if (!this.canRotate) return;
+        this._stopInertia();
+        this._animateTo(this._clampRotation(Math.round(this.rotation) + delta));
+      },
+
+      bringIntoView(i) {
+        if (!this.canRotate) return;
+        var slot = i - this.rotation;
+        if (slot < 0) this._animateTo(this._clampRotation(i));
+        else if (slot > SLOTS - 1) this._animateTo(this._clampRotation(i - SLOTS + 1));
+      },
+
+      dragStart(e) {
+        if (!this.canRotate || e.button === 2) return;
+        if (e.target.closest('.wheel-card, button, a, input, select, textarea')) return;
+        this._stopInertia();
+        this._dragging = true;
+        this._dragY = e.clientY;
+        this._lastY = e.clientY;
+        this._dragRot = this.rotation;
+        this._velocity = 0;
+        this.$refs.stage.setPointerCapture && this.$refs.stage.setPointerCapture(e.pointerId);
+      },
+
+      dragMove(e) {
+        if (!this._dragging) return;
+        this.rotation = this._clampRotation(this._dragRot - (e.clientY - this._dragY) / CARD_PITCH);
+        this._velocity = (e.clientY - this._lastY) / CARD_PITCH;
+        this._lastY = e.clientY;
+      },
+
+      dragEnd() {
+        if (!this._dragging) return;
+        this._dragging = false;
+        if (_reducedMotion() || Math.abs(this._velocity) < 0.02) {
+          this._animateTo(this._clampRotation(Math.round(this.rotation)));
+          return;
+        }
+        this._inertia();
+      },
+
+      _inertia() {
+        var self = this;
+        var v = -this._velocity;
+        function frame() {
+          v *= 0.92;
+          self.rotation = self._clampRotation(self.rotation + v);
+          if (Math.abs(v) > 0.004 && self.rotation > 0 && self.rotation < self.maxRotation) {
+            self._raf = requestAnimationFrame(frame);
+          } else {
+            self._raf = null;
+            self._animateTo(self._clampRotation(Math.round(self.rotation)));
+          }
+        }
+        this._raf = requestAnimationFrame(frame);
+      },
+
+      _stopInertia() {
+        if (this._raf) { cancelAnimationFrame(this._raf); this._raf = null; }
+        if (this._snapTimer) { clearTimeout(this._snapTimer); this._snapTimer = null; }
+        if (this._settle) { clearTimeout(this._settle); this._settle = null; }
+      },
+
+      _scheduleSnap() {
+        if (this._snapTimer) clearTimeout(this._snapTimer);
+        this._snapTimer = setTimeout(() => {
+          this._animateTo(this._clampRotation(Math.round(this.rotation)));
+        }, 140);
+      },
+
+      _animateTo(target) {
+        this._stopInertia();
+        if (_reducedMotion()) { this.rotation = target; return; }
+
+        var self = this, from = this.rotation, t0 = performance.now();
+        function frame(now) {
+          var k = Math.min(1, (now - t0) / SNAP_MS);
+          var eased = 1 - Math.pow(1 - k, 3);
+          self.rotation = from + (target - from) * eased;
+          if (k < 1) self._raf = requestAnimationFrame(frame);
+          else { self.rotation = target; self._raf = null; }
+        }
+        this._raf = requestAnimationFrame(frame);
+
+        /* requestAnimationFrame is paused in background tabs and in webviews
+           that are not compositing, which would strand the wheel mid-rotation
+           or stop it moving at all. Guarantee the target is reached. */
+        if (this._settle) clearTimeout(this._settle);
+        this._settle = setTimeout(() => {
+          if (self.rotation !== target) {
+            if (self._raf) { cancelAnimationFrame(self._raf); self._raf = null; }
+            self.rotation = target;
+          }
+        }, SNAP_MS + 80);
+      },
+
+      /* ── Drag & drop ────────────────────────────────────────────────── */
       dragEnter(e) {
         if (!e.dataTransfer || !e.dataTransfer.types.includes('Files')) return;
         this._dragCounter++;
         this.dropping = true;
       },
 
-      dragLeave(e) {
+      dragLeave() {
         this._dragCounter--;
         if (this._dragCounter <= 0) {
           this._dragCounter = 0;
@@ -154,104 +428,242 @@
         }
       },
 
-      async handleDrop(e) {
+      handleDrop(e) {
         this._dragCounter = 0;
         this.dropping = false;
+        var files = Array.from((e.dataTransfer && e.dataTransfer.files) || []);
+        if (files.length) this.stageFiles(files);
+      },
 
-        var files = e.dataTransfer && e.dataTransfer.files;
-        if (!files || files.length === 0) return;
+      /* Clipboard image paste — saved with a generated name, then staged. */
+      handlePaste(e) {
+        if (this.chooserOpen || this.uploading) return;
+        var tag = (e.target && e.target.tagName) || '';
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || (e.target && e.target.isContentEditable)) return;
 
-        var file = files[0];
-        this.dropFile = file;
-        this.dropFilename = file.name;
+        var items = Array.from((e.clipboardData && e.clipboardData.items) || []);
+        var images = items.filter(function (it) {
+          return it.kind === 'file' && it.type.indexOf('image/') === 0;
+        });
+        if (!images.length) return;
+
+        e.preventDefault();
+        /* Local time, to match the server-generated session directory name. */
+        var d = new Date();
+        var pad = function (n) { return String(n).padStart(2, '0'); };
+        var stamp = String(d.getFullYear()) + pad(d.getMonth() + 1) + pad(d.getDate())
+                  + '-' + pad(d.getHours()) + pad(d.getMinutes()) + pad(d.getSeconds());
+        var files = images.map(function (it, idx) {
+          var blob = it.getAsFile();
+          var ext = (blob.type.split('/')[1] || 'png').replace('jpeg', 'jpg');
+          var suffix = images.length > 1 ? '-' + (idx + 1) : '';
+          return new File([blob], 'pasted-' + stamp + suffix + '.' + ext, { type: blob.type });
+        });
+        this.stageFiles(files);
+      },
+
+      async stageFiles(files) {
+        this.dropError = '';
+        this.uploadLabel = files.length > 1 ? 'Uploading ' + files.length + ' files…' : 'Uploading…';
         this.uploading = true;
 
-        /* Set local preview */
-        var ext = file.name.split('.').pop().toLowerCase();
-        var imageExts = ['jpg','jpeg','png','webp','gif','bmp','tiff','tif'];
-        var videoExts = ['mp4','mkv','mov','avi','webm','m4v','flv'];
-        if (imageExts.includes(ext)) {
-          this.dropFileType = 'image';
-          this.dropPreviewUrl = URL.createObjectURL(file);
-        } else if (videoExts.includes(ext)) {
-          this.dropFileType = 'video';
-          this.dropPreviewUrl = URL.createObjectURL(file);
-        } else {
-          this.dropFileType = ext;
-          this.dropPreviewUrl = null;
-        }
-
-        /* Upload and get matching scripts */
         var body = new FormData();
-        body.append('file', file);
+        files.forEach(function (f) { body.append('files', f); });
+
         try {
           var res = await fetch('/api/drop-upload', { method: 'POST', body: body });
           var data = await res.json();
-          this.uploadedPath = data.path;
-          this.dropCategory = data.category;
-          this.dropFilesize = _formatSize(data.size);
-          this.dropScripts = data.scripts;
-          this.overlayPhase = 'preview';
+          if (!res.ok) { this.showError(data.detail || 'That drop could not be used.'); return; }
+          this.applyStaged(data, files);
         } catch (err) {
-          console.error('Drop upload failed:', err);
-          this.closeDrop();
+          this.showError('Upload failed. Is the app still running?');
         } finally {
           this.uploading = false;
         }
       },
 
-      async selectScript(s) {
+      applyStaged(data, files) {
+        this.sessionDir = data.dir;
+        this.fileNames = data.files.map(function (f) { return f.filename; });
+        this.filePaths = data.files.map(function (f) { return f.path; });
+        this.batchCount = data.count;
+        this.dropCategory = data.category;
+        this.categoryIcon = data.category_icon;
+        this.dropScripts = data.scripts;
+        this.totalSizeLabel = _formatSize(data.total_size);
+        this.dropFilename = data.files[0].filename;
+
+        var ext = this.dropFilename.split('.').pop().toLowerCase();
+        this.typeLabel = data.count > 1 ? data.category.toUpperCase() : ext.toUpperCase();
+
+        if (this.dropPreviewUrl) URL.revokeObjectURL(this.dropPreviewUrl);
+        this.dropPreviewUrl = null;
+        this.dropFileType = ext;
+        if (data.count === 1 && files && files[0]) {
+          if (IMAGE_EXTS.indexOf(ext) !== -1) { this.dropFileType = 'image'; }
+          else if (VIDEO_EXTS.indexOf(ext) !== -1) { this.dropFileType = 'video'; }
+          if (this.dropFileType === 'image' || this.dropFileType === 'video') {
+            this.dropPreviewUrl = URL.createObjectURL(files[0]);
+          }
+        }
+
+        this.rotation = 0;
+        this.expandingIndex = null;
+        this.chooserOpen = true;
+        this.$nextTick(() => { this._measure(); this.showTip(); });
+      },
+
+      showError(message) {
+        this.dropError = message;
+        if (this._errorTimer) clearTimeout(this._errorTimer);
+        this._errorTimer = setTimeout(() => { this.dropError = ''; }, 6000);
+      },
+
+      showTip() {
+        if (this._tipShown) return;
+        this._tipShown = true;
+        this.tipVisible = true;
+        this._tipTimer = setTimeout(() => { this.tipVisible = false; }, 5000);
+      },
+
+      /* ── Cards ──────────────────────────────────────────────────────── */
+      truncate(text, limit) { return _truncate(text, limit); },
+
+      /* Per-file batching is not implemented yet — see BACKLOG.md. */
+      cardEnabled(s) {
+        return this.batchCount <= 1 || s.batch_mode === 'directory';
+      },
+
+      selectScript(s, i) {
+        this.expandingIndex = i;
+        var delay = _reducedMotion() ? 0 : 500;
+        setTimeout(() => this._openScript(s), delay);
+      },
+
+      _openScript(s) {
+        /* Custom templates (e.g. the av.trim waveform editor) only make sense
+           for a single file, so batches always use the inline runner. */
+        if (s.has_template && this.batchCount === 1) {
+          var params = new URLSearchParams();
+          params.set('_prefill_file', this.filePaths[0]);
+          window.location.href = '/scripts/' + s.theme + '/' + s.name + '?' + params.toString();
+          return;
+        }
+        this.openRunner(s);
+      },
+
+      async openRunner(s) {
         this.selectedScript = s;
         this.fieldValues = {};
+        this.runLines = [];
+        this.runResult = '';
+        this.runnerFields = [];
 
         if (s.has_extra_fields) {
           try {
             var res = await fetch('/api/script-fields/' + s.theme + '/' + s.name);
             var data = await res.json();
-            this.scriptFields = data.fields;
-            /* Pre-fill defaults */
-            for (var f of data.fields) {
-              this.fieldValues[f.dest] = f.default || '';
+            this.runnerFields = data.fields.filter(function (f) { return f.dest !== s.file_dest; });
+            for (var f of this.runnerFields) {
+              this.fieldValues[f.dest] = f.widget === 'checkbox'
+                ? (f.default === 'True')
+                : (f.default || '');
             }
           } catch (err) {
-            this.scriptFields = [];
+            this.runnerFields = [];
           }
-        } else {
-          this.scriptFields = [];
         }
-
-        this.overlayPhase = 'fields';
+        this.runnerOpen = true;
       },
 
-      goToScript() {
+      closeRunner() {
+        this._stopRun();
+        this.runnerOpen = false;
+        this.selectedScript = null;
+        this.expandingIndex = null;
+        this.runLines = [];
+        this.runResult = '';
+      },
+
+      /* ── Running ────────────────────────────────────────────────────── */
+      startRun() {
+        var s = this.selectedScript;
+        if (!s || this.running) return;
+
         var params = new URLSearchParams();
-        params.set('_prefill_file', this.uploadedPath);
-        for (var f of this.scriptFields) {
-          var val = this.fieldValues[f.dest];
-          if (val !== undefined && val !== '') {
-            params.set(f.dest, val);
-          }
+        if (s.file_dest) {
+          params.set(s.file_dest, this.batchCount > 1 ? this.sessionDir : this.filePaths[0]);
         }
-        window.location.href = '/scripts/' + this.selectedScript.theme + '/' + this.selectedScript.name + '?' + params.toString();
+        for (var f of this.runnerFields) {
+          var v = this.fieldValues[f.dest];
+          if (f.widget === 'checkbox') { if (v) params.set(f.dest, 'on'); }
+          else if (v !== undefined && v !== null && v !== '') { params.set(f.dest, v); }
+        }
+
+        this._stopRun();
+        this.runLines = [];
+        this.runResult = '';
+        this.running = true;
+
+        var url = '/scripts/' + s.theme + '/' + s.name + '/run?' + params.toString();
+        this._es = new EventSource(url);
+
+        this._es.onmessage = (e) => {
+          this.runLines.push(_parseRunLine(e.data));
+          this.$nextTick(() => {
+            var c = this.$refs.console;
+            if (c) c.scrollTop = c.scrollHeight;
+          });
+        };
+
+        this._es.addEventListener('done', (e) => {
+          var info = {};
+          try { info = JSON.parse(e.data); } catch (err) { /* keep defaults */ }
+          this.runOk = info.exit_code === 0;
+          this.runResult = this.runOk
+            ? 'Completed successfully in ' + info.elapsed + 's'
+            : 'Run failed (exit code ' + info.exit_code + ')';
+          this._stopRun();
+        });
+
+        this._es.onerror = () => { this._stopRun(); };
       },
 
+      _stopRun() {
+        if (this._es) { this._es.close(); this._es = null; }
+        this.running = false;
+      },
+
+      /* ── Teardown ───────────────────────────────────────────────────── */
       closeDrop() {
-        if (this.dropPreviewUrl) {
-          URL.revokeObjectURL(this.dropPreviewUrl);
-        }
-        this.overlayPhase = null;
+        this._stopRun();
+        this._stopInertia();
+        if (this._tipTimer) clearTimeout(this._tipTimer);
+        if (this.dropPreviewUrl) URL.revokeObjectURL(this.dropPreviewUrl);
+
+        this.chooserOpen = false;
+        this.runnerOpen = false;
         this.dropping = false;
-        this.dropFile = null;
+        this.tipVisible = false;
+        this.expandingIndex = null;
+        this.rotation = 0;
+        this.sessionDir = '';
+        this.fileNames = [];
+        this.filePaths = [];
+        this.batchCount = 0;
         this.dropFilename = '';
         this.dropCategory = null;
+        this.categoryIcon = null;
         this.dropFileType = null;
         this.dropPreviewUrl = null;
-        this.dropFilesize = '';
+        this.totalSizeLabel = '';
+        this.typeLabel = '';
         this.dropScripts = [];
         this.selectedScript = null;
-        this.scriptFields = [];
+        this.runnerFields = [];
         this.fieldValues = {};
-        this.uploadedPath = '';
+        this.runLines = [];
+        this.runResult = '';
       },
 
       /* Existing script browser methods */

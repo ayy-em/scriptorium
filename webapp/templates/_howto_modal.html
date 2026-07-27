@@ -1,0 +1,23 @@
+{# "How this works" modal, opened from the chooser header. #}
+<div class="modal-overlay"
+     x-show="howtoOpen"
+     x-cloak
+     x-transition:enter="modal-enter"
+     x-transition:enter-start="modal-enter-from"
+     x-transition:enter-end="modal-enter-to"
+     x-transition:leave="modal-leave"
+     x-transition:leave-start="modal-leave-from"
+     x-transition:leave-end="modal-leave-to"
+     @click="howtoOpen = false"
+     @keydown.escape.window="howtoOpen = false">
+  <div class="modal-dialog howto-dialog" @click.stop role="dialog" aria-modal="true" aria-labelledby="howto-title">
+    <button class="modal-close" @click="howtoOpen = false" aria-label="Close">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+        <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+    </button>
+
+    <h2 class="howto-title" id="howto-title">How this works</h2>
+    <p class="howto-body">Drop a file, click a button, what's so hard about it?</p>
+  </div>
+</div>

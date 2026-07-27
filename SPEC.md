@@ -368,9 +368,30 @@ ACCEPTS: set[str] = {"video", "audio"}
 ```
 
 Valid categories are defined in `core/categories.py`: `video`, `audio`, `image`,
-`tabular`, `document`. When present, the script appears in the Drop-to-Discover
-overlay when a user drops a matching file onto the index page. Scripts without
+`tabular`, `document`. When present, the script appears on the Drop-to-Discover
+wheel when a user drops a matching file onto the index page. Scripts without
 `ACCEPTS` are excluded from drop results.
+
+#### Batch classification
+
+How a script behaves when several files are dropped is **inferred**, not
+declared — `webapp._form.batch_mode_for()` reads it off the argument parser:
+
+| Batch mode | Inferred from | Behaviour |
+|---|---|---|
+| `directory` | file input has widget `file-multi` (an optional `Path` positional), or its dest is `inputs` | one invocation against the drop session directory |
+| `per_file` | file input has widget `file` | not yet implemented; the card renders dimmed |
+
+To make a new script batch-capable, give its source argument `nargs="?"` and
+have it accept a directory, as the `formats.convert_*` scripts do. Per-file
+fan-out is tracked in `BACKLOG.md`.
+
+#### Drop sessions
+
+Every drop or clipboard paste writes into its own directory,
+`inputs/drop/<timestamp>-<random>/` (see `core.paths.drop_session_dir`), so a
+directory-native script never sees files from an earlier drop. All files in one
+drop must share a category; mixed batches are rejected by `/api/drop-upload`.
 
 ### Optional: `get_parser()`
 

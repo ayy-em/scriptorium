@@ -29,12 +29,45 @@ The web UI lists all scripts grouped by theme. Clicking a script opens a detail
 page with an auto-generated form. File inputs support drag-and-drop upload.
 Submitting the form runs the script and streams output in real time.
 
+Inputs that accept either a file or a whole directory show a **Files / Folder**
+toggle above the picker. Both modes upload into one batch directory and hand the
+script that directory's path.
+
+### Drop to discover
+
+Drag a file onto the main screen and the script list is replaced by a chooser:
+the file appears on the left and every script that can process it fans out on an
+arc to the right. Seven cards are visible at a time; when more match, rotate the
+wheel with the mouse wheel, by dragging, with the arrow keys, or via the arrow
+buttons. Tab reaches every card regardless of rotation.
+
+Picking a card either opens the script's own page (for scripts with a custom
+editor, such as `av.trim`) or expands into an inline form that runs the script
+without leaving the page.
+
+You can also **paste an image straight from the clipboard** — copy an image
+anywhere, focus Scriptorium, press <kbd>Ctrl</kbd>+<kbd>V</kbd>, and it is saved
+to `inputs/drop/<session>/` under a generated name and staged for use.
+
+**Batches.** Dropping several files at once works as long as they are all the
+same kind — `.mp4` alongside `.mov` is fine, `.docx` alongside `.avi` is
+rejected. Scripts that accept a directory (`av.join`, the `formats.convert_*`
+family, `photo.remove_bg`) run once over the whole batch. Scripts that take a
+single file are shown dimmed and marked *single file only*; running those across
+a batch is tracked in [BACKLOG.md](BACKLOG.md).
+
 ## Building Apps
 
 A single command builds the distributable app for your platform:
 
+Mac:
 ```sh
-bash build.sh
+build.sh
+```
+
+Windows:
+```bash
+build
 ```
 
 The script auto-detects your OS, installs missing tools (uv, Homebrew, ffmpeg),

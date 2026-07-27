@@ -1,10 +1,20 @@
 """Tests for argparse → form field introspection."""
 
 import argparse
+import importlib
+import json
 from pathlib import Path
 
 from core.argparse import ScriptoriumParser
-from webapp._form import FieldSpec, build_argv, fields_from_parser
+from webapp._form import (
+    FieldSpec,
+    accepts_directory,
+    batch_mode_for,
+    build_argv,
+    field_specs_payload,
+    fields_from_parser,
+    file_input_for,
+)
 
 
 def _parser(**kwargs) -> argparse.ArgumentParser:
@@ -238,3 +248,116 @@ class TestBuildArgv:
         specs = self._specs(parser)
         result = build_argv({"input": "in.mp4", "output": "out.mp4"}, specs)
         assert result == ["in.mp4", "out.mp4"]
+
+
+class TestFileInputFor:
+    def test_finds_positional_file(self):
+        parser = _parser()
+        parser.add_argument("input", type=Path)
+        spec = file_input_for(fields_from_parser(parser))
+        assert spec is not None
+        assert spec.dest == "input"
+
+    def test_finds_inputs_flag_when_no_positional_file(self):
+        parser = _parser()
+        parser.add_argument("--inputs", type=Path)
+        parser.add_argument("--order", choices=["a", "b"])
+        spec = file_input_for(fields_from_parser(parser))
+        assert spec is not None
+        assert spec.dest == "inputs"
+
+    def test_returns_none_when_script_takes_no_file(self):
+        parser = _parser()
+        parser.add_argument("--count", type=int)
+        assert file_input_for(fields_from_parser(parser)) is None
+
+    def test_ignores_non_file_positionals(self):
+        parser = _parser()
+        parser.add_argument("start")
+        parser.add_argument("source", type=Path)
+        spec = file_input_for(fields_from_parser(parser))
+        assert spec.dest == "source"
+
+
+class TestAcceptsDirectory:
+    def test_true_for_optional_path_positional(self):
+        parser = _parser()
+        parser.add_argument("source", type=Path, nargs="?")
+        assert accepts_directory(file_input_for(fields_from_parser(parser))) is True
+
+    def test_false_for_required_single_file(self):
+        parser = _parser()
+        parser.add_argument("input", type=Path)
+        assert accepts_directory(file_input_for(fields_from_parser(parser))) is False
+
+    def test_true_for_inputs_flag(self):
+        parser = _parser()
+        parser.add_argument("--inputs", type=Path)
+        assert accepts_directory(file_input_for(fields_from_parser(parser))) is True
+
+    def test_false_for_none(self):
+        assert accepts_directory(None) is False
+
+
+class TestBatchModeFor:
+    def test_directory_when_input_takes_a_folder(self):
+        parser = _parser()
+        parser.add_argument("source", type=Path, nargs="?")
+        assert batch_mode_for(fields_from_parser(parser)) == "directory"
+
+    def test_per_file_for_single_file_input(self):
+        parser = _parser()
+        parser.add_argument("input", type=Path)
+        assert batch_mode_for(fields_from_parser(parser)) == "per_file"
+
+    def test_per_file_when_no_file_input(self):
+        parser = _parser()
+        parser.add_argument("--count", type=int)
+        assert batch_mode_for(fields_from_parser(parser)) == "per_file"
+
+
+class TestRealScriptClassification:
+    """Guards the 7 directory-native / 10 per-file split the chooser relies on."""
+
+    def _mode(self, key):
+        mod = importlib.import_module(f"scripts.{key}")
+        return batch_mode_for(fields_from_parser(mod.get_parser()))
+
+    def test_join_is_directory_native(self):
+        assert self._mode("av.join") == "directory"
+
+    def test_converters_are_directory_native(self):
+        assert self._mode("formats.convert_video") == "directory"
+        assert self._mode("formats.convert_audio") == "directory"
+
+    def test_remove_bg_is_directory_native(self):
+        assert self._mode("photo.remove_bg") == "directory"
+
+    def test_trim_is_per_file(self):
+        assert self._mode("av.trim") == "per_file"
+
+    def test_transcribe_is_per_file(self):
+        assert self._mode("speech.transcribe") == "per_file"
+
+
+class TestFieldSpecsPayload:
+    def test_adds_accepts_dir_flag(self):
+        parser = _parser()
+        parser.add_argument("source", type=Path, nargs="?")
+        payload = field_specs_payload(fields_from_parser(parser))
+        assert payload[0]["accepts_dir"] is True
+
+    def test_preserves_every_spec_attribute(self):
+        parser = _parser()
+        parser.add_argument("--quality", choices=["low", "high"], default="low")
+        payload = field_specs_payload(fields_from_parser(parser))
+        entry = payload[0]
+        assert entry["dest"] == "quality"
+        assert entry["choices"] == ["low", "high"]
+        assert entry["default"] == "low"
+        assert entry["widget"] == "select"
+
+    def test_is_json_serialisable(self):
+        parser = _parser()
+        parser.add_argument("input", type=Path)
+        json.dumps(field_specs_payload(fields_from_parser(parser)))

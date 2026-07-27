@@ -1,6 +1,7 @@
 """Argparse introspection utilities for auto-generating web forms."""
 
 import argparse
+import dataclasses
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -86,6 +87,72 @@ def fields_from_parser(parser: argparse.ArgumentParser) -> list[FieldSpec]:
         )
 
     return specs
+
+
+def field_specs_payload(specs: list[FieldSpec]) -> list[dict]:
+    """Serialise field specs for JSON transport, enriched for the UI.
+
+    Each dict carries every FieldSpec attribute plus ``accepts_dir``, which
+    tells the client whether to offer a file/folder toggle for that input.
+
+    Args:
+        specs: Field descriptors from fields_from_parser().
+
+    Returns:
+        List of JSON-serialisable dicts in the same order as *specs*.
+    """
+    return [{**dataclasses.asdict(s), "accepts_dir": accepts_directory(s)} for s in specs]
+
+
+def file_input_for(specs: list[FieldSpec]) -> FieldSpec | None:
+    """Return the spec describing a script's primary file input, if any.
+
+    A script's file input is the first positional argument rendered as a file
+    widget. Scripts driven entirely by a directory flag (``av.join``) expose no
+    positional file input and instead carry a spec whose dest is ``"inputs"``.
+
+    Args:
+        specs: Field descriptors from fields_from_parser().
+
+    Returns:
+        The matching FieldSpec, or None if the script takes no file input.
+    """
+    for spec in specs:
+        if spec.is_positional and spec.widget in ("file", "file-multi"):
+            return spec
+    return next((s for s in specs if s.dest == "inputs"), None)
+
+
+def accepts_directory(spec: FieldSpec | None) -> bool:
+    """Report whether a file input also accepts a directory path.
+
+    Scripts whose input is rendered as ``file-multi`` document their argument
+    as "file or directory" and walk a directory themselves. The ``inputs`` flag
+    used by directory-only scripts is likewise a directory.
+
+    Args:
+        spec: A file input spec from file_input_for(), or None.
+
+    Returns:
+        True if a directory path is a valid value for this input.
+    """
+    if spec is None:
+        return False
+    return spec.widget == "file-multi" or spec.dest == "inputs"
+
+
+def batch_mode_for(specs: list[FieldSpec]) -> str:
+    """Classify how a script should handle a batch of dropped files.
+
+    Args:
+        specs: Field descriptors from fields_from_parser().
+
+    Returns:
+        ``"directory"`` when the script can process a whole directory in one
+        invocation, otherwise ``"per_file"``. Per-file batching is not yet
+        implemented — see BACKLOG.md.
+    """
+    return "directory" if accepts_directory(file_input_for(specs)) else "per_file"
 
 
 def _widget_for(action: argparse.Action) -> str:

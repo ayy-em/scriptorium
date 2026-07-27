@@ -47,6 +47,24 @@ def inputs_dir(theme: str) -> Path:  # noqa: ARG001
     return d
 
 
+def drop_session_dir(session_id: str) -> Path:
+    """Return an isolated directory for one drag-drop or paste session.
+
+    Lives at ``inputs/drop/<session_id>/`` so that directory-native scripts run
+    against exactly the files just dropped, without picking up unrelated files
+    sitting in the shared inputs root.
+
+    Args:
+        session_id: Filesystem-safe identifier for this drop.
+
+    Returns:
+        The created session directory.
+    """
+    d = inputs_dir("drop") / "drop" / session_id
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
 def past_inputs_dir(theme: str) -> Path:  # noqa: ARG001
     """Return the processed-inputs archive directory, creating it if needed.
 

@@ -20,11 +20,33 @@
     {% if spec.widget == "file-multi" %}
     <label>{{ spec.label }}{% if spec.required %}<span class="req">*</span>{% else %}<span class="optional-tag">optional</span>{% endif %}</label>
     <div class="file-upload-wrap" x-data="fileUploadMulti('{{ key.split('.')[0] }}')">
+      {# This input accepts a file or a whole directory, so offer both. #}
+      <div class="path-toggle">
+        <button type="button" class="path-toggle-opt" :class="{ 'is-active': mode === 'file' }" @click="setMode('file')">
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M9 1.5H4.5A1.5 1.5 0 0 0 3 3v10a1.5 1.5 0 0 0 1.5 1.5h7A1.5 1.5 0 0 0 13 13V5.5L9 1.5Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
+            <path d="M9 1.5V5.5h4" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
+          </svg>
+          Files
+        </button>
+        <button type="button" class="path-toggle-opt" :class="{ 'is-active': mode === 'dir' }" @click="setMode('dir')">
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M2 4.2h4.2l1.3 1.5H14v7.3H2V4.2Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
+          </svg>
+          Folder
+        </button>
+      </div>
       <label class="file-drop" :class="{ 'has-file': filenames.length }" @dragover.prevent @drop.prevent="dropFile($event)">
-        <input type="file" class="file-hidden" multiple @change="upload($event)">
-        <span x-show="!filenames.length && !uploading" class="file-placeholder">Drop files here or click to browse</span>
+        <template x-if="mode === 'file'">
+          <input type="file" class="file-hidden" multiple @change="upload($event)">
+        </template>
+        <template x-if="mode === 'dir'">
+          <input type="file" class="file-hidden" webkitdirectory directory multiple @change="upload($event)">
+        </template>
+        <span x-show="!filenames.length && !uploading" class="file-placeholder"
+              x-text="mode === 'dir' ? 'Choose a folder — every supported file inside is used' : 'Drop files here or click to browse'"></span>
         <span x-show="uploading" class="file-uploading">Uploading&hellip;</span>
-        <span x-show="filenames.length && !uploading" x-text="filenames.length === 1 ? filenames[0] : filenames.length + ' files queued'" class="file-name"></span>
+        <span x-show="filenames.length && !uploading" x-text="summary()" class="file-name"></span>
       </label>
       <input type="hidden" id="f_{{ spec.dest }}" name="{{ spec.dest }}" x-model="batchDir">
     </div>
@@ -149,12 +171,27 @@ function fileUploadMulti(theme) {
     filenames: [],
     batchDir: '',
     uploading: false,
+    /* 'file' picks individual files, 'dir' picks a whole folder. Both upload
+       into one batch subdirectory and submit that directory's path, which is
+       what these scripts accept. */
+    mode: 'file',
     init() {
       if (__prefill && !__prefill._consumed) {
         this.batchDir = __prefill.path;
         this.filenames = [__prefill.filename];
         __prefill._consumed = true;
       }
+    },
+    setMode(next) {
+      if (this.mode === next) return;
+      this.mode = next;
+      this.filenames = [];
+      this.batchDir = '';
+    },
+    summary() {
+      if (this.filenames.length === 1) return this.filenames[0];
+      var noun = this.mode === 'dir' ? ' files from folder' : ' files queued';
+      return this.filenames.length + noun;
     },
     async upload(event) {
       var files = Array.from(event.target.files);

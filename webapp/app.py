@@ -8,6 +8,8 @@ import logging
 from pathlib import Path
 import subprocess
 import sys
+import time
+import uuid
 
 from fastapi import FastAPI, HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -21,6 +23,7 @@ from core.config import save as save_config
 from core.env import load_env
 from core.paths import (
     FROZEN,
+    drop_session_dir,
     has_ffmpeg,
     inputs_dir,
     outputs_dir,
@@ -35,7 +38,15 @@ from core.registry import (
     theme_descriptions,
     theme_labels,
 )
-from webapp._form import build_argv, fields_from_parser
+from webapp._form import (
+    accepts_directory,
+    batch_mode_for,
+    build_argv,
+    field_specs_payload,
+    fields_from_parser,
+    file_input_for,
+)
+from webapp._icons import icon_for_category, icon_for_script
 
 _CREATION_FLAGS = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
 
@@ -50,6 +61,7 @@ app.mount("/static", StaticFiles(directory=str(static_dir())), name="static")
 templates = Jinja2Templates(directory=str(templates_dir()))
 templates.env.globals["is_frozen"] = FROZEN
 templates.env.globals["has_ffmpeg"] = has_ffmpeg()
+templates.env.globals["accepts_directory"] = accepts_directory
 templates.env.globals["ffmpeg_install_hint"] = (
     "Install via Homebrew: brew install ffmpeg"
     if sys.platform == "darwin"
@@ -311,35 +323,104 @@ def _has_extra_fields(mod) -> bool:
     return any(not (s.is_positional and s.widget in ("file", "file-multi")) for s in specs)
 
 
+def _script_summary(key: str, mod) -> dict:
+    """Build the chooser payload describing one script.
+
+    Args:
+        key: Dotted script key such as ``"av.trim"``.
+        mod: The imported script module.
+
+    Returns:
+        Dict with display metadata, batch classification, whether the script
+        renders a custom template, and whether its input accepts a directory.
+    """
+    specs = fields_from_parser(mod.get_parser()) if hasattr(mod, "get_parser") else []
+    file_input = file_input_for(specs)
+    theme, name = key.split(".", 1)
+    return {
+        "key": key,
+        "theme": theme,
+        "name": name,
+        "title": mod.TITLE,
+        "description": mod.DESCRIPTION,
+        "has_extra_fields": _has_extra_fields(mod),
+        "has_template": bool(getattr(mod, "TEMPLATE", None)),
+        "batch_mode": batch_mode_for(specs),
+        "accepts_directory": accepts_directory(file_input),
+        "file_dest": file_input.dest if file_input else None,
+        "icon": icon_for_script(key),
+    }
+
+
+def _new_drop_session() -> tuple[str, Path]:
+    """Create an isolated directory for one drop or paste.
+
+    Each drop gets its own subdirectory so that directory-native scripts such
+    as ``av.join`` never pick up leftovers from an earlier drop.
+
+    Returns:
+        Tuple of (session id, created directory path).
+    """
+    session_id = f"{time.strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex[:6]}"
+    return session_id, drop_session_dir(session_id)
+
+
 @app.post("/api/drop-upload")
-async def drop_upload(file: UploadFile) -> JSONResponse:
-    """Accept a dropped file, save to inputs/, and return matching scripts."""
-    save_dir = inputs_dir("drop")
-    save_path = save_dir / file.filename
-    content = await file.read()
-    save_path.write_bytes(content)
+async def drop_upload(files: list[UploadFile]) -> JSONResponse:
+    """Accept one or more dropped files and return the scripts that match them.
 
-    category = categorize(file.filename)
-    matches = scripts_for_file(file.filename)
+    All files in a batch must share a single category; mixed batches are
+    rejected so that the chooser never has to intersect incompatible script
+    sets. Files are written into a per-drop session directory.
 
-    scripts_data = [
-        {
-            "key": key,
-            "theme": key.split(".")[0],
-            "name": key.split(".")[1],
-            "title": mod.TITLE,
-            "description": mod.DESCRIPTION,
-            "has_extra_fields": _has_extra_fields(mod),
-        }
-        for key, mod in matches
-    ]
+    Args:
+        files: Uploaded files from the browser, all of the same category.
+
+    Returns:
+        JSON describing the session, the batch, and every matching script.
+
+    Raises:
+        HTTPException: 400 if the batch is empty, contains an unrecognised file
+            type, or mixes categories.
+    """
+    if not files:
+        raise HTTPException(status_code=400, detail="No files uploaded")
+
+    names = [Path(f.filename or "").name for f in files]
+    if any(not n for n in names):
+        raise HTTPException(status_code=400, detail="A file was uploaded without a name")
+
+    categories = {categorize(n) for n in names}
+    if None in categories:
+        unknown = sorted({Path(n).suffix.lower() or n for n in names if categorize(n) is None})
+        raise HTTPException(status_code=400, detail=f"Unsupported file type: {', '.join(unknown)}")
+    if len(categories) > 1:
+        listed = ", ".join(sorted(c for c in categories if c))
+        raise HTTPException(
+            status_code=400,
+            detail=f"All files must be the same type — got {listed}",
+        )
+
+    category = categories.pop()
+    session_id, session_dir = _new_drop_session()
+
+    saved = []
+    for upload, name in zip(files, names, strict=True):
+        content = await upload.read()
+        (session_dir / name).write_bytes(content)
+        saved.append({"filename": name, "path": str(session_dir / name), "size": len(content)})
+
+    scripts_data = [_script_summary(key, mod) for key, mod in scripts_for_file(names[0])]
 
     return JSONResponse(
         {
-            "filename": file.filename,
-            "path": str(save_path),
+            "session_id": session_id,
+            "dir": str(session_dir),
             "category": category,
-            "size": len(content),
+            "category_icon": icon_for_category(category),
+            "count": len(saved),
+            "total_size": sum(f["size"] for f in saved),
+            "files": saved,
             "scripts": scripts_data,
         }
     )
@@ -360,9 +441,7 @@ async def script_fields(theme: str, script_name: str) -> JSONResponse:
     specs = fields_from_parser(mod.get_parser())
     filtered = [s for s in specs if not (s.is_positional and s.widget in ("file", "file-multi"))]
 
-    import dataclasses  # noqa: PLC0415
-
-    return JSONResponse({"fields": [dataclasses.asdict(f) for f in filtered]})
+    return JSONResponse({"fields": field_specs_payload(filtered)})
 
 
 async def _stream_script(key: str, argv: list[str]):

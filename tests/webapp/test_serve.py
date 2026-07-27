@@ -185,34 +185,33 @@ class TestSettingsAPI:
 
 class TestDropUpload:
     def test_mp4_returns_video_category(self, tmp_path, monkeypatch):
-        monkeypatch.setattr("webapp.app.inputs_dir", lambda theme: tmp_path)
+        monkeypatch.setattr("webapp.app.drop_session_dir", lambda sid: tmp_path)
         response = client.post(
             "/api/drop-upload",
-            files={"file": ("clip.mp4", b"fake-video-data", "video/mp4")},
+            files=[("files", ("clip.mp4", b"fake-video-data", "video/mp4"))],
         )
         assert response.status_code == 200
         data = response.json()
         assert data["category"] == "video"
-        assert data["filename"] == "clip.mp4"
-        assert data["size"] == len(b"fake-video-data")
+        assert data["count"] == 1
+        assert data["files"][0]["filename"] == "clip.mp4"
+        assert data["total_size"] == len(b"fake-video-data")
         assert any(s["key"] == "formats.convert_video" for s in data["scripts"])
 
-    def test_unknown_ext_returns_null_category(self, tmp_path, monkeypatch):
-        monkeypatch.setattr("webapp.app.inputs_dir", lambda theme: tmp_path)
+    def test_unknown_ext_is_rejected(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("webapp.app.drop_session_dir", lambda sid: tmp_path)
         response = client.post(
             "/api/drop-upload",
-            files={"file": ("data.xyz", b"whatever", "application/octet-stream")},
+            files=[("files", ("data.xyz", b"whatever", "application/octet-stream"))],
         )
-        assert response.status_code == 200
-        data = response.json()
-        assert data["category"] is None
-        assert data["scripts"] == []
+        assert response.status_code == 400
+        assert ".xyz" in response.json()["detail"]
 
     def test_saves_file_to_disk(self, tmp_path, monkeypatch):
-        monkeypatch.setattr("webapp.app.inputs_dir", lambda theme: tmp_path)
+        monkeypatch.setattr("webapp.app.drop_session_dir", lambda sid: tmp_path)
         client.post(
             "/api/drop-upload",
-            files={"file": ("test.png", b"png-bytes", "image/png")},
+            files=[("files", ("test.png", b"png-bytes", "image/png"))],
         )
         assert (tmp_path / "test.png").read_bytes() == b"png-bytes"
 
