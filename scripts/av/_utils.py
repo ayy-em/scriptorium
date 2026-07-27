@@ -124,6 +124,28 @@ def run_ffmpeg(args: list[str]) -> None:
     )
 
 
+def run_ffmpeg_stderr(args: list[str]) -> str:
+    """Run ffmpeg and return its stderr output as a string.
+
+    Unlike run_ffmpeg, does not raise on non-zero exit — used for filter
+    probes (e.g. blackdetect with -f null) where the filter log in stderr is
+    more useful than the exit code.
+
+    Args:
+        args: Arguments passed after the ffmpeg binary name.
+
+    Returns:
+        stderr decoded as UTF-8 (with replacement for invalid bytes).
+    """
+    result = subprocess.run(
+        ["ffmpeg", "-hide_banner", *args],
+        check=False,
+        capture_output=True,
+        creationflags=_CREATION_FLAGS,
+    )
+    return result.stderr.decode("utf-8", errors="replace")
+
+
 def run_ffprobe(args: list[str]) -> dict:
     """Run ffprobe in JSON mode and return the parsed output.
 
