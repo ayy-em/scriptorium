@@ -65,7 +65,7 @@ def parse_time(value: str) -> float:
         if len(parts) == 2:
             return int(parts[0]) * 60 + float(parts[1])
         return float(parts[0])
-    except (ValueError, IndexError):
+    except ValueError, IndexError:
         raise ValueError(f"Cannot parse timestamp: {value!r}")
 
 
