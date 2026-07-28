@@ -46,6 +46,12 @@ AUDIO_ONLY_EXTS = frozenset(
 COVER_SUPPORTED_EXTS = frozenset({".mp4", ".m4v", ".m4a", ".mp3", ".mkv", ".flac"})
 
 
+# Colon-separated field counts a timestamp can have: HH:MM:SS and MM:SS.
+# Anything else is treated as bare seconds.
+_HMS_PARTS = 3
+_MS_PARTS = 2
+
+
 def parse_time(value: str) -> float:
     """Parse a timestamp string into seconds.
 
@@ -60,9 +66,9 @@ def parse_time(value: str) -> float:
     """
     parts = value.split(":")
     try:
-        if len(parts) == 3:
+        if len(parts) == _HMS_PARTS:
             return int(parts[0]) * 3600 + int(parts[1]) * 60 + float(parts[2])
-        if len(parts) == 2:
+        if len(parts) == _MS_PARTS:
             return int(parts[0]) * 60 + float(parts[1])
         return float(parts[0])
     except ValueError, IndexError:

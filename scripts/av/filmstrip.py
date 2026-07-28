@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 import platform
@@ -66,6 +67,72 @@ def _parse_grid(grid: str) -> tuple[int, int]:
     return rows, cols
 
 
+@dataclass(frozen=True)
+class _Layout:
+    """Pixel geometry for one filmstrip sheet.
+
+    Derived purely from the source frame size and the grid, so the arithmetic
+    can be reasoned about (and tested) without touching ffmpeg or Pillow.
+
+    Attributes:
+        frame_w: Width each scaled frame is fitted into.
+        frame_h: Height each scaled frame is fitted into.
+        gap_x: Horizontal gap between columns.
+        pad_x: Left and right canvas padding.
+        cell_h: Height of one frame plus its timestamp label.
+        grid_top: Y coordinate where the frame grid starts, below the header.
+        canvas_w: Total canvas width.
+        canvas_h: Total canvas height.
+    """
+
+    frame_w: int
+    frame_h: int
+    gap_x: int
+    pad_x: int
+    cell_h: int
+    grid_top: int
+    canvas_w: int
+    canvas_h: int
+
+
+def _compute_layout(vid_w: int, vid_h: int, rows: int, cols: int) -> _Layout:
+    """Work out the canvas geometry for a grid of frames.
+
+    Portrait sources get a narrower frame box and tighter horizontal spacing,
+    otherwise a column of tall frames leaves large empty margins.
+
+    Args:
+        vid_w: Source frame width in pixels, after any rotation is applied.
+        vid_h: Source frame height in pixels, after any rotation is applied.
+        rows: Grid rows.
+        cols: Grid columns.
+
+    Returns:
+        The resolved ``_Layout``.
+    """
+    is_portrait = vid_h > vid_w
+    box_w, box_h = _FRAME_BOX_PORTRAIT if is_portrait else _FRAME_BOX_LANDSCAPE
+    scale = min(box_w / vid_w, box_h / vid_h)
+    frame_w = round(vid_w * scale)
+    frame_h = round(vid_h * scale)
+
+    gap_x = 4 if is_portrait else _GAP
+    pad_x = 14 if is_portrait else _PAD
+    cell_h = frame_h + _LABEL_H
+    grid_top = _HEADER_H + 1 + len(_SHADOW_LINES) + _PAD
+
+    return _Layout(
+        frame_w=frame_w,
+        frame_h=frame_h,
+        gap_x=gap_x,
+        pad_x=pad_x,
+        cell_h=cell_h,
+        grid_top=grid_top,
+        canvas_w=2 * pad_x + cols * frame_w + (cols - 1) * gap_x,
+        canvas_h=grid_top + rows * cell_h + (rows - 1) * _GAP + _PAD,
+    )
+
+
 def filmstrip(
     source: Path,
     output: Path,
@@ -111,43 +178,33 @@ def filmstrip(
         vid_w, vid_h = probe_frame.size
         probe_frame.close()
 
-        is_portrait = vid_h > vid_w
-        box_w, box_h = _FRAME_BOX_PORTRAIT if is_portrait else _FRAME_BOX_LANDSCAPE
-        scale = min(box_w / vid_w, box_h / vid_h)
-        frame_w = round(vid_w * scale)
-        frame_h = round(vid_h * scale)
+        layout = _compute_layout(vid_w, vid_h, rows, cols)
 
-        gap_x = 4 if is_portrait else _GAP
-        pad_x = 14 if is_portrait else _PAD
-        cell_h = frame_h + _LABEL_H
-        canvas_w = 2 * pad_x + cols * frame_w + (cols - 1) * gap_x
-        shadow_h = len(_SHADOW_LINES)
-        grid_top = _HEADER_H + 1 + shadow_h + _PAD
-        canvas_h = grid_top + rows * cell_h + (rows - 1) * _GAP + _PAD
-
-        canvas = Image.new("RGB", (canvas_w, canvas_h), _BG)
+        canvas = Image.new("RGB", (layout.canvas_w, layout.canvas_h), _BG)
         draw = ImageDraw.Draw(canvas)
         label_font = _load_font(16)
 
-        _draw_header(draw, canvas_w, source.name, duration, pad_x=pad_x)
+        _draw_header(draw, layout.canvas_w, source.name, duration, pad_x=layout.pad_x)
 
         for idx, seek in enumerate(positions):
             frame_path = tmp_dir / f"frame_{idx:03d}.jpg"
             if idx > 0:
                 _extract_frame(source, seek, frame_path)
             frame = Image.open(frame_path)
-            frame.thumbnail((frame_w, frame_h), Image.LANCZOS)
+            frame.thumbnail((layout.frame_w, layout.frame_h), Image.LANCZOS)
             col = idx % cols
             row = idx // cols
-            x = pad_x + col * (frame_w + gap_x) + (frame_w - frame.width) // 2
-            y = grid_top + row * (cell_h + _GAP) + (frame_h - frame.height) // 2
-            canvas.paste(frame, (x, y))
+            cell_x = layout.pad_x + col * (layout.frame_w + layout.gap_x)
+            cell_y = layout.grid_top + row * (layout.cell_h + _GAP)
+            canvas.paste(
+                frame,
+                (cell_x + (layout.frame_w - frame.width) // 2, cell_y + (layout.frame_h - frame.height) // 2),
+            )
 
             label = _format_duration(seek)
-            label_x = pad_x + col * (frame_w + gap_x) + frame_w // 2
-            label_y = grid_top + row * (cell_h + _GAP) + frame_h + 4
             label_w = draw.textlength(label, font=label_font)
-            draw.text((label_x - label_w / 2, label_y), label, fill=(130, 130, 138), font=label_font)
+            label_x = cell_x + layout.frame_w // 2 - label_w / 2
+            draw.text((label_x, cell_y + layout.frame_h + 4), label, fill=(130, 130, 138), font=label_font)
 
     if out_path.suffix.lower() == ".pdf":
         canvas.save(str(out_path), "PDF", resolution=150)

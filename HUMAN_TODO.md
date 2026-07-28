@@ -105,12 +105,8 @@ could not be verified there and need a human with the app actually open.
 - [ ] **Fonts are vendored** as Inter and JetBrains Mono variable woff2 (89KB
       total), both SIL OFL 1.1, licences alongside them in
       `webapp/static/fonts/`. No action needed unless you change families.
-- [ ] **Three pre-existing lint errors** fail `uv run ruff check`, all in files
-      untouched by the UI work: `PLR2004` ×2 in `scripts/av/_utils.py` and
-      `PLR0915` in `scripts/av/filmstrip.py`. They fail on `main` too.
-- [ ] **Four pre-existing test failures**, likewise on `main`:
-      `tests/av/test_split.py::test_split_middle_segment_has_both_ss_and_to`,
-      `tests/av/test_trim.py::{test_trim_with_start_and_end,test_trim_accepts_mm_ss_format}`,
-      and `tests/webapp/test_serve.py::TestScriptFields::test_excludes_output_field`.
-      All four point at `av.trim` / `av.split` argument handling, which suggests
-      one underlying change to those scripts broke its tests.
+- [x] ~~Pre-existing lint errors and test failures.~~ Resolved. All four failing
+      tests were stale assertions left behind by two earlier commits that
+      changed behaviour deliberately — `d891096` (keyframe-accurate cutting) and
+      `df5a24a` (exposing `--output` in the drop overlay). The code was right in
+      both cases; the tests were updated to match, not the other way round.

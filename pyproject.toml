@@ -117,9 +117,6 @@ fixable = ["ALL"]
 "scripts/av/to_anim.py" = [
     "PLR0913", # to_anim legitimately needs source, start, end, outputs_dir + 4 optional knobs
 ]
-"scripts/av/filmstrip.py" = [
-    "PLR0913", # filmstrip takes source + 5 optional layout/output knobs
-]
 "scripts/telegram/_group_metrics.py" = [
     "PLR0913", # build_group_analytics takes metadata + messages + sender_lookup + config kwargs
 ]

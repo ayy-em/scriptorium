@@ -248,11 +248,15 @@ class TestScriptFields:
         dests = [f["dest"] for f in data["fields"]]
         assert "source" not in dests
 
-    def test_excludes_output_field(self):
+    def test_includes_output_field(self):
+        """--output is deliberately exposed so it can be set from the drop overlay.
+
+        It used to be filtered out; commit df5a24a removed that exclusion.
+        """
         response = client.get("/api/script-fields/av/trim")
         data = response.json()
         dests = [f["dest"] for f in data["fields"]]
-        assert "output" not in dests
+        assert "output" in dests
 
     def test_unknown_script_returns_404(self):
         response = client.get("/api/script-fields/does/notexist")
