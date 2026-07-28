@@ -5,9 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Personal script runner with auto-generated forms and streaming output.">
   <link rel="icon" href="/static/logo.webp" type="image/webp">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
+  <link rel="preload" href="/static/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/static/fonts/jetbrains-mono-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="/static/style.css">
   <title>{% block title %}Scriptorium{% endblock %}</title>
   <script>
@@ -25,17 +24,25 @@
         settingsOpen: false,
         outputsDir: '',
         closeBehavior: 'close',
+        browseSupported: false,
+        browseError: '',
+        saving: false,
         _settingsLoaded: false,
+        _snapshot: null,
         updateAvailable: false,
         updateUrl: '',
         latestVersion: '',
         onboardingOpen: false,
         onboardingStep: 0,
 
+        applyTheme(dark) {
+          this.dark = dark;
+          localStorage.setItem('theme', dark ? 'dark' : 'light');
+          document.documentElement.classList.toggle('dark', dark);
+        },
+
         toggleDark() {
-          this.dark = !this.dark;
-          localStorage.setItem('theme', this.dark ? 'dark' : 'light');
-          document.documentElement.classList.toggle('dark', this.dark);
+          this.applyTheme(!this.dark);
         },
 
         async loadSettings() {
@@ -45,16 +52,39 @@
             var data = await res.json();
             this.outputsDir = data.outputs_dir || '';
             this.closeBehavior = data.close_behavior || 'close';
-            if (data.theme === 'dark' !== this.dark) {
-              this.dark = data.theme === 'dark';
-              localStorage.setItem('theme', this.dark ? 'dark' : 'light');
-              document.documentElement.classList.toggle('dark', this.dark);
+            this.browseSupported = !!data.browse_supported;
+            if ((data.theme === 'dark') !== this.dark) {
+              this.applyTheme(data.theme === 'dark');
             }
             this._settingsLoaded = true;
           } catch (e) { /* use defaults */ }
         },
 
+        /* Snapshot on open so Cancel can restore everything, including the
+           theme — which previews live while the modal is open. */
+        openSettings() {
+          this._snapshot = {
+            dark: this.dark,
+            outputsDir: this.outputsDir,
+            closeBehavior: this.closeBehavior
+          };
+          this.browseError = '';
+          this.settingsOpen = true;
+        },
+
+        cancelSettings() {
+          if (this._snapshot) {
+            if (this._snapshot.dark !== this.dark) this.applyTheme(this._snapshot.dark);
+            this.outputsDir = this._snapshot.outputsDir;
+            this.closeBehavior = this._snapshot.closeBehavior;
+          }
+          this._snapshot = null;
+          this.browseError = '';
+          this.settingsOpen = false;
+        },
+
         async saveSettings() {
+          this.saving = true;
           try {
             await fetch('/api/settings', {
               method: 'POST',
@@ -65,8 +95,28 @@
                 close_behavior: this.closeBehavior
               })
             });
+            this._snapshot = null;
             this.settingsOpen = false;
-          } catch (e) { /* silent */ }
+          } catch (e) { /* silent */ } finally {
+            this.saving = false;
+          }
+        },
+
+        /* Native folder picker. Only the pywebview desktop wrapper can supply
+           a real absolute path, so the button is disabled elsewhere. */
+        async browseFolder() {
+          this.browseError = '';
+          try {
+            var res = await fetch('/api/browse-folder', { method: 'POST' });
+            if (!res.ok) {
+              this.browseError = 'Folder picker unavailable — type a path instead.';
+              return;
+            }
+            var data = await res.json();
+            if (data.path) this.outputsDir = data.path;
+          } catch (e) {
+            this.browseError = 'Folder picker unavailable — type a path instead.';
+          }
         },
 
         async checkUpdate() {
@@ -106,9 +156,14 @@
       Alpine.store('ui').initOnboarding();
     });
   </script>
-  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/cdn.min.js"></script>
+  {# Self-hosted so the desktop app works offline. The focus plugin, which
+     provides x-trap, must load before Alpine core. #}
+  <script defer src="/static/js/alpinejs-focus.min.js"></script>
+  <script defer src="/static/js/alpinejs.min.js"></script>
 </head>
 <body x-data>
+  {% include "_splash.html" %}
+
   <!-- Fixed top navbar -->
   <header class="topnav">
     <a href="/" class="topnav-brand" @click="$store.ui.activeCategory = null">
@@ -132,7 +187,7 @@
     </div>
 
     <div class="topnav-actions">
-      <button class="outputs-btn"
+      <button class="icon-action"
               @click="fetch('/api/open-outputs', { method: 'POST' })"
               aria-label="Open outputs folder">
         <img src="/static/icons/icon-folder.png" class="icon-img" width="18" height="18" alt="" aria-hidden="true">
@@ -140,7 +195,7 @@
       {# Sun shows in dark mode, moon in light mode — each indicates the mode you
          switch to. x-show is authoritative; the opacity rules in style.css cover
          the first paint before Alpine initialises. #}
-      <button class="dark-toggle"
+      <button class="icon-action dark-toggle"
               @click="$store.ui.toggleDark()"
               :aria-label="$store.ui.dark ? 'Switch to light mode' : 'Switch to dark mode'">
         <img src="/static/icons/icon-day.png" class="icon-img icon-day" width="18" height="18"
@@ -148,8 +203,8 @@
         <img src="/static/icons/icon-night.png" class="icon-img icon-night" width="18" height="18"
              x-show="!$store.ui.dark" alt="" aria-hidden="true">
       </button>
-      <button class="settings-btn"
-              @click="$store.ui.settingsOpen = true"
+      <button class="icon-action"
+              @click="$store.ui.openSettings()"
               aria-label="Open settings">
         <img src="/static/icons/icon-settings.png" class="icon-img" width="18" height="18" alt="" aria-hidden="true">
       </button>

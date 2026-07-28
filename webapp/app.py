@@ -6,6 +6,7 @@ import html
 import json
 import logging
 from pathlib import Path
+import shlex
 import subprocess
 import sys
 import time
@@ -16,7 +17,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from core.categories import categorize
+from core.categories import CATEGORY_EXTS, categorize
 from core.config import UserConfig
 from core.config import load as load_config
 from core.config import save as save_config
@@ -26,6 +27,7 @@ from core.paths import (
     drop_session_dir,
     has_ffmpeg,
     inputs_dir,
+    logs_dir,
     outputs_root,
     read_version,
     static_dir,
@@ -38,6 +40,7 @@ from core.registry import (
     theme_descriptions,
     theme_labels,
 )
+from webapp._badges import badges_for
 from webapp._form import (
     accepts_directory,
     batch_mode_for,
@@ -67,6 +70,26 @@ templates.env.globals["ffmpeg_install_hint"] = (
     if sys.platform == "darwin"
     else "Download ffmpeg from gyan.dev/ffmpeg/builds and add it to your PATH."
 )
+
+
+def accept_exts_for(mod) -> str:  # noqa: ANN001
+    """Return an ``accept`` attribute value for a script's file input.
+
+    Derived from the script's ``ACCEPTS`` categories, so the file picker filters
+    to the types the script can actually handle and the dropzone can reject
+    obviously wrong files before uploading them.
+
+    Args:
+        mod: The imported script module.
+
+    Returns:
+        Comma-separated extension list (e.g. ``".mp4,.mkv"``), or an empty
+        string when the script declares no categories — meaning accept anything.
+    """
+    exts: set[str] = set()
+    for category in getattr(mod, "ACCEPTS", set()):
+        exts |= CATEGORY_EXTS.get(category, frozenset())
+    return ",".join(sorted(exts))
 
 
 def _read_git_hash() -> str:
@@ -154,8 +177,11 @@ async def script_detail(theme: str, script_name: str, request: Request):
         {
             "key": key,
             "key_path": key.replace(".", "/"),
+            "theme": theme,
             "mod": mod,
             "field_specs": field_specs,
+            "badges": badges_for(key, mod, field_specs),
+            "accept_exts": accept_exts_for(mod),
             "all_themes": discover_themes(),
             "labels": theme_labels(),
             "version": _APP_VERSION,
@@ -208,11 +234,85 @@ async def upload_file(theme: str, file: UploadFile, subdir: str = "") -> JSONRes
     return JSONResponse({"path": str(save_path), "filename": file.filename, "dir": str(save_dir)})
 
 
+def _webview_window(request: Request):  # noqa: ANN201
+    """Return the pywebview window backing this app, if there is one.
+
+    Only the desktop wrapper sets this (see ``packaging/entrypoint.py``). In dev
+    mode, Chromium ``--app`` mode, and the browser fallback it is absent, which
+    is what gates the native folder picker.
+
+    Args:
+        request: The incoming request, used to reach ``app.state``.
+
+    Returns:
+        The pywebview window object, or ``None``.
+    """
+    return getattr(request.app.state, "webview_window", None)
+
+
 @app.get("/api/settings")
-async def get_settings() -> JSONResponse:
-    """Return current user settings."""
+async def get_settings(request: Request) -> JSONResponse:
+    """Return current user settings plus which optional controls are usable."""
     cfg = load_config()
-    return JSONResponse({"theme": cfg.theme, "outputs_dir": cfg.outputs_dir, "close_behavior": cfg.close_behavior})
+    return JSONResponse(
+        {
+            "theme": cfg.theme,
+            "outputs_dir": cfg.outputs_dir,
+            "close_behavior": cfg.close_behavior,
+            "browse_supported": _webview_window(request) is not None,
+        }
+    )
+
+
+@app.post("/api/browse-folder")
+async def browse_folder(request: Request) -> JSONResponse:
+    """Open a native folder picker and return the chosen directory.
+
+    A browser cannot hand back an absolute directory path, so this only works
+    under the pywebview desktop wrapper. Everywhere else the UI disables the
+    Browse button and the user types a path instead.
+
+    Returns:
+        JSON with the selected ``path``, or an empty string if the user
+        cancelled the dialog.
+
+    Raises:
+        HTTPException: 501 when no native window is available to host a dialog.
+    """
+    window = _webview_window(request)
+    if window is None:
+        raise HTTPException(status_code=501, detail="Folder picker requires the desktop app")
+
+    def _pick() -> str:
+        import webview  # noqa: PLC0415
+
+        result = window.create_file_dialog(webview.FOLDER_DIALOG)
+        if not result:
+            return ""
+        return str(result[0]) if isinstance(result, (list, tuple)) else str(result)
+
+    try:
+        # create_file_dialog blocks until the user answers; keep the event loop free.
+        path = await asyncio.to_thread(_pick)
+    except Exception:
+        logger.debug("Folder dialog failed", exc_info=True)
+        raise HTTPException(status_code=500, detail="Folder picker failed") from None
+
+    return JSONResponse({"path": path})
+
+
+@app.post("/api/open-logs")
+async def open_logs() -> JSONResponse:
+    """Open the logs directory in the OS file explorer.
+
+    Offered by the splash screen's failure state, which is reachable when the
+    UI scripts never initialise and the rest of the app is unusable.
+
+    Returns:
+        JSON acknowledgement.
+    """
+    _open_in_file_manager(logs_dir())
+    return JSONResponse({"ok": True})
 
 
 @app.post("/api/settings")
@@ -228,6 +328,20 @@ async def post_settings(request: Request) -> JSONResponse:
     return JSONResponse({"ok": True})
 
 
+def _open_in_file_manager(folder: Path) -> None:
+    """Reveal a directory in the platform's file manager.
+
+    Args:
+        folder: Directory to open.
+    """
+    if sys.platform == "win32":
+        subprocess.Popen(["explorer", str(folder)])
+    elif sys.platform == "darwin":
+        subprocess.Popen(["open", str(folder)])
+    else:
+        subprocess.Popen(["xdg-open", str(folder)])
+
+
 @app.post("/api/open-outputs")
 async def open_outputs() -> JSONResponse:
     """Open the outputs root folder in the OS file explorer.
@@ -238,13 +352,7 @@ async def open_outputs() -> JSONResponse:
     Returns:
         JSON acknowledgement.
     """
-    folder = outputs_root()
-    if sys.platform == "win32":
-        subprocess.Popen(["explorer", str(folder)])
-    elif sys.platform == "darwin":
-        subprocess.Popen(["open", str(folder)])
-    else:
-        subprocess.Popen(["xdg-open", str(folder)])
+    _open_in_file_manager(outputs_root())
     return JSONResponse({"ok": True})
 
 
@@ -440,6 +548,63 @@ async def script_fields(theme: str, script_name: str) -> JSONResponse:
     filtered = [s for s in specs if not (s.is_positional and s.widget in ("file", "file-multi"))]
 
     return JSONResponse({"fields": field_specs_payload(filtered)})
+
+
+def _cli_prefix() -> list[str]:
+    """Return the command tokens that invoke Scriptorium on this install.
+
+    Returns:
+        ``["scriptorium"]`` for the packaged app, otherwise the dev invocation.
+    """
+    return ["scriptorium"] if FROZEN else ["uv", "run", "main.py"]
+
+
+def _quote_command(tokens: list[str]) -> str:
+    """Join argv tokens into a string the user's own shell will accept.
+
+    Windows and POSIX disagree about quoting, and this string exists to be
+    copy-pasted, so the platform convention matters.
+
+    Args:
+        tokens: Command tokens, already in argv order.
+
+    Returns:
+        A single copy-pasteable command line.
+    """
+    if sys.platform == "win32":
+        return subprocess.list2cmdline(tokens)
+    return shlex.join(tokens)
+
+
+@app.get("/api/preview-command/{theme}/{script_name}")
+async def preview_command(theme: str, script_name: str, request: Request) -> JSONResponse:
+    """Render the CLI command equivalent to the current form state.
+
+    Shares ``build_argv`` with the run endpoint, so the preview cannot drift
+    from what actually executes.
+
+    Args:
+        theme: Script theme slug.
+        script_name: Script module name.
+        request: Request whose query params carry the current form values.
+
+    Returns:
+        JSON with the assembled ``command`` string.
+
+    Raises:
+        HTTPException: 404 if the script key is unknown.
+    """
+    key = f"{theme}.{script_name}"
+    scripts = discover()
+    if key not in scripts:
+        raise HTTPException(status_code=404, detail=f"Script {key!r} not found")
+
+    mod = scripts[key]
+    parser = mod.get_parser() if hasattr(mod, "get_parser") else None
+    field_specs = fields_from_parser(parser) if parser else []
+    argv = build_argv(dict(request.query_params), field_specs)
+
+    return JSONResponse({"command": _quote_command([*_cli_prefix(), key, *argv])})
 
 
 async def _stream_script(key: str, argv: list[str]):

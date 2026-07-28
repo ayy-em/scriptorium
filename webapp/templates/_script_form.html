@@ -1,0 +1,210 @@
+{% from "_icons.html" import icon %}
+{# Auto-generated argument form.
+
+   Class names here (.field, .file-drop, .hint, .run-btn) are shared with the
+   hand-written script template at scripts/av/trim.html, so they are restyled
+   rather than renamed — both pages pick up the same polish.
+
+   Fields are split into the file input, which gets the full-width dropzone,
+   and everything else, which flows through a two-column grid.
+#}
+{% set file_specs = field_specs | selectattr('widget', 'in', ['file', 'file-multi']) | list %}
+{% set param_specs = field_specs | rejectattr('widget', 'in', ['file', 'file-multi']) | list %}
+
+<form id="run-form" class="card form-card"
+      data-run-url="/scripts/{{ key_path }}/run"
+      @submit.prevent="run()">
+
+  {% for spec in file_specs %}
+  <div class="field field--file {{ 'field--required' if spec.required else 'field--optional' }}">
+    <label class="field-label" for="f_{{ spec.dest }}">
+      {{ spec.label }}
+      {%- if spec.required %}<span class="req" aria-hidden="true">*</span><span class="sr-only"> (required)</span>
+      {%- else %}<span class="optional-tag">optional</span>{% endif %}
+    </label>
+
+    {% if spec.widget == "file-multi" %}
+    {# Accepts a file or a whole directory, so offer both. #}
+    <div class="path-toggle" role="group" aria-label="Input mode">
+      <button type="button" class="path-toggle-opt" :class="{ 'is-active': multiMode === 'file' }"
+              @click="setMultiMode('file')" :aria-pressed="multiMode === 'file'">
+        {{ icon('file', 13) }} Files
+      </button>
+      <button type="button" class="path-toggle-opt" :class="{ 'is-active': multiMode === 'dir' }"
+              @click="setMultiMode('dir')" :aria-pressed="multiMode === 'dir'">
+        {{ icon('folder', 13) }} Folder
+      </button>
+    </div>
+    {% endif %}
+
+    <label class="file-drop"
+           :class="{
+             'is-dragover': dragOver,
+             'has-file': hasFile,
+             'is-uploading': uploading,
+             'is-invalid': !!uploadError
+           }"
+           @dragover.prevent="dragOver = true"
+           @dragenter.prevent="dragOver = true"
+           @dragleave="dragOver = false"
+           @drop.prevent="dropFile($event)">
+
+      {% if spec.widget == "file-multi" %}
+      <template x-if="multiMode === 'file'">
+        <input type="file" class="file-hidden" multiple
+               {% if accept_exts %}accept="{{ accept_exts }}"{% endif %}
+               @change="pickFile($event)">
+      </template>
+      <template x-if="multiMode === 'dir'">
+        <input type="file" class="file-hidden" webkitdirectory directory multiple @change="pickFile($event)">
+      </template>
+      {% else %}
+      <input type="file" id="f_{{ spec.dest }}_picker" class="file-hidden"
+             {% if accept_exts %}accept="{{ accept_exts }}"{% endif %}
+             @change="pickFile($event)">
+      {% endif %}
+
+      <span class="file-drop-icon" :class="{ 'is-accepted': hasFile }">
+        {{ icon('upload', 22) }}
+      </span>
+
+      <span class="file-drop-body">
+        <template x-if="!hasFile && !uploading && !uploadError">
+          <span>
+            <span class="file-drop-title">Drop a file here or click to browse</span>
+            {% if accept_exts %}
+            <span class="file-drop-formats">{{ accept_exts.replace(',', ', ') }}</span>
+            {% endif %}
+          </span>
+        </template>
+
+        <template x-if="uploading">
+          <span class="file-drop-title file-drop-title--busy">
+            <span class="dot-pulse" aria-hidden="true"></span>
+            <span x-text="uploadLabel"></span>
+          </span>
+        </template>
+
+        <template x-if="uploadError && !uploading">
+          <span>
+            <span class="file-drop-title file-drop-title--error" x-text="uploadError"></span>
+            <span class="file-drop-formats">Click to choose a different file</span>
+          </span>
+        </template>
+
+        <template x-if="hasFile && !uploading && !uploadError">
+          <span>
+            <span class="file-drop-title file-drop-title--file" x-text="fileSummary()"></span>
+            <span class="file-drop-formats">Click to replace</span>
+          </span>
+        </template>
+      </span>
+    </label>
+
+    <input type="hidden" id="f_{{ spec.dest }}" name="{{ spec.dest }}"
+           x-model="values['{{ spec.dest }}']">
+
+    {% if spec.help %}<p class="hint">{{ spec.help }}</p>{% endif %}
+  </div>
+  {% endfor %}
+
+  {% if param_specs %}
+  <div class="field-grid">
+    {% for spec in param_specs %}
+    {% set wide = spec.widget in ('textarea',) %}
+    <div class="field {{ 'field--wide' if wide else '' }} {{ 'field--required' if spec.required else 'field--optional' }}">
+
+      {% if spec.widget == "checkbox" %}
+      <label class="checkbox-row" for="f_{{ spec.dest }}">
+        <input type="checkbox" id="f_{{ spec.dest }}" name="{{ spec.dest }}" value="on"
+               x-model="values['{{ spec.dest }}']">
+        <span class="field-label field-label--inline">{{ spec.label }}</span>
+      </label>
+
+      {% else %}
+      <label class="field-label" for="f_{{ spec.dest }}">
+        {{ spec.label }}
+        {%- if spec.required %}<span class="req" aria-hidden="true">*</span><span class="sr-only"> (required)</span>
+        {%- else %}<span class="optional-tag">optional</span>{% endif %}
+      </label>
+
+      {% if spec.widget == "select" %}
+      <select id="f_{{ spec.dest }}" name="{{ spec.dest }}" class="input"
+              x-model="values['{{ spec.dest }}']"{% if spec.required %} required{% endif %}>
+        {% if not spec.required %}<option value="">— optional —</option>{% endif %}
+        {% for c in spec.choices %}
+        <option value="{{ c }}">{{ c }}</option>
+        {% endfor %}
+      </select>
+
+      {% elif spec.widget == "textarea" %}
+      <textarea id="f_{{ spec.dest }}" name="{{ spec.dest }}" class="input input--mono"
+                x-model="values['{{ spec.dest }}']"{% if spec.required %} required{% endif %}></textarea>
+
+      {% elif spec.widget == "number" %}
+      <input type="number" id="f_{{ spec.dest }}" name="{{ spec.dest }}" class="input" step="any"
+             x-model="values['{{ spec.dest }}']"{% if spec.required %} required{% endif %}>
+
+      {% else %}
+      <input type="text" id="f_{{ spec.dest }}" name="{{ spec.dest }}" class="input"
+             x-model="values['{{ spec.dest }}']"
+             {% if spec.default %}placeholder="{{ spec.default }}"{% endif %}
+             {% if spec.required %}required{% endif %}>
+      {% endif %}
+      {% endif %}
+
+      {% if spec.help %}
+      <p class="hint">
+        {%- if spec.widget == 'textarea' %}One {{ spec.label[:-1] | lower if spec.label.endswith('s') else spec.label | lower }} per line. {% endif -%}
+        {{ spec.help }}
+      </p>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <div class="run-controls">
+    <button type="submit" class="run-btn" id="run-btn"
+            :disabled="!canRun"
+            :class="{ 'is-running': isBusy }">
+      <template x-if="!isBusy">
+        <span class="run-btn-inner">{{ icon('play', 15, 'run-btn-icon') }}<span>Run</span></span>
+      </template>
+      <template x-if="isBusy">
+        <span class="run-btn-inner"><span class="dot-pulse dot-pulse--on-solid" aria-hidden="true"></span><span>Running…</span></span>
+      </template>
+    </button>
+
+    <button type="button" class="btn btn--secondary"
+            @click="togglePreview()"
+            :aria-expanded="previewOpen.toString()"
+            aria-controls="command-preview">
+      {{ icon('terminal', 15) }}
+      <span>Preview command</span>
+    </button>
+
+    <button type="button" class="btn btn--ghost" @click="reset()">
+      {{ icon('reset', 15) }}
+      <span>Reset</span>
+    </button>
+  </div>
+
+  {# Height animation via grid-template-rows 0fr→1fr, so no Collapse plugin. #}
+  <div class="collapsible" :class="{ 'is-open': previewOpen }" id="command-preview">
+    <div class="collapsible-inner">
+      <div class="command-preview">
+        <div class="command-preview-head">
+          <span class="command-preview-label">CLI equivalent</span>
+          <button type="button" class="btn-icon"
+                  @click="copyCommand()"
+                  :aria-label="copied ? 'Command copied' : 'Copy command'">
+            <span x-show="!copied">{{ icon('copy', 14) }}</span>
+            <span x-show="copied" x-cloak class="is-success">{{ icon('check', 14) }}</span>
+          </button>
+        </div>
+        <pre class="command-preview-code"><code x-text="command || 'Building…'"></code></pre>
+      </div>
+    </div>
+  </div>
+</form>

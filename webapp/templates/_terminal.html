@@ -1,0 +1,92 @@
+{% from "_icons.html" import icon %}
+{% from "_components.html" import soon_button %}
+{# Run status strip + streaming output console.
+
+   The strip is hidden while idle and swaps between starting / running /
+   success / error / cancelled. The terminal appears as soon as a run starts
+   and stays put afterwards so the log survives the run finishing.
+#}
+
+<div class="status-strip" :class="'status-strip--' + state" x-show="state !== 'idle'" x-cloak>
+  <span class="status-strip-glyph" aria-hidden="true">
+    <template x-if="isBusy">
+      {# Terminal pulse: a small console with a blinking cursor, not a spinner. #}
+      <span class="term-pulse"><span class="term-pulse-caret"></span></span>
+    </template>
+    <template x-if="state === 'success'"><span class="status-ok">{{ icon('check-circle', 16) }}</span></template>
+    <template x-if="state === 'error'"><span class="status-err">{{ icon('x-circle', 16) }}</span></template>
+    <template x-if="state === 'cancelled'"><span class="status-neutral">{{ icon('ban', 16) }}</span></template>
+  </span>
+
+  <span class="status-strip-text" x-text="statusLabel()"></span>
+
+  <span class="status-strip-spacer"></span>
+
+  <span class="status-strip-elapsed" x-show="elapsedLabel()" x-cloak>
+    {{ icon('clock', 13) }}
+    <span x-text="elapsedLabel()"></span>
+  </span>
+
+  <template x-if="isBusy">
+    {# No progress data exists to drive a real bar; see BACKLOG.md. #}
+    {{ soon_button('Cancel run', 'ban', 'btn-soon--sm', true) }}
+  </template>
+
+  <template x-if="state === 'success'">
+    <button type="button" class="btn btn--secondary btn--sm"
+            @click="fetch('/api/open-outputs', { method: 'POST' })">
+      {{ icon('folder-open', 14) }}
+      <span>Open outputs folder</span>
+    </button>
+  </template>
+
+  <div class="status-progress" x-show="isBusy" aria-hidden="true"><span></span></div>
+</div>
+
+<section class="terminal" x-show="lines.length || state !== 'idle'" x-cloak aria-label="Script output">
+  <header class="terminal-head">
+    <span class="terminal-title">{{ icon('terminal', 14) }} Output</span>
+
+    <span class="terminal-live" x-show="isBusy" x-cloak>
+      <span class="terminal-live-dot" aria-hidden="true"></span> Live
+    </span>
+
+    <span class="terminal-head-spacer"></span>
+
+    <button type="button" class="btn-icon btn-icon--on-dark"
+            @click="clearLines()" :disabled="!lines.length" aria-label="Clear output">
+      {{ icon('trash', 14) }}
+    </button>
+    <button type="button" class="btn-icon btn-icon--on-dark"
+            @click="terminalOpen = !terminalOpen"
+            :aria-expanded="terminalOpen.toString()"
+            :aria-label="terminalOpen ? 'Collapse output' : 'Expand output'">
+      <span x-show="terminalOpen">{{ icon('chevron-up', 14) }}</span>
+      <span x-show="!terminalOpen" x-cloak>{{ icon('chevron-down', 14) }}</span>
+    </button>
+  </header>
+
+  <div class="collapsible" :class="{ 'is-open': terminalOpen }">
+    <div class="collapsible-inner">
+      <div class="terminal-body" x-ref="console" @scroll="onConsoleScroll()">
+        <p class="terminal-empty" x-show="!lines.length" x-cloak>Waiting for output…</p>
+        <template x-for="(line, i) in lines" :key="i">
+          <div class="terminal-line" :class="'terminal-line--' + line.level">
+            <span class="terminal-ts" x-text="line.ts" aria-hidden="true"></span>
+            <span class="terminal-glyph" x-text="line.glyph" aria-hidden="true"></span>
+            <span class="terminal-text" x-text="line.text"></span>
+          </div>
+        </template>
+        <p class="terminal-trimmed" x-show="trimmed" x-cloak>
+          <span x-text="trimmed"></span> earlier lines trimmed to keep scrolling smooth.
+        </p>
+      </div>
+
+      <button type="button" class="terminal-jump" x-show="!autoScroll && lines.length" x-cloak
+              @click="jumpToLatest()">
+        {{ icon('jump-latest', 13) }}
+        <span>Jump to latest</span>
+      </button>
+    </div>
+  </div>
+</section>

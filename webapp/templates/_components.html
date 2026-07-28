@@ -1,0 +1,40 @@
+{# Shared UI fragments used across more than one screen.
+
+   Buttons, inputs and cards are plain CSS classes (.btn, .field, .card…)
+   rather than macros — their content varies too much for a macro signature to
+   help. What lives here is the handful of pieces that repeat verbatim.
+#}
+{% from "_icons.html" import icon %}
+
+{# A small pill label. Variants: neutral (default), accent, green, warn, red. #}
+{% macro badge(label, variant='neutral') %}
+<span class="badge badge--{{ variant }}">{{ label }}</span>
+{%- endmacro %}
+
+{# Placeholder shown when a list or result area has nothing to display. #}
+{% macro empty_state(icon_name, title, body='') %}
+<div class="empty-state">
+  <span class="empty-state-icon">{{ icon(icon_name, 24) }}</span>
+  <p class="empty-state-title">{{ title }}</p>
+  {% if body %}<p class="empty-state-body">{{ body }}</p>{% endif %}
+</div>
+{%- endmacro %}
+
+{# A control that is deliberately not wired up yet.
+
+   Renders as a real <button> so it keeps its place in the layout and in the
+   tab order, but is disabled and announces why. Used for sort, favourites and
+   run cancellation — all tracked in BACKLOG.md. Prefer this over a live-looking
+   control that silently does nothing.
+#}
+{% macro soon_button(label, icon_name='', cls='', hide_label=false) %}
+<button type="button"
+        class="btn-soon{% if cls %} {{ cls }}{% endif %}"
+        disabled
+        aria-disabled="true"
+        data-soon="Coming soon!"
+        aria-label="{{ label }} — coming soon">
+  {%- if icon_name %}{{ icon(icon_name, 14) }}{% endif -%}
+  {%- if not hide_label %}<span>{{ label }}</span>{% endif -%}
+</button>
+{%- endmacro %}

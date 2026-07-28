@@ -27,11 +27,33 @@ uv run webapp                           # start at http://127.0.0.1:8000
 
 The web UI lists all scripts grouped by theme. Clicking a script opens a detail
 page with an auto-generated form. File inputs support drag-and-drop upload.
-Submitting the form runs the script and streams output in real time.
+Submitting the form runs the script and streams output in real time into a
+console panel with timestamps, colour-coded severities and auto-scroll.
+
+A context column beside the form shows what the script accepts, what each field
+means, and a live summary of the settings you have chosen.
+
+**Preview command** turns the current form state into the exact CLI invocation,
+ready to copy:
+
+```sh
+uv run main.py av.filmstrip inputs/sample-video.mp4 --grid 2x5 --format pdf
+```
+
+It is generated server-side from the same code that builds the real run, so it
+cannot drift from what actually executes.
 
 Inputs that accept either a file or a whole directory show a **Files / Folder**
 toggle above the picker. Both modes upload into one batch directory and hand the
 script that directory's path.
+
+Fonts and the JS runtime are served locally, so the UI works with no internet
+connection. Light and dark themes are both fully supported; switch from the top
+bar or in Settings.
+
+Sort, favourites and run cancellation are visible but not yet implemented — they
+render disabled with a "Coming soon!" tooltip rather than doing nothing quietly.
+See [BACKLOG.md](BACKLOG.md).
 
 ### Drop to discover
 

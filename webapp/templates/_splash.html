@@ -1,0 +1,91 @@
+{# Boot splash. Deliberately driven by plain JS rather than Alpine: if Alpine
+   itself fails to load, [x-cloak] hides the whole app, so an Alpine-driven
+   splash would never dismiss and the user would stare at a blank page. #}
+<div id="splash" class="splash" role="status" aria-live="polite">
+  <div class="splash-inner">
+    <img class="splash-logo" src="/static/logo.webp" width="88" height="88" alt="" aria-hidden="true">
+    <p class="splash-name">Scriptorium</p>
+    <p class="splash-version">v{{ version }}</p>
+
+    <p class="splash-loading" id="splash-loading">
+      <span class="splash-prompt" aria-hidden="true">&gt;</span>
+      <span>loading scripts</span><span class="splash-dots" aria-hidden="true">...</span><span class="splash-cursor" aria-hidden="true"></span>
+    </p>
+
+    <div class="splash-error" id="splash-error" hidden>
+      <p class="splash-error-title">Scriptorium could not finish loading</p>
+      <p class="splash-error-body">The interface scripts did not start. Reloading usually fixes it.</p>
+      <div class="splash-error-actions">
+        <button type="button" class="btn btn--primary btn--sm" id="splash-retry">Retry</button>
+        <button type="button" class="btn btn--ghost btn--sm" id="splash-logs">Open logs</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  (function () {
+    var splash = document.getElementById('splash');
+    if (!splash) return;
+
+    /* Alpine has to initialise for the app to be usable at all; fonts only
+       affect how it looks, so they get a shorter leash. */
+    var READY_TIMEOUT = 4000;
+    var FADE_MS = 200;
+
+    var alpineReady = false;
+    var fontsReady = false;
+    var dismissed = false;
+    var failTimer = null;
+
+    function dismiss() {
+      if (dismissed) return;
+      dismissed = true;
+      if (failTimer) clearTimeout(failTimer);
+      splash.classList.add('is-hiding');
+      document.body.classList.add('app-ready');
+      setTimeout(function () { splash.hidden = true; }, FADE_MS);
+    }
+
+    function maybeDismiss() {
+      if (alpineReady && fontsReady) dismiss();
+    }
+
+    function fail() {
+      if (dismissed) return;
+      var loading = document.getElementById('splash-loading');
+      var error = document.getElementById('splash-error');
+      if (loading) loading.hidden = true;
+      if (error) error.hidden = false;
+      splash.classList.add('is-failed');
+    }
+
+    document.addEventListener('alpine:initialized', function () {
+      alpineReady = true;
+      maybeDismiss();
+    });
+
+    if (document.fonts && document.fonts.ready) {
+      document.fonts.ready.then(function () { fontsReady = true; maybeDismiss(); });
+    } else {
+      fontsReady = true;
+    }
+
+    /* Never block on webfonts: if they are slow, show the app anyway. */
+    setTimeout(function () { fontsReady = true; maybeDismiss(); }, 1200);
+
+    failTimer = setTimeout(function () {
+      if (alpineReady) { dismiss(); } else { fail(); }
+    }, READY_TIMEOUT);
+
+    var retry = document.getElementById('splash-retry');
+    if (retry) retry.addEventListener('click', function () { window.location.reload(); });
+
+    var logs = document.getElementById('splash-logs');
+    if (logs) {
+      logs.addEventListener('click', function () {
+        fetch('/api/open-logs', { method: 'POST' }).catch(function () { /* nothing else to offer */ });
+      });
+    }
+  }());
+</script>

@@ -1,0 +1,73 @@
+{% from "_icons.html" import icon %}
+{% from "_macros.html" import theme_icon %}
+{% from "_components.html" import badge %}
+{# Right-hand context column. Informational only — every value here is derived
+   from the script's own metadata or the live form state, so it never claims
+   anything the script did not declare. #}
+{% set param_specs = field_specs | rejectattr('widget', 'in', ['file', 'file-multi']) | list %}
+{% set documented = field_specs | selectattr('help') | list %}
+
+<aside class="script-context" aria-label="Script details">
+
+  <section class="context-card">
+    <h2 class="context-title">{{ icon('info', 14) }} About this script</h2>
+    <div class="context-script">
+      <span class="context-script-icon">{{ theme_icon(theme, 20) }}</span>
+      <div>
+        <p class="context-script-key">{{ key }}</p>
+        <p class="context-script-theme">{{ labels[theme] }}</p>
+      </div>
+    </div>
+    <p class="context-body">{{ mod.DESCRIPTION }}</p>
+    {% if badges %}
+    <div class="badge-row">
+      {% for b in badges %}{{ badge(b, 'accent' if b in ('ffmpeg', 'yt-dlp') else 'neutral') }}{% endfor %}
+    </div>
+    {% endif %}
+  </section>
+
+  {% if documented %}
+  <section class="context-card">
+    <h2 class="context-title">{{ icon('lightbulb', 14) }} Fields</h2>
+    <dl class="context-fields">
+      {% for spec in documented %}
+      <div class="context-field">
+        <dt>
+          {{ spec.label }}
+          {%- if spec.required %}<span class="req" aria-hidden="true">*</span>{% endif %}
+        </dt>
+        <dd>{{ spec.help }}</dd>
+      </div>
+      {% endfor %}
+    </dl>
+  </section>
+  {% endif %}
+
+  {% if param_specs %}
+  <section class="context-card">
+    <h2 class="context-title">{{ icon('sliders', 14) }} Run settings</h2>
+    <dl class="context-summary">
+      {% for spec in param_specs %}
+      <div class="context-summary-row">
+        <dt>{{ spec.label }}</dt>
+        <dd x-text="summaryValue('{{ spec.dest }}')"
+            :class="{ 'is-default': !values['{{ spec.dest }}'] }">—</dd>
+      </div>
+      {% endfor %}
+    </dl>
+  </section>
+  {% endif %}
+
+  <section class="context-card" x-show="state === 'success'" x-cloak>
+    <h2 class="context-title">{{ icon('check-circle', 14) }} Finished</h2>
+    <p class="context-body">
+      Run completed in <span x-text="elapsedLabel()"></span>. Scriptorium does not yet
+      detect individual output files — open the outputs folder to see what was written.
+    </p>
+    <button type="button" class="btn btn--secondary btn--full"
+            @click="fetch('/api/open-outputs', { method: 'POST' })">
+      {{ icon('folder-open', 14) }}
+      <span>Open outputs folder</span>
+    </button>
+  </section>
+</aside>

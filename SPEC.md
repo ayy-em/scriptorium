@@ -33,9 +33,16 @@ scriptorium/
 │       └── <script>.py      # one script per file
 ├── webapp/
 │   ├── app.py               # FastAPI server
+│   ├── _badges.py           # ACCEPTS-derived compatibility badges
 │   ├── _form.py             # argparse introspection for auto-generated forms
-│   ├── static/              # CSS, logo
-│   └── templates/           # Jinja2 templates (base, index, script detail)
+│   ├── _icons.py            # PNG icon lookup for scripts and file categories
+│   ├── static/
+│   │   ├── style.css        # the entire stylesheet, sectioned (see below)
+│   │   ├── fonts/           # self-hosted Inter + JetBrains Mono (OFL 1.1)
+│   │   ├── js/              # vendored Alpine.js + focus plugin
+│   │   ├── icons/           # legacy PNG icons (see BACKLOG.md)
+│   │   └── logo.{png,webp}
+│   └── templates/           # Jinja2 (see "Web UI layer" below)
 └── packaging/
     ├── entrypoint.py            # frozen app entry (web server + --run-script mode)
     ├── scriptorium.spec         # PyInstaller spec for macOS .app bundle
@@ -104,6 +111,100 @@ Uploaded files are saved to the theme's inputs directory via `POST /upload/{them
 
 When ffmpeg is not found on PATH, a banner appears in the sidebar with install
 instructions.
+
+---
+
+## Web UI layer
+
+No build step. Jinja2 templates, one stylesheet, and Alpine.js — all served
+locally so the packaged app works offline.
+
+### Third-party assets, vendored
+
+| Asset | Version | Path | Licence |
+|---|---|---|---|
+| Alpine.js | 3.15.12 | `static/js/alpinejs.min.js` | MIT |
+| Alpine Focus plugin | 3.15.12 | `static/js/alpinejs-focus.min.js` | MIT |
+| Inter (variable, latin) | — | `static/fonts/inter-latin-wght-normal.woff2` | SIL OFL 1.1 |
+| JetBrains Mono (variable, latin) | — | `static/fonts/jetbrains-mono-latin-wght-normal.woff2` | SIL OFL 1.1 |
+
+The focus plugin must load **before** Alpine core; it supplies `x-trap`, which
+the settings modal uses for focus trapping. Fonts total ~89KB. PyInstaller
+bundles `webapp/static` wholesale, so vendored assets need no spec changes.
+
+### Templates
+
+```
+templates/
+├── base.html              # shell: topnav, sidebar slot, $store.ui, splash
+├── index.html             # script browser + Drop-to-Discover (scriptBrowser())
+├── script.html            # script detail page (scriptRunner())
+├── _splash.html           # boot overlay, plain JS — see below
+├── _icons.html            # icon(name, size, cls) — inline SVG UI icon set
+├── _components.html       # badge(), empty_state(), soon_button()
+├── _macros.html           # theme_icon() — still partly PNG-backed
+├── _settings_modal.html   # settings dialog
+├── _script_form.html      # auto-generated argument form
+├── _script_context.html   # right-hand context column
+├── _terminal.html         # run status strip + streaming console
+├── _sidebar.html, _onboarding_modal.html, _howto_modal.html
+├── _drop_{overlay,chooser,runner}.html
+└── scripts/av/trim.html   # hand-written override via a script's TEMPLATE attr
+```
+
+`webapp/static/style.css` is one file, sectioned with a table of contents at the
+top. **Design tokens are defined in pairs**: every custom property in `:root`
+has a matching entry in `html.dark`. Adding one without the other is a bug.
+
+### Splash screen
+
+`_splash.html` covers the window until Alpine initialises, replacing the
+unstyled `[x-cloak]`-blanked first paint. It is driven by **plain JS, not
+Alpine** — an Alpine-driven splash could never dismiss itself if Alpine were the
+thing that failed. It clears when Alpine initialises and fonts are ready, with a
+1.2s font timeout, and falls back to a retry/open-logs error state after 4s.
+
+### Web endpoints
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /` | script browser |
+| `GET /scripts/{theme}/{script}` | detail page + generated form |
+| `GET /scripts/{theme}/{script}/run` | run the script, stream output as SSE |
+| `GET /api/script-fields/{theme}/{script}` | field specs, minus the file input |
+| `GET /api/preview-command/{theme}/{script}` | CLI equivalent of the current form state |
+| `POST /upload/{theme}` | single-file upload |
+| `POST /api/drop-upload` | multi-file drop; returns matching scripts |
+| `GET`/`POST /api/settings` | read/write `UserConfig` |
+| `POST /api/browse-folder` | native folder picker; 501 outside the desktop app |
+| `POST /api/open-outputs` | reveal the outputs root |
+| `POST /api/open-logs` | reveal the logs directory |
+| `POST /api/quit` | shut the server down (frozen mode only) |
+| `GET /api/update-check` | compare against the latest GitHub release |
+
+`preview-command` shares `webapp._form.build_argv` with the run endpoint, so the
+previewed command cannot drift from what actually executes. It quotes with
+`subprocess.list2cmdline` on Windows and `shlex.join` elsewhere, and prefixes
+`scriptorium` when frozen, `uv run main.py` otherwise.
+
+`browse-folder` requires `app.state.webview_window`, set by
+`packaging/entrypoint.py` only on the pywebview tier. A browser cannot return an
+absolute directory path, so on the other two launch tiers the endpoint returns
+501 and the UI disables the button.
+
+### Run output classification
+
+`_stream_script` yields stdout lines, then stderr lines wrapped in
+`<span class='stderr'>`, then an exit line and a `done` event carrying
+`{exit_code, elapsed}`. The client maps these to console severities.
+
+One special case: `core/runner.py` writes its own run banner
+(`[av.filmstrip] done in 1.2s`) to **stderr** as routine progress. Without
+handling, every successful run would render as a wall of warnings, so the client
+demotes lines matching `^\[<key>\] ` to info — unless they say `failed`.
+
+There is no cancellation and no output-artifact detection; both are tracked in
+BACKLOG.md, and the UI states as much rather than implying otherwise.
 
 ### Building a standalone app
 

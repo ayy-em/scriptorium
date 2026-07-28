@@ -1,12 +1,12 @@
 {# First-visit onboarding carousel. Visibility persisted in localStorage. #}
 <div class="modal-overlay"
      x-show="$store.ui.onboardingOpen"
-     x-transition:enter="modal-enter"
-     x-transition:enter-start="modal-enter-from"
-     x-transition:enter-end="modal-enter-to"
-     x-transition:leave="modal-leave"
-     x-transition:leave-start="modal-leave-from"
-     x-transition:leave-end="modal-leave-to"
+     x-transition:enter="modal-fade"
+     x-transition:enter-start="modal-fade-from"
+     x-transition:enter-end="modal-fade-to"
+     x-transition:leave="modal-fade modal-fade--out"
+     x-transition:leave-start="modal-fade-to"
+     x-transition:leave-end="modal-fade-from"
      @keydown.escape.window="$store.ui.finishOnboarding()"
      x-cloak>
   <div class="modal-dialog onboarding-dialog" @click.stop>

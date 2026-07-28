@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from fastapi.testclient import TestClient
 
 from core.paths import read_version
+from core.registry import discover
 from webapp.app import _parse_version, _read_git_hash, _themes_search_json, app
 
 client = TestClient(app)
@@ -361,3 +362,107 @@ class TestUpdateCheckEndpoint:
             assert response.status_code == 200
             data = response.json()
             assert data["update_available"] is False
+
+
+class TestPreviewCommand:
+    def test_unknown_script_returns_404(self):
+        assert client.get("/api/preview-command/av/nope").status_code == 404
+
+    def test_bare_command_when_no_params_given(self):
+        data = client.get("/api/preview-command/av/filmstrip").json()
+        assert data["command"].endswith("av.filmstrip")
+
+    def test_includes_positional_and_flags(self):
+        data = client.get(
+            "/api/preview-command/av/filmstrip",
+            params={"source": "clip.mp4", "grid": "2x5", "format": "pdf"},
+        ).json()
+        command = data["command"]
+        assert "av.filmstrip" in command
+        assert "clip.mp4" in command
+        assert "--grid 2x5" in command
+        assert "--format pdf" in command
+
+    def test_omits_empty_values(self):
+        data = client.get(
+            "/api/preview-command/av/filmstrip",
+            params={"source": "clip.mp4", "output": ""},
+        ).json()
+        assert "--output" not in data["command"]
+
+    def test_matches_build_argv(self):
+        """The preview must not drift from what the run endpoint would execute."""
+        from webapp._form import build_argv, fields_from_parser  # noqa: PLC0415
+
+        form = {"source": "clip.mp4", "grid": "4x4", "format": "png"}
+        specs = fields_from_parser(discover()["av.filmstrip"].get_parser())
+        expected = build_argv(form, specs)
+
+        command = client.get("/api/preview-command/av/filmstrip", params=form).json()["command"]
+        for token in expected:
+            assert token in command
+
+    def test_quotes_paths_containing_spaces(self):
+        command = client.get(
+            "/api/preview-command/av/filmstrip",
+            params={"source": "my holiday clip.mp4"},
+        ).json()["command"]
+        assert '"my holiday clip.mp4"' in command or "'my holiday clip.mp4'" in command
+
+
+class TestBrowseFolder:
+    def test_returns_501_without_a_native_window(self):
+        response = client.post("/api/browse-folder")
+        assert response.status_code == 501
+
+    def test_returns_selected_path_when_a_window_exists(self):
+        window = MagicMock()
+        window.create_file_dialog.return_value = ("D:\\chosen\folder",)
+        app.state.webview_window = window
+        try:
+            with patch.dict("sys.modules", {"webview": MagicMock(FOLDER_DIALOG=2)}):
+                response = client.post("/api/browse-folder")
+        finally:
+            app.state.webview_window = None
+        assert response.status_code == 200
+        assert response.json()["path"] == "D:\\chosen\folder"
+
+    def test_cancelled_dialog_returns_empty_path(self):
+        window = MagicMock()
+        window.create_file_dialog.return_value = None
+        app.state.webview_window = window
+        try:
+            with patch.dict("sys.modules", {"webview": MagicMock(FOLDER_DIALOG=2)}):
+                response = client.post("/api/browse-folder")
+        finally:
+            app.state.webview_window = None
+        assert response.status_code == 200
+        assert response.json()["path"] == ""
+
+    def test_settings_reports_browse_unsupported_by_default(self):
+        assert client.get("/api/settings").json()["browse_supported"] is False
+
+
+class TestOpenLogs:
+    def test_opens_the_logs_directory(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("webapp.app.logs_dir", lambda: tmp_path)
+        with patch("webapp.app.subprocess.Popen") as popen:
+            response = client.post("/api/open-logs")
+        assert response.status_code == 200
+        assert popen.call_args[0][0][-1] == str(tmp_path)
+
+
+class TestAcceptExts:
+    def test_derives_extensions_from_accepts(self):
+        from webapp.app import accept_exts_for  # noqa: PLC0415
+
+        exts = accept_exts_for(discover()["av.filmstrip"])
+        assert ".mp4" in exts
+        assert ".mp3" not in exts
+
+    def test_script_without_accepts_returns_empty(self):
+        from types import SimpleNamespace  # noqa: PLC0415
+
+        from webapp.app import accept_exts_for  # noqa: PLC0415
+
+        assert accept_exts_for(SimpleNamespace()) == ""

@@ -1,352 +1,422 @@
 {% extends "base.html" %}
+{% from "_icons.html" import icon %}
 {% block title %}{{ key }} — Scriptorium{% endblock %}
 {% block content %}
 
-<nav class="detail-breadcrumb" aria-label="Breadcrumb">
-  <a href="/">Scriptorium</a>
-  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-    <path d="M4.5 2.5 7.5 6l-3 3.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
-  </svg>
-  <span>{{ key }}</span>
-</nav>
+{% set required_dests = field_specs | selectattr('required') | map(attribute='dest') | list %}
+{% set defaults = {} %}
+{% for spec in field_specs %}{% set _ = defaults.update({spec.dest: (spec.default if spec.widget != 'checkbox' else (spec.default == 'True'))}) %}{% endfor %}
+{% set file_spec = (field_specs | selectattr('widget', 'in', ['file', 'file-multi']) | list | first) %}
 
-<h1 class="detail-title">{{ mod.TITLE }}</h1>
-<p class="detail-desc">{{ mod.DESCRIPTION }}</p>
+{# Single-quoted on purpose: Jinja's tojson escapes ' but not ", so a
+   double-quoted attribute would terminate at the first JSON string. #}
+<div class="script-page" x-cloak x-data='scriptRunner({
+       theme: {{ theme | tojson }},
+       runUrl: {{ ("/scripts/" ~ key_path ~ "/run") | tojson }},
+       previewUrl: {{ ("/api/preview-command/" ~ key_path) | tojson }},
+       fileDest: {{ (file_spec.dest if file_spec else None) | tojson }},
+       fileWidget: {{ (file_spec.widget if file_spec else None) | tojson }},
+       requiredDests: {{ required_dests | tojson }},
+       defaults: {{ defaults | tojson }}
+     })'>
 
-{% if field_specs %}
-<form id="run-form" data-run-url="/scripts/{{ key_path }}/run">
-  {% for spec in field_specs %}
-  <div class="field {{ 'field--required' if spec.required else 'field--optional' }}">
-    {% if spec.widget == "file-multi" %}
-    <label>{{ spec.label }}{% if spec.required %}<span class="req">*</span>{% else %}<span class="optional-tag">optional</span>{% endif %}</label>
-    <div class="file-upload-wrap" x-data="fileUploadMulti('{{ key.split('.')[0] }}')">
-      {# This input accepts a file or a whole directory, so offer both. #}
-      <div class="path-toggle">
-        <button type="button" class="path-toggle-opt" :class="{ 'is-active': mode === 'file' }" @click="setMode('file')">
-          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-            <path d="M9 1.5H4.5A1.5 1.5 0 0 0 3 3v10a1.5 1.5 0 0 0 1.5 1.5h7A1.5 1.5 0 0 0 13 13V5.5L9 1.5Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
-            <path d="M9 1.5V5.5h4" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
-          </svg>
-          Files
-        </button>
-        <button type="button" class="path-toggle-opt" :class="{ 'is-active': mode === 'dir' }" @click="setMode('dir')">
-          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-            <path d="M2 4.2h4.2l1.3 1.5H14v7.3H2V4.2Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
-          </svg>
-          Folder
+  <div class="script-main">
+    <nav class="detail-breadcrumb" aria-label="Breadcrumb">
+      <a href="/">Scriptorium</a>
+      {{ icon('chevron-right', 12) }}
+      <span class="detail-breadcrumb-key">{{ key }}</span>
+    </nav>
+
+    <header class="detail-head">
+      <h1 class="detail-title">{{ mod.TITLE }}</h1>
+      <p class="detail-desc">{{ mod.DESCRIPTION }}</p>
+    </header>
+
+    {% if field_specs %}
+    {% include "_script_form.html" %}
+    {% else %}
+    <div class="card form-card form-card--empty">
+      <p class="detail-no-args">This script takes no arguments.</p>
+      <div class="run-controls">
+        <button type="button" class="run-btn" id="run-btn" @click="run()"
+                :disabled="isBusy" :class="{ 'is-running': isBusy }">
+          <template x-if="!isBusy">
+            <span class="run-btn-inner">{{ icon('play', 15, 'run-btn-icon') }}<span>Run</span></span>
+          </template>
+          <template x-if="isBusy">
+            <span class="run-btn-inner"><span class="dot-pulse dot-pulse--on-solid" aria-hidden="true"></span><span>Running…</span></span>
+          </template>
         </button>
       </div>
-      <label class="file-drop" :class="{ 'has-file': filenames.length }" @dragover.prevent @drop.prevent="dropFile($event)">
-        <template x-if="mode === 'file'">
-          <input type="file" class="file-hidden" multiple @change="upload($event)">
-        </template>
-        <template x-if="mode === 'dir'">
-          <input type="file" class="file-hidden" webkitdirectory directory multiple @change="upload($event)">
-        </template>
-        <span x-show="!filenames.length && !uploading" class="file-placeholder"
-              x-text="mode === 'dir' ? 'Choose a folder — every supported file inside is used' : 'Drop files here or click to browse'"></span>
-        <span x-show="uploading" class="file-uploading">Uploading&hellip;</span>
-        <span x-show="filenames.length && !uploading" x-text="summary()" class="file-name"></span>
-      </label>
-      <input type="hidden" id="f_{{ spec.dest }}" name="{{ spec.dest }}" x-model="batchDir">
     </div>
-    {% elif spec.widget == "file" %}
-    <label for="f_{{ spec.dest }}">{{ spec.label }}{% if spec.required %}<span class="req">*</span>{% else %}<span class="optional-tag">optional</span>{% endif %}</label>
-    <div class="file-upload-wrap" x-data="fileUpload('{{ key.split('.')[0] }}')">
-      <label class="file-drop" :class="{ 'has-file': filename }" @dragover.prevent @drop.prevent="dropFile($event)">
-        <input type="file" class="file-hidden" @change="upload($event)">
-        <span x-show="!filename && !uploading" class="file-placeholder">Drop a file here or click to browse</span>
-        <span x-show="uploading" class="file-uploading">Uploading&hellip;</span>
-        <span x-show="filename && !uploading" x-text="filename" class="file-name"></span>
-      </label>
-      <input type="hidden" id="f_{{ spec.dest }}" name="{{ spec.dest }}" x-model="path">
-    </div>
-    {% elif spec.widget == "checkbox" %}
-    <div class="checkbox-row">
-      <input type="checkbox" id="f_{{ spec.dest }}" name="{{ spec.dest }}" value="on">
-      <label for="f_{{ spec.dest }}">{{ spec.label }}</label>
-    </div>
-    {% elif spec.widget == "select" %}
-    <label for="f_{{ spec.dest }}">{{ spec.label }}{% if spec.required %}<span class="req">*</span>{% else %}<span class="optional-tag">optional</span>{% endif %}</label>
-    <select id="f_{{ spec.dest }}" name="{{ spec.dest }}"{% if spec.required %} required{% endif %}>
-      {% if not spec.required %}<option value="">— optional —</option>{% endif %}
-      {% for c in spec.choices %}
-      <option value="{{ c }}"{% if spec.default == c %} selected{% endif %}>{{ c }}</option>
-      {% endfor %}
-    </select>
-    {% elif spec.widget == "textarea" %}
-    <label for="f_{{ spec.dest }}">
-      {{ spec.label }}{% if spec.required %}<span class="req">*</span>{% else %}<span class="optional-tag">optional</span>{% endif %}
-      <span class="field-label-hint"> — one {{ spec.label[:-1] | lower if spec.label.endswith('s') else spec.label | lower }} per line</span>
-    </label>
-    <textarea id="f_{{ spec.dest }}" name="{{ spec.dest }}"{% if spec.required %} required{% endif %}>{{ spec.default or "" }}</textarea>
-    {% elif spec.widget == "number" %}
-    <label for="f_{{ spec.dest }}">{{ spec.label }}{% if spec.required %}<span class="req">*</span>{% else %}<span class="optional-tag">optional</span>{% endif %}</label>
-    <input type="number" id="f_{{ spec.dest }}" name="{{ spec.dest }}" step="any"
-      {% if spec.default %}value="{{ spec.default }}"{% endif %}
-      {% if spec.required %}required{% endif %}>
-    {% else %}
-    <label for="f_{{ spec.dest }}">{{ spec.label }}{% if spec.required %}<span class="req">*</span>{% else %}<span class="optional-tag">optional</span>{% endif %}</label>
-    <input type="text" id="f_{{ spec.dest }}" name="{{ spec.dest }}"
-      {% if spec.default %}value="{{ spec.default }}" placeholder="{{ spec.default }}"{% endif %}
-      {% if spec.required %}required{% endif %}>
     {% endif %}
-    {% if spec.help %}
-    <div class="hint">{{ spec.help }}</div>
-    {% endif %}
-  </div>
-  {% endfor %}
-  <button type="submit" class="run-btn" id="run-btn">
-    <svg class="run-btn-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path d="M4 2.5v11l9-5.5z" fill="currentColor"/>
-    </svg>
-    Run
-  </button>
-</form>
-{% else %}
-<p class="detail-no-args">This script takes no arguments.</p>
-<button class="run-btn detail-run-btn" id="run-btn">
-  <svg class="run-btn-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-    <path d="M4 2.5v11l9-5.5z" fill="currentColor"/>
-  </svg>
-  Run
-</button>
-{% endif %}
 
-<div id="output-section">
-  <h2>Output</h2>
-  <div id="output"></div>
-  <div id="run-result"></div>
+    {% include "_terminal.html" %}
+  </div>
+
+  {% include "_script_context.html" %}
 </div>
 
 <script>
-var __prefill = (function () {
-  var params = new URLSearchParams(window.location.search);
-  if (!params.has('_prefill_file')) return null;
-  var filePath = params.get('_prefill_file');
-  return { path: filePath, filename: filePath.split(/[/\\]/).pop() };
-})();
+  /* Longest log we keep in the DOM. Alpine re-renders the whole x-for on every
+     append, so an unbounded log makes long runs crawl. */
+  var MAX_LINES = 2000;
 
-function fileUpload(theme) {
-  return {
-    filename: '',
-    path: '',
-    uploading: false,
-    init() {
-      if (__prefill && !__prefill._consumed) {
-        this.path = __prefill.path;
-        this.filename = __prefill.filename;
-        __prefill._consumed = true;
+  var GLYPHS = { info: 'ℹ', warn: '!', ok: '✓', err: '✕' };
+
+  /* core/runner.py writes its own run banner to stderr as routine progress,
+     so "[av.filmstrip] done in 1.2s" arrives on the same channel as real
+     warnings. Recognise the banner and demote it, otherwise every successful
+     run is painted yellow. */
+  var RUNNER_BANNER = /^\[[\w.]+\]\s/;
+
+  /* Decode one SSE payload into console text plus a severity level. The server
+     wraps stderr and the exit line in spans with known classes; everything
+     else is plain text. */
+  function _decodeLine(payload) {
+    var doc = new DOMParser().parseFromString(payload, 'text/html');
+    var el = doc.body.firstElementChild;
+    var levels = { 'stderr': 'warn', 'exit-ok': 'ok', 'exit-err': 'err' };
+    if (el && el.tagName === 'SPAN' && levels[el.className]) {
+      var text = el.textContent;
+      var level = levels[el.className];
+      if (level === 'warn' && RUNNER_BANNER.test(text)) {
+        level = /\bfailed\b/.test(text) ? 'err' : 'info';
       }
-    },
-    async upload(event) {
-      var file = event.target.files[0];
-      if (file) await this._send(file);
-    },
-    async dropFile(event) {
-      var file = (event.dataTransfer.files || [])[0];
-      if (file) await this._send(file);
-    },
-    async _send(file) {
-      this.uploading = true;
-      this.filename = file.name;
-      var body = new FormData();
-      body.append('file', file);
-      try {
-        var res = await fetch('/upload/' + theme, { method: 'POST', body: body });
-        var data = await res.json();
-        this.path = data.path;
-      } catch (e) {
-        this.filename = '';
-        this.path = '';
-      } finally {
-        this.uploading = false;
-      }
+      return { text: text, level: level };
     }
-  };
-}
-
-function fileUploadMulti(theme) {
-  return {
-    filenames: [],
-    batchDir: '',
-    uploading: false,
-    /* 'file' picks individual files, 'dir' picks a whole folder. Both upload
-       into one batch subdirectory and submit that directory's path, which is
-       what these scripts accept. */
-    mode: 'file',
-    init() {
-      if (__prefill && !__prefill._consumed) {
-        this.batchDir = __prefill.path;
-        this.filenames = [__prefill.filename];
-        __prefill._consumed = true;
-      }
-    },
-    setMode(next) {
-      if (this.mode === next) return;
-      this.mode = next;
-      this.filenames = [];
-      this.batchDir = '';
-    },
-    summary() {
-      if (this.filenames.length === 1) return this.filenames[0];
-      var noun = this.mode === 'dir' ? ' files from folder' : ' files queued';
-      return this.filenames.length + noun;
-    },
-    async upload(event) {
-      var files = Array.from(event.target.files);
-      if (files.length) await this._sendAll(files);
-    },
-    async dropFile(event) {
-      var files = Array.from(event.dataTransfer.files || []);
-      if (files.length) await this._sendAll(files);
-    },
-    async _sendAll(files) {
-      this.uploading = true;
-      this.filenames = files.map(function(f) { return f.name; });
-      var batchId = Date.now().toString(36);
-      var self = this;
-      try {
-        var results = await Promise.all(files.map(function(file) {
-          var body = new FormData();
-          body.append('file', file);
-          return fetch('/upload/' + theme + '?subdir=' + batchId, { method: 'POST', body: body })
-            .then(function(r) { return r.json(); });
-        }));
-        if (results.length > 0) {
-          self.batchDir = results[0].dir;
-        }
-      } catch (e) {
-        this.filenames = [];
-        this.batchDir = '';
-      } finally {
-        this.uploading = false;
-      }
-    }
-  };
-}
-
-/* Pre-fill non-file form fields from URL query params (used by Drop-to-Discover).
-   File inputs are handled by fileUpload().init() via __prefill. */
-(function () {
-  var params = new URLSearchParams(window.location.search);
-  if (!params.has('_prefill_file')) return;
-
-  params.forEach(function (val, key) {
-    if (key === '_prefill_file') return;
-    var el = document.getElementById('f_' + key);
-    if (!el) return;
-    if (el.type === 'checkbox') {
-      el.checked = (val === 'on' || val === 'true' || val === '1');
-    } else {
-      el.value = val;
-    }
-  });
-
-  if (window.history.replaceState) {
-    window.history.replaceState({}, '', window.location.pathname);
-  }
-}());
-
-(function () {
-  var form = document.getElementById('run-form');
-  var outputSection = document.getElementById('output-section');
-  var output = document.getElementById('output');
-  var runBtn = document.getElementById('run-btn');
-  var runUrl = form ? form.dataset.runUrl : '/scripts/{{ key_path }}/run';
-  var es;
-  var SAFE_CLASSES = ['stderr', 'exit-ok', 'exit-err'];
-
-  function safeParse(html) {
-    var frag = document.createDocumentFragment();
-    var doc = new DOMParser().parseFromString(html, 'text/html');
-    doc.body.childNodes.forEach(function (node) {
-      if (node.nodeType === 3) {
-        frag.appendChild(document.createTextNode(node.textContent));
-      } else if (node.nodeType === 1 && node.tagName === 'SPAN' &&
-                 SAFE_CLASSES.indexOf(node.className) !== -1) {
-        var span = document.createElement('span');
-        span.className = node.className;
-        span.textContent = node.textContent;
-        frag.appendChild(span);
-      } else {
-        frag.appendChild(document.createTextNode(node.textContent || ''));
-      }
-    });
-    return frag;
+    return { text: doc.body.textContent, level: 'info' };
   }
 
-  var resultDiv = document.getElementById('run-result');
-  var RUN_ICON = '<svg class="run-btn-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M4 2.5v11l9-5.5z" fill="currentColor"/></svg>';
+  function _stamp() {
+    var d = new Date();
+    var p = function (n) { return String(n).padStart(2, '0'); };
+    return p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
+  }
 
-  function formatElapsed(s) {
+  function _formatSeconds(s) {
     if (s < 60) return s.toFixed(1) + 's';
     var m = Math.floor(s / 60);
     var sec = Math.round(s % 60);
     return m + 'm ' + (sec < 10 ? '0' : '') + sec + 's';
   }
 
-  function showResult(data) {
-    resultDiv.innerHTML = '';
-    var info;
-    try { info = JSON.parse(data); } catch (e) { return; }
-    var ok = info.exit_code === 0;
-    var el = document.createElement('div');
-    el.className = 'run-result ' + (ok ? 'run-result--ok' : 'run-result--err');
-    if (ok) {
-      el.innerHTML = '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8.5l3.5 3.5 6.5-7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>'
-        + 'Completed successfully in ' + formatElapsed(info.elapsed);
-    } else {
-      el.innerHTML = '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.5"/><path d="M5.5 5.5l5 5M10.5 5.5l-5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>'
-        + 'Run failed (exit code ' + info.exit_code + ')';
-    }
-    resultDiv.appendChild(el);
-  }
+  function scriptRunner(config) {
+    return {
+      theme: config.theme,
+      runUrl: config.runUrl,
+      previewUrl: config.previewUrl,
+      fileDest: config.fileDest,
+      fileWidget: config.fileWidget,
+      requiredDests: config.requiredDests || [],
+      defaults: config.defaults || {},
 
-  function resetBtn() {
-    runBtn.disabled = false;
-    runBtn.classList.remove('is-running');
-    runBtn.innerHTML = RUN_ICON + ' Run';
-  }
+      values: {},
 
-  function startRun(queryString) {
-    if (es) { es.close(); }
-    output.textContent = '';
-    resultDiv.innerHTML = '';
-    outputSection.classList.add('is-visible');
-    runBtn.disabled = true;
-    runBtn.classList.add('is-running');
-    runBtn.innerHTML = RUN_ICON + ' Running…';
+      /* File input */
+      filenames: [],
+      uploading: false,
+      uploadLabel: 'Uploading…',
+      uploadError: '',
+      dragOver: false,
+      multiMode: 'file',
 
-    es = new EventSource(runUrl + (queryString ? '?' + queryString : ''));
+      /* Run */
+      state: 'idle',
+      lines: [],
+      trimmed: 0,
+      exitCode: null,
+      elapsed: 0,
+      autoScroll: true,
+      terminalOpen: true,
+      _es: null,
+      _t0: 0,
+      _timer: null,
 
-    es.onmessage = function (e) {
-      var div = document.createElement('div');
-      div.appendChild(safeParse(e.data));
-      output.appendChild(div);
-      output.scrollTop = output.scrollHeight;
+      /* Command preview */
+      previewOpen: false,
+      command: '',
+      copied: false,
+      _previewTimer: null,
+
+      init() {
+        this.values = Object.assign({}, this.defaults);
+        for (var k in this.values) {
+          if (this.values[k] === null || this.values[k] === undefined) this.values[k] = '';
+        }
+        this._applyPrefill();
+
+        /* Keep the CLI preview and the right-hand summary in step with the
+           form without a request per keystroke. */
+        this.$watch('values', () => { if (this.previewOpen) this._schedulePreview(); });
+      },
+
+      /* ── File input ───────────────────────────────────────────────────── */
+      get hasFile() { return this.filenames.length > 0; },
+
+      fileSummary() {
+        if (this.filenames.length === 1) return this.filenames[0];
+        var noun = this.multiMode === 'dir' ? ' files from folder' : ' files queued';
+        return this.filenames.length + noun;
+      },
+
+      setMultiMode(next) {
+        if (this.multiMode === next) return;
+        this.multiMode = next;
+        this._clearFile();
+      },
+
+      _clearFile() {
+        this.filenames = [];
+        this.uploadError = '';
+        if (this.fileDest) this.values[this.fileDest] = '';
+      },
+
+      pickFile(event) {
+        var files = Array.from(event.target.files || []);
+        if (files.length) this._send(files);
+      },
+
+      dropFile(event) {
+        this.dragOver = false;
+        var files = Array.from((event.dataTransfer && event.dataTransfer.files) || []);
+        if (files.length) this._send(files);
+      },
+
+      async _send(files) {
+        this.uploadError = '';
+        var multi = this.fileWidget === 'file-multi';
+        if (!multi) files = files.slice(0, 1);
+
+        this.uploading = true;
+        this.uploadLabel = files.length > 1 ? 'Uploading ' + files.length + ' files…' : 'Uploading…';
+        this.filenames = files.map(function (f) { return f.name; });
+
+        try {
+          if (multi) {
+            var batchId = Date.now().toString(36);
+            var results = await Promise.all(files.map((file) => {
+              var body = new FormData();
+              body.append('file', file);
+              return fetch('/upload/' + this.theme + '?subdir=' + batchId, { method: 'POST', body: body })
+                .then(function (r) { return r.json(); });
+            }));
+            this.values[this.fileDest] = results[0].dir;
+          } else {
+            var body = new FormData();
+            body.append('file', files[0]);
+            var res = await fetch('/upload/' + this.theme, { method: 'POST', body: body });
+            var data = await res.json();
+            this.values[this.fileDest] = data.path;
+          }
+        } catch (e) {
+          this._clearFile();
+          this.uploadError = 'Upload failed — is the app still running?';
+        } finally {
+          this.uploading = false;
+          if (this.previewOpen) this._schedulePreview();
+        }
+      },
+
+      /* ── Form state ───────────────────────────────────────────────────── */
+      get canRun() {
+        if (this.isBusy || this.uploading) return false;
+        return this.requiredDests.every((d) => {
+          var v = this.values[d];
+          return v !== undefined && v !== null && String(v).trim() !== '';
+        });
+      },
+
+      get isBusy() { return this.state === 'starting' || this.state === 'running'; },
+
+      summaryValue(dest) {
+        var v = this.values[dest];
+        if (v === true) return 'on';
+        if (v === false || v === undefined || v === null || String(v).trim() === '') return 'default';
+        return String(v);
+      },
+
+      reset() {
+        if (this.isBusy) return;
+        this.values = Object.assign({}, this.defaults);
+        for (var k in this.values) {
+          if (this.values[k] === null || this.values[k] === undefined) this.values[k] = '';
+        }
+        this._clearFile();
+        this.multiMode = 'file';
+        this.command = '';
+        if (this.previewOpen) this._schedulePreview();
+      },
+
+      _buildParams() {
+        var params = new URLSearchParams();
+        for (var dest in this.values) {
+          var v = this.values[dest];
+          if (typeof v === 'boolean') {
+            if (v) params.set(dest, 'on');
+          } else if (v !== undefined && v !== null && String(v) !== '') {
+            params.set(dest, String(v));
+          }
+        }
+        return params;
+      },
+
+      _applyPrefill() {
+        var params = new URLSearchParams(window.location.search);
+        if (!params.has('_prefill_file')) return;
+
+        var filePath = params.get('_prefill_file');
+        if (this.fileDest) {
+          this.values[this.fileDest] = filePath;
+          this.filenames = [filePath.split(/[/\\]/).pop()];
+        }
+        params.forEach((val, key) => {
+          if (key === '_prefill_file') return;
+          if (key in this.values) this.values[key] = val;
+        });
+
+        if (window.history.replaceState) {
+          window.history.replaceState({}, '', window.location.pathname);
+        }
+      },
+
+      /* ── Command preview ──────────────────────────────────────────────── */
+      togglePreview() {
+        this.previewOpen = !this.previewOpen;
+        if (this.previewOpen) this._schedulePreview();
+      },
+
+      _schedulePreview() {
+        if (this._previewTimer) clearTimeout(this._previewTimer);
+        this._previewTimer = setTimeout(() => this._loadPreview(), 180);
+      },
+
+      /* Built server-side so it always matches what the run endpoint will
+         actually execute. */
+      async _loadPreview() {
+        try {
+          var res = await fetch(this.previewUrl + '?' + this._buildParams().toString());
+          var data = await res.json();
+          this.command = data.command || '';
+        } catch (e) {
+          this.command = '';
+        }
+      },
+
+      copyCommand() {
+        if (!this.command) return;
+        navigator.clipboard.writeText(this.command).then(() => {
+          this.copied = true;
+          setTimeout(() => { this.copied = false; }, 1500);
+        }).catch(function () { /* clipboard blocked — the text is on screen */ });
+      },
+
+      /* ── Running ──────────────────────────────────────────────────────── */
+      statusLabel() {
+        if (this.state === 'starting') return 'Starting script…';
+        if (this.state === 'running') return 'Running…';
+        if (this.state === 'success') return 'Done in ' + _formatSeconds(this.elapsed);
+        if (this.state === 'error') return 'Script failed (exit ' + this.exitCode + ')';
+        if (this.state === 'cancelled') return 'Run cancelled';
+        return '';
+      },
+
+      elapsedLabel() {
+        if (this.state === 'idle' || !this.elapsed) return '';
+        return _formatSeconds(this.elapsed);
+      },
+
+      run() {
+        if (!this.canRun && this.requiredDests.length) return;
+        if (this.isBusy) return;
+
+        this._stop();
+        this.lines = [];
+        this.trimmed = 0;
+        this.exitCode = null;
+        this.elapsed = 0;
+        this.autoScroll = true;
+        this.terminalOpen = true;
+        this.state = 'starting';
+
+        this._t0 = performance.now();
+        this._timer = setInterval(() => {
+          this.elapsed = (performance.now() - this._t0) / 1000;
+        }, 100);
+
+        var qs = this._buildParams().toString();
+        this._es = new EventSource(this.runUrl + (qs ? '?' + qs : ''));
+
+        this._es.onmessage = (e) => {
+          if (this.state === 'starting') this.state = 'running';
+          this._push(_decodeLine(e.data));
+        };
+
+        this._es.addEventListener('done', (e) => {
+          var info = {};
+          try { info = JSON.parse(e.data); } catch (err) { /* keep defaults */ }
+          this.exitCode = info.exit_code;
+          this.elapsed = typeof info.elapsed === 'number' ? info.elapsed : this.elapsed;
+          this.state = info.exit_code === 0 ? 'success' : 'error';
+          this._stop();
+        });
+
+        /* Fires on network loss and on normal stream close after 'done'. */
+        this._es.onerror = () => {
+          if (this.isBusy) {
+            this.state = 'error';
+            this.exitCode = this.exitCode === null ? -1 : this.exitCode;
+          }
+          this._stop();
+        };
+      },
+
+      _push(line) {
+        this.lines.push({
+          text: line.text,
+          level: line.level,
+          glyph: GLYPHS[line.level] || GLYPHS.info,
+          ts: _stamp()
+        });
+        if (this.lines.length > MAX_LINES) {
+          var over = this.lines.length - MAX_LINES;
+          this.lines.splice(0, over);
+          this.trimmed += over;
+        }
+        if (this.autoScroll) {
+          this.$nextTick(() => this._scrollToEnd());
+        }
+      },
+
+      _scrollToEnd() {
+        var c = this.$refs.console;
+        if (c) c.scrollTop = c.scrollHeight;
+      },
+
+      onConsoleScroll() {
+        var c = this.$refs.console;
+        if (!c) return;
+        /* Re-arm auto-scroll once the user returns to the bottom. */
+        this.autoScroll = (c.scrollHeight - c.scrollTop - c.clientHeight) < 40;
+      },
+
+      jumpToLatest() {
+        this.autoScroll = true;
+        this._scrollToEnd();
+      },
+
+      clearLines() {
+        this.lines = [];
+        this.trimmed = 0;
+      },
+
+      _stop() {
+        if (this._es) { this._es.close(); this._es = null; }
+        if (this._timer) { clearInterval(this._timer); this._timer = null; }
+      },
+
+      destroy() { this._stop(); },
     };
-
-    es.addEventListener('done', function (e) {
-      es.close();
-      resetBtn();
-      showResult(e.data);
-    });
-
-    es.onerror = function () {
-      es.close();
-      resetBtn();
-    };
   }
-
-  if (form) {
-    form.addEventListener('submit', function (e) {
-      e.preventDefault();
-      startRun(new URLSearchParams(new FormData(form)).toString());
-    });
-  } else {
-    runBtn.addEventListener('click', function () { startRun(''); });
-  }
-}());
 </script>
 {% endblock %}

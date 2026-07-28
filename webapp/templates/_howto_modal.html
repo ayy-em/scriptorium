@@ -2,12 +2,12 @@
 <div class="modal-overlay"
      x-show="howtoOpen"
      x-cloak
-     x-transition:enter="modal-enter"
-     x-transition:enter-start="modal-enter-from"
-     x-transition:enter-end="modal-enter-to"
-     x-transition:leave="modal-leave"
-     x-transition:leave-start="modal-leave-from"
-     x-transition:leave-end="modal-leave-to"
+     x-transition:enter="modal-fade"
+     x-transition:enter-start="modal-fade-from"
+     x-transition:enter-end="modal-fade-to"
+     x-transition:leave="modal-fade modal-fade--out"
+     x-transition:leave-start="modal-fade-to"
+     x-transition:leave-end="modal-fade-from"
      @click="howtoOpen = false"
      @keydown.escape.window="howtoOpen = false">
   <div class="modal-dialog howto-dialog" @click.stop role="dialog" aria-modal="true" aria-labelledby="howto-title">

@@ -68,4 +68,9 @@ past_inputs/
 *.tsv
 archive/
 logs/
+
+# Licences for vendored assets must ship with them, despite the *.txt rule above
+!**/LICENSE*.txt
+!**/OFL.txt
+!**/UFL.txt
 *.json

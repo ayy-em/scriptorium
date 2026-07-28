@@ -399,7 +399,7 @@ def _run_cli() -> None:
     cli_main()
 
 
-def _start_gui(logger, url: str, uv_server, server_thread: threading.Thread) -> None:  # noqa: ANN001
+def _start_gui(logger, url: str, uv_server, server_thread: threading.Thread, app=None) -> None:  # noqa: ANN001
     """Try to open a GUI window, attempting three tiers in order.
 
     Tier 1: pywebview native window (preferred on desktop installs).
@@ -411,6 +411,10 @@ def _start_gui(logger, url: str, uv_server, server_thread: threading.Thread) -> 
         url: The local URL the server is listening on.
         uv_server: A ``uvicorn.Server`` instance.
         server_thread: The background thread running the server.
+        app: The FastAPI app, so the native window can be published on
+            ``app.state`` for endpoints that need to raise OS dialogs. Only
+            tier 1 has a window; the other tiers leave it unset, which is how
+            the UI knows to disable the folder picker.
     """
     try:
         import webview  # noqa: PLC0415
@@ -424,6 +428,8 @@ def _start_gui(logger, url: str, uv_server, server_thread: threading.Thread) -> 
 
             _patch_webview2_external_drop()
             window = webview.create_window("Scriptorium", url, width=1200, height=800)
+            if app is not None:
+                app.state.webview_window = window
 
             tray_icon = _create_tray_icon(window)
             window.events.closing += _make_closing_handler(window, tray_icon)
@@ -437,6 +443,8 @@ def _start_gui(logger, url: str, uv_server, server_thread: threading.Thread) -> 
             os._exit(0)  # noqa: SLF001
         except Exception:
             uv_server.should_exit = False
+            if app is not None:
+                app.state.webview_window = None
             logger.exception("pywebview failed — trying Chromium app mode")
 
     try:
@@ -518,7 +526,7 @@ def main() -> None:
         logger.error("Server failed to start within timeout")
         sys.exit(1)
 
-    _start_gui(logger, url, uv_server, server_thread)
+    _start_gui(logger, url, uv_server, server_thread, app)
 
 
 if __name__ == "__main__":

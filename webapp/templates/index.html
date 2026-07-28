@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% from "_macros.html" import theme_icon %}
+{% from "_components.html" import soon_button, empty_state %}
 {% block title %}Scriptorium{% endblock %}
 {% set active_page = "scripts" %}
 {% block content %}
@@ -17,13 +18,7 @@
   <div class="browse-pane" :class="{ 'is-hidden': chooserOpen }">
   <div class="page-header">
     <h1>Scripts</h1>
-    <button class="sort-btn" title="Sort order">
-      <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-        <path d="M2 4h8M2 8h5M2 12h3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-        <path d="M13 3v10M10.5 10.5L13 13l2.5-2.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
-      </svg>
-      A → Z
-    </button>
+    {{ soon_button('A → Z', 'sliders') }}
   </div>
   <p class="page-subtitle">Make your life easier with {{ total_scripts }} scripts across {{ themes | length }} categories.</p>
 
@@ -83,10 +78,15 @@
                 <path d="M9 10h2.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
               </svg>
             </button>
-            <button class="icon-btn fav-btn"
-                    title="Add to favourites"
+            {# Favourites are not implemented — see BACKLOG.md. Rendered
+               disabled rather than as a live control that does nothing. #}
+            <button type="button"
+                    class="btn-soon btn-soon--bare fav-btn"
+                    disabled
+                    aria-disabled="true"
+                    data-soon="Coming soon!"
                     @click.stop.prevent
-                    aria-label="Add {{ theme }}.{{ name }} to favourites">
+                    aria-label="Favourite {{ theme }}.{{ name }} — coming soon">
               <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
                 <path d="M8 13.5S2 10 2 5.5a3.5 3.5 0 0 1 6-2.43A3.5 3.5 0 0 1 14 5.5C14 10 8 13.5 8 13.5Z"
                       stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
@@ -101,13 +101,12 @@
     {% endfor %}
 
     <div class="no-results" x-show="noResults()" x-transition>
-      <svg class="no-results-icon" viewBox="0 0 36 36" fill="none" aria-hidden="true">
-        <circle cx="16" cy="16" r="10" stroke="currentColor" stroke-width="2"/>
-        <path d="M23 23L31 31" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-        <path d="M12 16h8M16 12v8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-      </svg>
-      <p class="no-results-title">No scripts found</p>
-      <p class="no-results-sub">Try a different search term or clear the category filter.</p>
+      {{ empty_state('search', 'No scripts found',
+                     'Try a different search term or clear the category filter.') }}
+      <button type="button" class="btn btn--secondary btn--sm"
+              @click="$store.ui.search = ''; $store.ui.activeCategory = null">
+        Clear filters
+      </button>
     </div>
   </div>
   </div>
