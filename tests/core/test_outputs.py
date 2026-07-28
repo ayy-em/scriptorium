@@ -1,11 +1,19 @@
 """Tests for core.outputs — standardized output path resolution."""
 
 from datetime import datetime
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
-from core.outputs import deduplicate, default_stem, resolve_output, resolve_output_dir
+from core.outputs import (
+    deduplicate,
+    default_stem,
+    names_a_file,
+    resolve_output,
+    resolve_output_dir,
+    resolve_single_output,
+)
 
 
 class TestDefaultStem:
@@ -139,3 +147,43 @@ class TestResolveOutputDir:
         result = resolve_output_dir(str(new_dir), theme="formats")
         assert result == new_dir
         assert new_dir.exists()
+
+
+class TestNamesAFile:
+    def test_path_with_extension_names_a_file(self):
+        assert names_a_file("D:/out/pic.png") is True
+
+    def test_bare_directory_does_not(self):
+        assert names_a_file("D:/out") is False
+
+    def test_none_does_not(self):
+        assert names_a_file(None) is False
+
+    def test_accepts_a_path_object(self):
+        assert names_a_file(Path("out/pic.png")) is True
+
+
+class TestResolveSingleOutput:
+    def test_returns_the_exact_path_the_user_named(self, tmp_path):
+        target = tmp_path / "sub" / "my_name.png"
+        assert resolve_single_output(target, theme="photo", ext=".png") == target
+
+    def test_returns_none_for_a_directory(self, tmp_path):
+        assert resolve_single_output(tmp_path, theme="photo", ext=".png") is None
+
+    def test_returns_none_for_no_output(self):
+        assert resolve_single_output(None, theme="photo", ext=".png") is None
+
+    def test_deduplicates_against_an_existing_file(self, tmp_path):
+        target = tmp_path / "taken.png"
+        target.write_bytes(b"x")
+        got = resolve_single_output(target, theme="photo", ext=".png")
+        assert got != target
+        assert got.name == "taken_001.png"
+
+    def test_bare_filename_lands_in_the_theme_outputs_dir(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("core.paths._user_data_dir", lambda: tmp_path)
+        monkeypatch.setattr("core.outputs.outputs_dir", lambda theme: tmp_path / theme)
+        got = resolve_single_output("just_a_name.png", theme="photo", ext=".png")
+        assert got.parent.name == "photo"
+        assert got.name == "just_a_name.png"

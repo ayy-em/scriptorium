@@ -7,7 +7,7 @@ import sys
 from PIL import Image
 
 from core.argparse import ScriptoriumParser
-from core.outputs import resolve_output_dir
+from core.outputs import resolve_output_dir, resolve_single_output
 from scripts.formats._utils import (
     IMAGE_EXTS,
     BatchConvertError,
@@ -45,6 +45,7 @@ def convert(
     outputs_dir: Path,
     *,
     quality: int = 85,
+    explicit_output: Path | None = None,
 ) -> list[Path]:
     """Convert a single image or a directory of images to a target format.
 
@@ -65,7 +66,7 @@ def convert(
     def _fn(inp: Path, out: Path) -> None:
         _convert(inp, out, quality)
 
-    return run_convert(source, IMAGE_EXTS, outputs_dir, to_format, _fn)
+    return run_convert(source, IMAGE_EXTS, outputs_dir, to_format, _fn, explicit_output=explicit_output)
 
 
 _EXAMPLES = """
@@ -120,9 +121,12 @@ def run() -> None:
     args = get_parser().parse_args()
     source = args.source or formats_inputs_dir()
     out_dir = resolve_output_dir(args.output, theme="formats")
+    # An explicit filename only makes sense for a one-file job; run_convert
+    # ignores it for a real batch.
+    explicit = resolve_single_output(args.output, theme="formats", ext=args.to_format)
 
     try:
-        outputs = convert(source, args.to_format, out_dir, quality=args.quality)
+        outputs = convert(source, args.to_format, out_dir, quality=args.quality, explicit_output=explicit)
         for o in outputs:
             print(o)
         sys.exit(0)

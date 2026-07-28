@@ -71,10 +71,16 @@
       <span class="file-drop-body">
         <template x-if="!hasFile && !uploading && !uploadError">
           <span>
-            <span class="file-drop-title">Drop a file here or click to browse</span>
+            {# The copy has to differ per mode, otherwise the Files/Folder
+               toggle changes the hidden input and nothing else, and reads as
+               a dead control. #}
+            <span class="file-drop-title" x-text="dropPrompt()">Drop a file here or click to browse</span>
             {% if accept_exts %}
-            <span class="file-drop-formats">{{ accept_exts.replace(',', ', ') }}</span>
+            <span class="file-drop-formats" x-show="multiMode !== 'dir'">{{ accept_exts.replace(',', ', ') }}</span>
             {% endif %}
+            <span class="file-drop-formats" x-show="multiMode === 'dir'" x-cloak>
+              Every supported file inside the folder is used
+            </span>
           </span>
         </template>
 
@@ -176,12 +182,15 @@
       </template>
     </button>
 
+    {# One control, not two: it reveals the command and copies it in the same
+       click, so there is no separate "CLI equivalent" panel to explain. #}
     <button type="button" class="btn btn--secondary"
-            @click="togglePreview()"
+            @click="showAndCopyCommand()"
             :aria-expanded="previewOpen.toString()"
             aria-controls="command-preview">
-      {{ icon('terminal', 15) }}
-      <span>Preview command</span>
+      <span x-show="!copied">{{ icon('terminal', 15) }}</span>
+      <span x-show="copied" x-cloak class="is-success">{{ icon('check', 15) }}</span>
+      <span x-text="copied ? 'Copied to clipboard' : 'Copy CLI command'">Copy CLI command</span>
     </button>
 
     <button type="button" class="btn btn--ghost" @click="reset()">
@@ -190,21 +199,16 @@
     </button>
   </div>
 
-  {# Height animation via grid-template-rows 0fr→1fr, so no Collapse plugin. #}
-  <div class="collapsible" :class="{ 'is-open': previewOpen }" id="command-preview">
-    <div class="collapsible-inner">
-      <div class="command-preview">
-        <div class="command-preview-head">
-          <span class="command-preview-label">CLI equivalent</span>
-          <button type="button" class="btn-icon"
-                  @click="copyCommand()"
-                  :aria-label="copied ? 'Command copied' : 'Copy command'">
-            <span x-show="!copied">{{ icon('copy', 14) }}</span>
-            <span x-show="copied" x-cloak class="is-success">{{ icon('check', 14) }}</span>
-          </button>
-        </div>
-        <pre class="command-preview-code"><code x-text="command || 'Building…'"></code></pre>
-      </div>
-    </div>
+  {# Plain x-show decides visibility — no x-transition. Alpine drives transitions
+     through requestAnimationFrame, which is throttled to a standstill while the
+     page is not compositing (backgrounded or occluded window), and the element
+     would then never get its display set. Motion comes from a CSS animation
+     instead, which can stall harmlessly without hiding anything. #}
+  <div class="command-preview" id="command-preview" x-show="previewOpen" x-cloak>
+    <pre class="command-preview-code"><code x-text="command"></code></pre>
+    <button type="button" class="command-preview-close"
+            @click="previewOpen = false" aria-label="Hide command">
+      {{ icon('x', 13) }}
+    </button>
   </div>
 </form>

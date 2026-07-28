@@ -249,7 +249,10 @@ def _find_chromium_windows() -> tuple[str, str] | None:
 def _chromium_app_window(url: str, uv_server, logger) -> None:  # noqa: ANN001
     """Open the app in a chromeless Chromium ``--app`` window.
 
-    Blocks until the user closes the window, then signals the server to stop.
+    Blocks until the user closes the window. When ``close_behavior`` is ``"tray"``
+    and a tray icon could be created, the window is reopened on demand from the
+    tray instead of the app exiting — otherwise this fallback tier would ignore
+    the setting entirely, which is what happens when pywebview is unavailable.
 
     Args:
         url: The local URL the server is listening on.
@@ -261,6 +264,7 @@ def _chromium_app_window(url: str, uv_server, logger) -> None:  # noqa: ANN001
     """
     from pathlib import Path  # noqa: PLC0415
     import subprocess  # noqa: PLC0415
+    import threading as _threading  # noqa: PLC0415
 
     browser = _find_chromium_browser()
     if browser is None:
@@ -278,15 +282,85 @@ def _chromium_app_window(url: str, uv_server, logger) -> None:  # noqa: ANN001
         "--disable-extensions",
     ]
 
-    logger.info("Launching %s in app mode: %s", name, exe_path)
-    proc = subprocess.Popen(cmd)  # noqa: S603
+    reopen = _threading.Event()
+    quit_requested = _threading.Event()
 
-    try:
-        proc.wait()
-    except KeyboardInterrupt:
-        proc.terminate()
+    def _open() -> subprocess.Popen:
+        logger.info("Launching %s in app mode: %s", name, exe_path)
+        return subprocess.Popen(cmd)  # noqa: S603
 
+    tray_icon = _create_tray_icon_for(reopen.set, quit_requested.set)
+    if tray_icon is None:
+        logger.info("No tray icon available; window close will exit the app")
+
+    proc = _open()
+    while True:
+        try:
+            proc.wait()
+        except KeyboardInterrupt:
+            proc.terminate()
+            break
+
+        if quit_requested.is_set() or tray_icon is None or not _close_to_tray():
+            break
+
+        # Window closed but the user wants us resident: idle until the tray asks
+        # for the window back, or for the app to quit.
+        logger.info("Window closed — staying in the tray")
+        reopen.clear()
+        while not reopen.wait(timeout=0.5):
+            if quit_requested.is_set():
+                break
+        if quit_requested.is_set():
+            break
+        proc = _open()
+
+    if tray_icon is not None:
+        tray_icon.stop()
     uv_server.should_exit = True
+
+
+def _close_to_tray() -> bool:
+    """Report whether the user asked the close button to minimise to tray.
+
+    Returns:
+        True when ``close_behavior`` is ``"tray"``.
+    """
+    from core.config import load as load_config  # noqa: PLC0415
+
+    return load_config().close_behavior == "tray"
+
+
+def _create_tray_icon_for(on_show, on_quit):  # noqa: ANN001, ANN201
+    """Create a tray icon wired to arbitrary show/quit callbacks.
+
+    The pywebview tier can show and hide its own window, but the Chromium tier
+    has to relaunch a process instead, so the actions are injected rather than
+    hard-coded.
+
+    Args:
+        on_show: Called when the user picks "Show Scriptorium".
+        on_quit: Called when the user picks "Quit".
+
+    Returns:
+        Running ``pystray.Icon`` instance, or ``None`` if unavailable.
+    """
+    try:
+        import pystray  # noqa: PLC0415
+
+        icon_image = _load_tray_icon()
+        if icon_image is None:
+            return None
+
+        menu = pystray.Menu(
+            pystray.MenuItem("Show Scriptorium", lambda icon, item: on_show(), default=True),
+            pystray.MenuItem("Quit", lambda icon, item: on_quit()),
+        )
+        tray = pystray.Icon("Scriptorium", icon_image, "Scriptorium", menu)
+        threading.Thread(target=tray.run, daemon=True).start()
+        return tray
+    except Exception:
+        return None
 
 
 def _browser_fallback(url: str, server_thread: threading.Thread, logger) -> None:  # noqa: ANN001
@@ -332,7 +406,7 @@ def _load_tray_icon():  # noqa: ANN201
 
 
 def _create_tray_icon(window):  # noqa: ANN001, ANN201
-    """Create and start a system tray icon with Show/Quit menu items.
+    """Create a tray icon that shows and hides a pywebview window.
 
     Args:
         window: The pywebview window to show/hide.
@@ -340,32 +414,13 @@ def _create_tray_icon(window):  # noqa: ANN001, ANN201
     Returns:
         Running ``pystray.Icon`` instance, or ``None`` if pystray is unavailable.
     """
-    try:
-        import pystray  # noqa: PLC0415
 
-        icon_image = _load_tray_icon()
-        if icon_image is None:
-            return None
+    def _quit() -> None:
+        import os  # noqa: PLC0415
 
-        def on_show(icon, item):  # noqa: ANN001
-            window.show()
+        os._exit(0)  # noqa: SLF001
 
-        def on_quit(icon, item):  # noqa: ANN001
-            icon.stop()
-            import os  # noqa: PLC0415
-
-            os._exit(0)  # noqa: SLF001
-
-        menu = pystray.Menu(
-            pystray.MenuItem("Show Scriptorium", on_show, default=True),
-            pystray.MenuItem("Quit", on_quit),
-        )
-        tray = pystray.Icon("Scriptorium", icon_image, "Scriptorium", menu)
-        t = threading.Thread(target=tray.run, daemon=True)
-        t.start()
-        return tray
-    except Exception:
-        return None
+    return _create_tray_icon_for(window.show, _quit)
 
 
 def _make_closing_handler(window, tray_icon):  # noqa: ANN001, ANN201
@@ -381,10 +436,7 @@ def _make_closing_handler(window, tray_icon):  # noqa: ANN001, ANN201
     """
 
     def _handler():  # noqa: ANN202
-        from core.config import load as load_config  # noqa: PLC0415
-
-        cfg = load_config()
-        if cfg.close_behavior == "tray" and tray_icon is not None:
+        if tray_icon is not None and _close_to_tray():
             window.hide()
             return False
         return None

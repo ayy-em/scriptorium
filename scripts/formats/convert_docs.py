@@ -8,7 +8,7 @@ import subprocess
 import sys
 
 from core.argparse import ScriptoriumParser
-from core.outputs import resolve_output_dir
+from core.outputs import resolve_output_dir, resolve_single_output
 from scripts.formats._utils import (
     BatchConvertError,
     formats_inputs_dir,
@@ -81,7 +81,12 @@ def _dispatcher(source_ext: str, target_ext: str) -> Callable[[Path, Path], None
     return _pandoc_convert
 
 
-def convert(source: Path, to_format: str, outputs_dir: Path) -> list[Path]:
+def convert(
+    source: Path,
+    to_format: str,
+    outputs_dir: Path,
+    explicit_output: Path | None = None,
+) -> list[Path]:
     """Convert a single document or every document in a directory to ``to_format``.
 
     Args:
@@ -104,7 +109,7 @@ def convert(source: Path, to_format: str, outputs_dir: Path) -> list[Path]:
     def _fn(inp: Path, out: Path) -> None:
         _dispatcher(inp.suffix, out.suffix)(inp, out)
 
-    return run_convert(source, DOCS_EXTS, outputs_dir, target, _fn)
+    return run_convert(source, DOCS_EXTS, outputs_dir, target, _fn, explicit_output=explicit_output)
 
 
 _EXAMPLES = """
@@ -153,9 +158,12 @@ def run() -> None:
     args = get_parser().parse_args()
     source = args.source or formats_inputs_dir()
     out_dir = resolve_output_dir(args.output, theme="formats")
+    # An explicit filename only makes sense for a one-file job; run_convert
+    # ignores it for a real batch.
+    explicit = resolve_single_output(args.output, theme="formats", ext=args.to_format)
 
     try:
-        outputs = convert(source, args.to_format, out_dir)
+        outputs = convert(source, args.to_format, out_dir, explicit_output=explicit)
         for o in outputs:
             print(o)
         sys.exit(0)

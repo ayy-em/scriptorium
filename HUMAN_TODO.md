@@ -92,6 +92,13 @@ could not be verified there and need a human with the app actually open.
 - [ ] **macOS and Linux.** All verification was on Windows. Font rendering,
       the tray icon, the folder dialog, and run cancellation are the likely
       divergences.
+- [ ] **Close-to-tray, one click.** The tray icon is now created in the Chromium
+      fallback tier (verified: the frozen app launches, the icon is created, and
+      `close_behavior: "tray"` is read). What could not be verified without a
+      human at the machine is the actual interaction — close the window and
+      confirm the app stays resident, then use the tray's "Show Scriptorium" to
+      bring it back and "Quit" to exit. pywebview's native window still fails to
+      start in the frozen build; see BACKLOG.md.
 - [ ] **POSIX run cancellation.** The Windows path is verified end to end — a
       real ffmpeg transcode was started through the UI and cancelled, and the
       ffmpeg process count went from 1 to 0 rather than being orphaned. The

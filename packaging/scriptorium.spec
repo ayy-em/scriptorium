@@ -9,7 +9,7 @@ Build from the repo root:
 import os
 from pathlib import Path
 
-from PyInstaller.utils.hooks import collect_all
+from PyInstaller.utils.hooks import collect_all, collect_submodules
 
 ROOT = Path(os.path.abspath(os.path.join(SPECPATH, "..")))
 
@@ -20,57 +20,27 @@ ROOT = Path(os.path.abspath(os.path.join(SPECPATH, "..")))
 # now; full native-lib bundling for a non-brew machine is a separate task).
 wp_datas, wp_binaries, wp_hidden = collect_all("weasyprint")
 
-# Collect every script sub-package so the registry can discover them at runtime.
-hidden_imports = [
-    "core",
-    "core.paths",
-    "core.registry",
-    "core.runner",
-    "scripts",
-    "scripts.api",
-    "scripts.av",
-    "scripts.av._utils",
-    "scripts.av.dump_frames",
-    "scripts.av.filmstrip",
-    "scripts.av.join",
-    "scripts.av.split",
-    "scripts.av.tag",
-    "scripts.av.to_anim",
-    "scripts.av.trim",
-    "scripts.av.video_crop",
-    "scripts.av.volume",
-    "scripts.downloads",
-    "scripts.downloads.download",
-    "scripts.formats",
-    "scripts.formats._utils",
-    "scripts.formats.convert_audio",
-    "scripts.formats.convert_image",
-    "scripts.formats.convert_tabular",
-    "scripts.formats.convert_video",
-    "scripts.homeassistant",
-    "scripts.llm",
-    "scripts.lora",
-    "scripts.lora._dataset",
-    "scripts.lora.export_captions",
-    "scripts.lora.import_captions",
-    "scripts.lora.renumber",
-    "scripts.lora.validate",
-    "scripts.photo",
-    "scripts.printing",
-    "scripts.sitemaps",
-    "scripts.sitemaps.status_check",
-    "scripts.speech",
-    "scripts.tabular",
-    "scripts.telegram",
-    "scripts.telegram._charts",
-    "scripts.telegram._metrics",
-    "scripts.telegram._parsing",
-    "scripts.telegram._pdf",
-    "scripts.telegram._runtime",
-    "scripts.telegram._stopwords_en",
-    "scripts.telegram._stopwords_ru",
-    "scripts.telegram.chat_analysis",
-    "scripts.web",
+def _collect(package):
+    """collect_all for an optional dependency, tolerating its absence."""
+    try:
+        return collect_all(package)
+    except Exception:  # pragma: no cover - build-time only
+        print(f"WARNING: could not collect {package!r}; scripts needing it will be missing")
+        return [], [], []
+
+
+# rembg drives photo.remove_bg and onnxruntime is its inference backend. Neither
+# is reachable by static analysis, and core.registry silently skips any script
+# whose imports fail — so without these, remove_bg vanishes with no error.
+rembg_datas, rembg_binaries, rembg_hidden = _collect("rembg")
+ort_datas, ort_binaries, ort_hidden = _collect("onnxruntime")
+
+
+# Every script module, discovered rather than listed. core.registry finds
+# scripts by walking the package at runtime, so a hand-maintained list here
+# drifts the moment a script is added — which is how seven scripts ended up
+# missing from the v0.5.2 builds.
+hidden_imports = collect_submodules("scripts") + collect_submodules("core") + [
     # Third-party libraries that might be lazily imported
     "uvicorn",
     "uvicorn.logging",
@@ -107,7 +77,7 @@ hidden_imports = [
     "ijson.backends",
     "ijson.backends.python",
 ]
-hidden_imports += wp_hidden
+hidden_imports += wp_hidden + rembg_hidden + ort_hidden
 
 # Data files that must be included in the bundle.
 datas = [
@@ -117,12 +87,12 @@ datas = [
     (str(ROOT / "scripts" / "telegram" / "templates"), "scripts/telegram/templates"),
     (str(ROOT / "pyproject.toml"), "."),
 ]
-datas += wp_datas
+datas += wp_datas + rembg_datas + ort_datas
 
 a = Analysis(
     [str(ROOT / "packaging" / "entrypoint.py")],
     pathex=[str(ROOT)],
-    binaries=wp_binaries,
+    binaries=wp_binaries + rembg_binaries + ort_binaries,
     datas=datas,
     hiddenimports=hidden_imports,
     hookspath=[],

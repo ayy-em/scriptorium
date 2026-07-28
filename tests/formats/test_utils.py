@@ -6,7 +6,7 @@ import pytest
 
 from core import paths
 from scripts.formats import _utils
-from scripts.formats._utils import BatchConvertError, run_convert
+from scripts.formats._utils import IMAGE_EXTS, BatchConvertError, run_convert, single_source
 
 
 @pytest.fixture
@@ -120,3 +120,82 @@ class TestRunConvertDeduplication:
 
 def test_module_exposes_run_convert() -> None:
     assert _utils.run_convert is run_convert
+
+
+class TestSingleSource:
+    def test_a_file_is_its_own_single_source(self, tmp_path):
+        f = tmp_path / "a.png"
+        f.write_bytes(b"x")
+        assert single_source(f, IMAGE_EXTS) == f
+
+    def test_directory_with_exactly_one_match_collapses_to_it(self, tmp_path):
+        """The web UI uploads even one file into a batch directory."""
+        f = tmp_path / "only.png"
+        f.write_bytes(b"x")
+        assert single_source(tmp_path, IMAGE_EXTS) == f
+
+    def test_directory_with_several_matches_stays_a_batch(self, tmp_path):
+        for n in ("a.png", "b.png"):
+            (tmp_path / n).write_bytes(b"x")
+        assert single_source(tmp_path, IMAGE_EXTS) is None
+
+    def test_empty_directory_is_not_a_single_source(self, tmp_path):
+        assert single_source(tmp_path, IMAGE_EXTS) is None
+
+    def test_ignores_files_of_other_types(self, tmp_path):
+        (tmp_path / "keep.png").write_bytes(b"x")
+        (tmp_path / "skip.txt").write_bytes(b"x")
+        assert single_source(tmp_path, IMAGE_EXTS).name == "keep.png"
+
+    def test_missing_path_is_not_a_single_source(self, tmp_path):
+        assert single_source(tmp_path / "nope", IMAGE_EXTS) is None
+
+
+class TestRunConvertExplicitOutput:
+    @staticmethod
+    def _touch(p):
+        p.write_bytes(b"x")
+        return p
+
+    def test_honours_an_explicit_filename_for_one_file(self, tmp_path):
+        src = tmp_path / "in"
+        src.mkdir()
+        self._touch(src / "only.png")
+        out_dir = tmp_path / "out"
+        target = tmp_path / "named.jpg"
+
+        written = run_convert(src, IMAGE_EXTS, out_dir, "jpg", lambda i, o: o.write_bytes(b"y"), explicit_output=target)
+        assert written == [target]
+        assert target.exists()
+
+    def test_ignores_an_explicit_filename_for_a_real_batch(self, tmp_path):
+        src = tmp_path / "in"
+        src.mkdir()
+        for n in ("a.png", "b.png"):
+            self._touch(src / n)
+        out_dir = tmp_path / "out"
+
+        written = run_convert(
+            src, IMAGE_EXTS, out_dir, "jpg", lambda i, o: o.write_bytes(b"y"), explicit_output=tmp_path / "one.jpg"
+        )
+        assert len(written) == 2
+        assert all(p.parent == out_dir for p in written)
+
+    def test_without_an_explicit_output_it_timestamps_as_before(self, tmp_path):
+        src = tmp_path / "in"
+        src.mkdir()
+        self._touch(src / "only.png")
+        out_dir = tmp_path / "out"
+
+        written = run_convert(src, IMAGE_EXTS, out_dir, "jpg", lambda i, o: o.write_bytes(b"y"))
+        assert written[0].parent == out_dir
+        assert written[0].suffix == ".jpg"
+
+    def test_creates_the_explicit_output_parent(self, tmp_path):
+        src = tmp_path / "in"
+        src.mkdir()
+        self._touch(src / "only.png")
+        target = tmp_path / "deep" / "nested" / "named.jpg"
+
+        run_convert(src, IMAGE_EXTS, tmp_path / "out", "jpg", lambda i, o: o.write_bytes(b"y"), explicit_output=target)
+        assert target.exists()

@@ -17,6 +17,12 @@
 <img src="/static/icons/icon-download.png" width="{{ size }}" height="{{ size }}" style="display:inline-block;vertical-align:middle;object-fit:contain" alt="" aria-hidden="true">
 {% elif theme == 'formats' %}
 <img src="/static/icons/icon-doc.png" width="{{ size }}" height="{{ size }}" style="display:inline-block;vertical-align:middle;object-fit:contain" alt="" aria-hidden="true">
+{% elif theme == 'gif' %}
+{# GIF wordmark. Filled rather than stroked, and on its native 256 viewBox —
+   the shared 16x16 stroke convention cannot express lettering this tight. #}
+<svg width="{{ size }}" height="{{ size }}" viewBox="0 0 256 256" fill="currentColor" stroke="none" aria-hidden="true" style="display:inline-block;vertical-align:middle">
+  <path d="M148,72V184a12,12,0,0,1-24,0V72a12,12,0,0,1,24,0Zm80-12H180a12.0006,12.0006,0,0,0-12,12V184a12,12,0,0,0,24,0V140h24a12,12,0,0,0,0-24H192V84h36a12,12,0,0,0,0-24ZM96,120H72a12,12,0,0,0,0,24H84v8a20,20,0,0,1-40,0V104a20.00476,20.00476,0,0,1,39.37109-5.00879,11.99988,11.99988,0,0,0,23.24219-5.98242A44.00462,44.00462,0,0,0,20,104v48a44,44,0,0,0,88,0V132A12.0006,12.0006,0,0,0,96,120Z"/>
+</svg>
 {% elif theme == 'homeassistant' %}
 {# /\ over [_] — minimal house, ASCII-flavoured #}
 <svg width="{{ size }}" height="{{ size }}" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -64,10 +70,9 @@
   <path d="M7 3 5 13M12 3l-2 10"/>
 </svg>
 {% else %}
-{# [_] — empty bracketed slot #}
+{# gif #}
 <svg width="{{ size }}" height="{{ size }}" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-  <path d="M5 2.5H3v11h2M11 2.5h2v11h-2"/>
-  <path d="M6 11h4"/>
+  <path d="M148,72V184a12,12,0,0,1-24,0V72a12,12,0,0,1,24,0Zm80-12H180a12.0006,12.0006,0,0,0-12,12V184a12,12,0,0,0,24,0V140h24a12,12,0,0,0,0-24H192V84h36a12,12,0,0,0,0-24ZM96,120H72a12,12,0,0,0,0,24H84v8a20,20,0,0,1-40,0V104a20.00476,20.00476,0,0,1,39.37109-5.00879,11.99988,11.99988,0,0,0,23.24219-5.98242A44.00462,44.00462,0,0,0,20,104v48a44,44,0,0,0,88,0V132A12.0006,12.0006,0,0,0,96,120Z"/>
 </svg>
 {% endif %}
 {% endmacro %}

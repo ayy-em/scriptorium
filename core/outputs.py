@@ -89,6 +89,47 @@ def resolve_output(
     return deduplicate(path)
 
 
+def names_a_file(output: str | Path | None) -> bool:
+    """Report whether an ``--output`` value names a file rather than a directory.
+
+    A suffix is the only signal available — the path need not exist yet.
+
+    Args:
+        output: Raw ``--output`` value, or ``None``.
+
+    Returns:
+        True when *output* carries a file extension.
+    """
+    return output is not None and Path(output).suffix != ""
+
+
+def resolve_single_output(
+    output: str | Path | None,
+    *,
+    theme: str,
+    ext: str,
+) -> Path | None:
+    """Resolve ``--output`` only when it explicitly names one file.
+
+    Scripts that may emit one *or* many files use ``resolve_output_dir``, which
+    keeps only the directory part — correct for a batch, but it silently discards
+    a filename the user typed. Such a script can call this first: a non-None
+    result means "the user asked for exactly this file".
+
+    Args:
+        output: Raw ``--output`` value, or ``None``.
+        theme: Script theme slug for the default outputs directory.
+        ext: Fallback extension including the leading dot.
+
+    Returns:
+        A collision-free file path, or None when *output* is absent or names a
+        directory.
+    """
+    if not names_a_file(output):
+        return None
+    return resolve_output(output, theme=theme, ext=ext)
+
+
 def resolve_output_dir(
     output: str | Path | None,
     *,

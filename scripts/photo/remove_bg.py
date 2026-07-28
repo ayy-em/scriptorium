@@ -10,7 +10,7 @@ from PIL import Image
 from core.argparse import ScriptoriumParser
 from core.outputs import deduplicate, default_stem, resolve_output, resolve_output_dir
 from core.paths import inputs_dir, move_to_past_inputs
-from scripts.formats._utils import IMAGE_EXTS, find_files
+from scripts.formats._utils import IMAGE_EXTS, find_files, single_source
 
 TITLE = "Remove background"
 DESCRIPTION = "Remove image backgrounds using AI, outputting transparent PNGs."
@@ -340,6 +340,14 @@ def run() -> None:
     }
 
     source = args.source if args.source is not None else inputs_dir(_THEME)
+
+    # The web UI uploads even a single file into a per-batch directory, so a
+    # directory holding exactly one image is a one-file job. Collapsing it here
+    # means an explicit --output filename reaches resolve_output() instead of
+    # being thrown away by the batch path.
+    lone = single_source(source, IMAGE_EXTS)
+    if lone is not None:
+        source = lone
 
     if source.is_file():
         out = resolve_output(args.output, theme=_THEME, ext=".png")

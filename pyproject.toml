@@ -133,6 +133,12 @@ fixable = ["ALL"]
 "scripts/telegram/_group_metrics.py" = [
     "PLR0913", # build_group_analytics takes metadata + messages + sender_lookup + config kwargs
 ]
+"scripts/formats/_utils.py" = [
+    "PLR0913", # run_convert takes source + exts + out dir + target ext + fn + optional explicit output
+]
+"scripts/formats/convert_video.py" = [
+    "PLR0913", # convert takes source + format + out dir + quality + no_audio + optional explicit output
+]
 
 [tool.ruff.format]
 quote-style = "double"

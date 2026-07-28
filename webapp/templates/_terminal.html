@@ -70,8 +70,9 @@
     </button>
   </header>
 
-  <div class="collapsible" :class="{ 'is-open': terminalOpen }">
-    <div class="collapsible-inner">
+  {# Plain x-show, no x-transition — see the note in _script_form.html. #}
+  <div x-show="terminalOpen">
+    <div>
       <div class="terminal-body" x-ref="console" @scroll="onConsoleScroll()">
         <p class="terminal-empty" x-show="!lines.length" x-cloak>Waiting for output…</p>
         <template x-for="(line, i) in lines" :key="i">

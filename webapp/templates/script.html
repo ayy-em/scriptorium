@@ -162,6 +162,13 @@
         return this.filenames.length + noun;
       },
 
+      dropPrompt() {
+        if (this.multiMode === 'dir') return 'Choose a folder, or drop one here';
+        return this.fileWidget === 'file-multi'
+          ? 'Drop files here or click to browse'
+          : 'Drop a file here or click to browse';
+      },
+
       setMultiMode(next) {
         if (this.multiMode === next) return;
         this.multiMode = next;
@@ -292,10 +299,21 @@
         }
       },
 
-      /* ── Command preview ──────────────────────────────────────────────── */
-      togglePreview() {
-        this.previewOpen = !this.previewOpen;
-        if (this.previewOpen) this._schedulePreview();
+      /* ── CLI command ──────────────────────────────────────────────────── */
+      /* One action: fetch, reveal, copy. The command is loaded *before* the
+         panel opens, so a placeholder like "Building…" can never be on screen. */
+      async showAndCopyCommand() {
+        await this._loadPreview();
+        this.previewOpen = true;
+        if (!this.command) return;
+        try {
+          await navigator.clipboard.writeText(this.command);
+          this.copied = true;
+          setTimeout(() => { this.copied = false; }, 1600);
+        } catch (e) {
+          /* Clipboard can be blocked by permissions; the command is visible
+             either way, so this is not worth an error state. */
+        }
       },
 
       _schedulePreview() {
@@ -313,14 +331,6 @@
         } catch (e) {
           this.command = '';
         }
-      },
-
-      copyCommand() {
-        if (!this.command) return;
-        navigator.clipboard.writeText(this.command).then(() => {
-          this.copied = true;
-          setTimeout(() => { this.copied = false; }, 1500);
-        }).catch(function () { /* clipboard blocked — the text is on screen */ });
       },
 
       /* ── Running ──────────────────────────────────────────────────────── */

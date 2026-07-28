@@ -23,13 +23,19 @@
 
 /* ─── 1. Fonts ───────────────────────────────────────────────────────────── */
 /* Self-hosted so the packaged desktop app renders correctly offline. Both
-   families are SIL OFL 1.1 — licences sit alongside the woff2 files. */
+   families are SIL OFL 1.1 — licences sit alongside the woff2 files.
+
+   format('woff2'), not format('woff2-variations'): the latter is deprecated and
+   some engines discard the entire src descriptor when any part of it is
+   unrecognised, which silently drops the font and falls the whole UI back to
+   system-ui. The variable axes still work — these are variable woff2 files and
+   the weight range is declared below. */
 @font-face {
   font-family: 'Inter';
   font-style: normal;
   font-weight: 100 900;
   font-display: swap;
-  src: url('/static/fonts/inter-latin-wght-normal.woff2') format('woff2-variations');
+  src: url('/static/fonts/inter-latin-wght-normal.woff2') format('woff2');
 }
 
 @font-face {
@@ -37,7 +43,7 @@
   font-style: normal;
   font-weight: 100 800;
   font-display: swap;
-  src: url('/static/fonts/jetbrains-mono-latin-wght-normal.woff2') format('woff2-variations');
+  src: url('/static/fonts/jetbrains-mono-latin-wght-normal.woff2') format('woff2');
 }
 
 /* ─── 2. Design tokens ───────────────────────────────────────────────────── */
@@ -1489,17 +1495,23 @@ input[type=checkbox] {
   box-shadow: var(--shadow-card);
 }
 
-/* Height-animated disclosure. grid-template-rows 0fr→1fr avoids needing a
-   measured pixel height, so no JS and no Collapse plugin. */
-.collapsible {
-  display: grid;
-  grid-template-rows: 0fr;
-  transition: grid-template-rows var(--dur-slow) var(--ease-out), opacity var(--dur) ease;
-  opacity: 0;
+/* Reveal motion for disclosures.
+
+   A CSS animation, deliberately — not an Alpine x-transition and not a
+   `grid-template-rows: 0fr` collapse. Alpine's transitions are driven by
+   requestAnimationFrame, which stops in a non-compositing window and would
+   leave the element without a display value; the 0fr trick depends on the fr
+   minimum resolving to zero, which engines disagree about. Both failure modes
+   put content on screen that should be hidden. x-show owns visibility; this
+   only decorates, and a stalled animation costs nothing. */
+@media (prefers-reduced-motion: no-preference) {
+  .command-preview { animation: revealDown 180ms var(--ease-out); }
 }
 
-.collapsible.is-open { grid-template-rows: 1fr; opacity: 1; }
-.collapsible-inner { overflow: hidden; min-height: 0; }
+@keyframes revealDown {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
 
 /* Loaders ------------------------------------------------------------------ */
 .dot-pulse {
@@ -1789,34 +1801,20 @@ input[type=checkbox] {
 .run-btn:disabled { opacity: 0.45; cursor: not-allowed; }
 .run-btn-icon { width: 15px; height: 15px; flex-shrink: 0; }
 
-/* Command preview ---------------------------------------------------------- */
+/* CLI command panel -------------------------------------------------------- */
+/* Revealed and copied by one control, so it needs no header or label — the
+   monospace block is self-evidently the command. */
 .command-preview {
+  position: relative;
   margin-top: 0.85rem;
-  border: 1px solid var(--border);
+  border: 1px solid var(--accent-border);
   border-radius: var(--r-md);
-  overflow: hidden;
-  background: var(--bg-input);
-}
-
-.command-preview-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0.3rem 0.4rem 0.3rem 0.75rem;
-  border-bottom: 1px solid var(--border);
-}
-
-.command-preview-label {
-  font-size: var(--fs-badge);
-  font-weight: 700;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-  color: var(--text-faint);
+  background: var(--accent-bg);
 }
 
 .command-preview-code {
   margin: 0;
-  padding: 0.7rem 0.85rem;
+  padding: 0.7rem 2.2rem 0.7rem 0.85rem;
   font-family: var(--font-mono);
   font-size: var(--fs-code);
   line-height: 1.6;
@@ -1824,6 +1822,26 @@ input[type=checkbox] {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+
+.command-preview-close {
+  position: absolute;
+  top: 0.35rem;
+  right: 0.35rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--r-sm);
+  color: var(--text-faint);
+  transition: background-color var(--dur-fast) ease, color var(--dur-fast) ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .command-preview-close:hover { background: var(--bg-hover); color: var(--text); }
+}
+
+.btn .is-success { color: var(--green); display: inline-flex; }
 
 /* Context panel ------------------------------------------------------------ */
 .script-context {
@@ -3313,7 +3331,21 @@ html.dark .wheel-connectors { color: oklch(32% 0.02 280); }
    narrow to hold a two-up field grid. */
 @media (max-width: 1180px) {
   .script-page { grid-template-columns: minmax(0, 1fr); }
-  .script-context { position: static; }
+
+  /* Stacked, the context cards would otherwise be full-width blocks sitting
+     below the fold — which reads as a run of loose text rather than a panel.
+     Laying them out side by side keeps them recognisable as cards, and the rule
+     above them marks where the form ends. */
+  .script-context {
+    position: static;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    align-items: start;
+    gap: 0.85rem;
+    margin-top: 1.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border);
+  }
 }
 
 @media (max-width: 900px) {
@@ -3373,7 +3405,6 @@ html.dark .wheel-connectors { color: oklch(32% 0.02 280); }
 
   /* Disclosures snap instead of sliding; the pill and row states still change
      colour, which carries the meaning without motion. */
-  .collapsible,
   .segmented-pill,
   .option-card-check,
   .splash { transition: none !important; }
