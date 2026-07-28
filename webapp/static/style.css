@@ -76,6 +76,8 @@
   --red-bg:         oklch(55% 0.222 27 / 10%);
   --warn:           oklch(60% 0.145 75);
   --warn-bg:        oklch(72% 0.152 85 / 12%);
+  --heart:          oklch(61% 0.234 11);
+  --heart-bg:       oklch(61% 0.234 11 / 8%);
 
   /* Terminal — deliberately dark in both themes; logs read as a console. */
   --term-bg:        oklch(16% 0.012 275);
@@ -160,6 +162,8 @@ html.dark {
   --red-bg:         oklch(64% 0.200 27 / 14%);
   --warn:           oklch(80% 0.140 85);
   --warn-bg:        oklch(78% 0.140 85 / 12%);
+  --heart:          oklch(70% 0.200 11);
+  --heart-bg:       oklch(70% 0.200 11 / 14%);
 
   /* Terminal sits slightly below the panel so it still reads as inset. */
   --term-bg:        oklch(10% 0.008 275);
@@ -469,45 +473,11 @@ body {
   padding-left: calc(0.75rem - 3px);
 }
 
-/* Not built yet. Kept visible but inert, with the same "Coming soon!" tooltip
-   as the other unimplemented controls. Tracked in BACKLOG.md. */
-.sidebar-link--stub {
-  position: relative;
-  opacity: 0.45;
-  cursor: not-allowed;
-  transition: opacity var(--dur-fast) ease;
-}
-
-.sidebar-link--stub::after {
-  content: attr(data-soon);
-  position: absolute;
-  left: calc(100% - 4px);
-  top: 50%;
-  transform: translateY(-50%) translateX(-3px);
-  padding: 0.2rem 0.45rem;
-  border-radius: var(--r-sm);
-  background: var(--text);
-  color: var(--bg);
-  font-size: var(--fs-badge);
-  font-weight: 600;
-  white-space: nowrap;
-  opacity: 0;
-  pointer-events: none;
-  box-shadow: var(--shadow-popover);
-  transition: opacity var(--dur-fast) ease, transform var(--dur-fast) ease;
-  z-index: 30;
-}
-
-@media (hover: hover) and (pointer: fine) {
-  .sidebar-link--stub:hover { background: none; color: var(--text-muted); transform: none; opacity: 0.7; }
-  .sidebar-link--stub:hover::after { opacity: 1; transform: translateY(-50%) translateX(0); }
-}
-
 .sidebar-link svg { flex-shrink: 0; opacity: 0.85; }
 .sidebar-link.active svg { opacity: 1; color: var(--accent); }
 
 @media (hover: hover) and (pointer: fine) {
-  .sidebar-link:not(.sidebar-link--stub):hover svg { color: var(--accent); }
+  .sidebar-link:hover svg { color: var(--accent); }
 }
 
 .sidebar-section-label {
@@ -803,6 +773,38 @@ html.dark .sidebar-github-logo { filter: invert(1); opacity: 0.6; }
   margin-bottom: 2rem;
 }
 
+/* Sort control ------------------------------------------------------------- */
+/* Deliberately quiet: it sits beside the page title and should not compete
+   with it. Cycles A→Z / Z→A / Most scripts. */
+.sort-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  font-size: var(--fs-helper);
+  font-weight: 500;
+  color: var(--text-muted);
+  background: var(--bg-panel);
+  white-space: nowrap;
+  transition: background-color var(--dur-fast) ease, border-color var(--dur-fast) ease,
+              color var(--dur-fast) ease, transform 90ms ease-out;
+}
+
+.sort-btn .ui-icon { color: var(--text-faint); transition: color var(--dur-fast) ease; }
+
+@media (hover: hover) and (pointer: fine) {
+  .sort-btn:hover {
+    background: var(--bg-hover);
+    border-color: var(--accent-border);
+    color: var(--accent-text);
+  }
+  .sort-btn:hover .ui-icon { color: var(--accent); }
+}
+
+.sort-btn:active { transform: scale(0.97); }
+
 /* Script list -------------------------------------------------------------- */
 .script-list {
   display: flex;
@@ -1015,12 +1017,39 @@ html.dark .sidebar-github-logo { filter: invert(1); opacity: 0.6; }
     color: var(--text-muted);
   }
   .icon-btn.fav-btn:hover {
-    background: oklch(61% 0.234 11 / 8%);
-    color: oklch(61% 0.234 11);
+    background: var(--heart-bg);
+    color: var(--heart);
   }
 }
 
 .icon-btn:active { transform: scale(0.94); }
+
+/* Favourite heart ---------------------------------------------------------- */
+/* A favourited row keeps its heart visible; unfavourited hearts only appear on
+   row hover, alongside the copy-CLI button. */
+.fav-btn { opacity: 0; transition: opacity var(--dur-fast) ease, color var(--dur-fast) ease; }
+.fav-btn.is-active { opacity: 1; color: var(--heart); }
+
+@media (hover: hover) and (pointer: fine) {
+  .script-row:hover .fav-btn,
+  .script-row:focus-within .fav-btn { opacity: 1; }
+}
+
+.fav-btn:focus-visible { opacity: 1; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .fav-btn.is-active svg { animation: heartPop 260ms var(--ease-out); }
+}
+
+@keyframes heartPop {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(1.28); }
+  100% { transform: scale(1); }
+}
+
+/* Count badge on a sidebar nav item, as opposed to a category row. */
+.sidebar-link-label { flex: 1; }
+.sidebar-link-count { margin-left: auto; }
 
 /* ─── Dark mode toggle button ────────────────────────────────────────────── */
 .dark-toggle {

@@ -1,14 +1,16 @@
 {% extends "base.html" %}
 {% from "_macros.html" import theme_icon %}
-{% from "_components.html" import soon_button, empty_state %}
-{% block title %}Scriptorium{% endblock %}
-{% set active_page = "scripts" %}
+{% from "_components.html" import empty_state %}
+{% from "_icons.html" import icon %}
+{% set active_page = "favourites" if favourites_only else "scripts" %}
+{% block title %}{{ 'Favourites' if favourites_only else 'Scriptorium' }}{% endblock %}
 {% block content %}
 <script>
   window.__THEMES__ = {{ themes_data_json | safe }};
+  window.__THEME_META__ = {{ themes_meta_json | safe }};
 </script>
 
-<div x-data="scriptBrowser()" x-cloak
+<div x-data="scriptBrowser({{ 'true' if favourites_only else 'false' }})" x-cloak
      @dragenter.prevent="dragEnter($event)"
      @dragover.prevent
      @dragleave="dragLeave($event)"
@@ -17,15 +19,33 @@
 
   <div class="browse-pane" :class="{ 'is-hidden': chooserOpen }">
   <div class="page-header">
-    <h1>Scripts</h1>
-    {{ soon_button('A → Z', 'sliders') }}
+    <h1>{{ 'Favourites' if favourites_only else 'Scripts' }}</h1>
+    <button type="button" class="sort-btn"
+            @click="$store.ui.cycleSort()"
+            :title="'Sort: ' + $store.ui.sortLabel + ' — click for ' + $store.ui.nextSortLabel"
+            :aria-label="'Sort order: ' + $store.ui.sortLabel + '. Click to sort by ' + $store.ui.nextSortLabel">
+      {{ icon('sliders', 13) }}
+      <span x-text="$store.ui.sortLabel">A → Z</span>
+    </button>
   </div>
-  <p class="page-subtitle">Make your life easier with {{ total_scripts }} scripts across {{ themes | length }} categories.</p>
+  <p class="page-subtitle">
+    {% if favourites_only %}
+    <span x-show="$store.ui.favouriteCount">
+      <span x-text="$store.ui.favouriteCount"></span>
+      <span x-text="$store.ui.favouriteCount === 1 ? 'script you starred.' : 'scripts you starred.'"></span>
+    </span>
+    <span x-show="!$store.ui.favouriteCount">Star a script from the list to pin it here.</span>
+    {% else %}
+    Make your life easier with {{ total_scripts }} scripts across {{ themes | length }} categories.
+    {% endif %}
+  </p>
 
   <div class="script-list">
     {% for theme, scripts in themes.items() %}
+    {# order is a flex property, so sections reorder without moving any DOM. #}
     <section class="theme-section"
              x-show="themeVisible('{{ theme }}')"
+             :style="{ order: sortIndex('{{ theme }}') }"
              x-transition.duration.200ms>
 
       <div class="theme-header"
@@ -57,6 +77,7 @@
         <a class="script-row"
            href="/scripts/{{ theme }}/{{ name }}"
            data-theme="{{ theme }}"
+           data-key="{{ theme }}.{{ name }}"
            data-search="{{ theme }}.{{ name }} {{ mod.TITLE | lower }}"
            x-show="rowVisible($el)"
            x-transition.duration.100ms>
@@ -78,16 +99,15 @@
                 <path d="M9 10h2.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
               </svg>
             </button>
-            {# Favourites are not implemented — see BACKLOG.md. Rendered
-               disabled rather than as a live control that does nothing. #}
             <button type="button"
-                    class="btn-soon btn-soon--bare fav-btn"
-                    disabled
-                    aria-disabled="true"
-                    data-soon="Coming soon!"
-                    @click.stop.prevent
-                    aria-label="Favourite {{ theme }}.{{ name }} — coming soon">
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                    class="icon-btn fav-btn"
+                    :class="{ 'is-active': $store.ui.isFavourite('{{ theme }}.{{ name }}') }"
+                    @click.stop.prevent="$store.ui.toggleFavourite('{{ theme }}.{{ name }}')"
+                    :title="$store.ui.isFavourite('{{ theme }}.{{ name }}') ? 'Remove from favourites' : 'Add to favourites'"
+                    :aria-pressed="$store.ui.isFavourite('{{ theme }}.{{ name }}').toString()"
+                    aria-label="Favourite {{ theme }}.{{ name }}">
+              <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"
+                   :fill="$store.ui.isFavourite('{{ theme }}.{{ name }}') ? 'currentColor' : 'none'">
                 <path d="M8 13.5S2 10 2 5.5a3.5 3.5 0 0 1 6-2.43A3.5 3.5 0 0 1 14 5.5C14 10 8 13.5 8 13.5Z"
                       stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
               </svg>
@@ -100,7 +120,15 @@
     </section>
     {% endfor %}
 
-    <div class="no-results" x-show="noResults()" x-transition>
+    {# Two distinct dead ends: an empty favourites list, and filters that match
+       nothing. They need different wording and different escape hatches. #}
+    <div class="no-results" x-show="noFavourites()" x-transition x-cloak>
+      {{ empty_state('sliders', 'No favourites yet',
+                     'Click the heart on any script to pin it here for quick access.') }}
+      <a class="btn btn--secondary btn--sm" href="/">Browse all scripts</a>
+    </div>
+
+    <div class="no-results" x-show="noResults()" x-transition x-cloak>
       {{ empty_state('search', 'No scripts found',
                      'Try a different search term or clear the category filter.') }}
       <button type="button" class="btn btn--secondary btn--sm"
@@ -160,9 +188,10 @@
     return { text: doc.body.textContent, cls: '' };
   }
 
-  function scriptBrowser() {
+  function scriptBrowser(favouritesOnly) {
     return {
       _collapsed: {},
+      favouritesOnly: !!favouritesOnly,
 
       /* ── Drag / staging ─────────────────────────────────────────────── */
       _dragCounter: 0,
@@ -674,26 +703,68 @@
         this._collapsed[theme] = !this._collapsed[theme];
       },
 
+      /* ── Sorting ────────────────────────────────────────────────────── */
+      /* Sections are laid out in a flex column, so reordering is a matter of
+         assigning each one a flex `order` rather than moving DOM nodes. */
+      get sortedThemes() {
+        const meta = window.__THEME_META__ || {};
+        const order = Alpine.store('ui').sortOrder;
+        const byLabel = (a, b) =>
+          String(meta[a].label).localeCompare(String(meta[b].label), undefined, { sensitivity: 'base' });
+
+        return Object.keys(meta).sort((a, b) => {
+          if (order === 'count') {
+            /* Ties fall back to alphabetical, so the order is never arbitrary. */
+            return (meta[b].count || 0) - (meta[a].count || 0) || byLabel(a, b);
+          }
+          return order === 'za' ? -byLabel(a, b) : byLabel(a, b);
+        });
+      },
+
+      sortIndex(theme) {
+        const i = this.sortedThemes.indexOf(theme);
+        return i === -1 ? 999 : i;
+      },
+
+      /* ── Filtering ──────────────────────────────────────────────────── */
+      _matches(theme, key, search) {
+        const ui = Alpine.store('ui');
+        if (this.favouritesOnly && !ui.isFavourite(key)) return false;
+        const q = ui.search.trim().toLowerCase();
+        return !q || search.includes(q);
+      },
+
       themeVisible(theme) {
-        const { search: q, activeCategory: cat } = Alpine.store('ui');
-        if (cat && cat !== theme) return false;
-        const qLower = q.trim().toLowerCase();
-        if (!qLower) return true;
-        return (window.__THEMES__[theme] || []).some(s => s.includes(qLower));
+        const ui = Alpine.store('ui');
+        if (ui.activeCategory && ui.activeCategory !== theme) return false;
+        /* keys and searches are index-aligned; both come from the same dict. */
+        const keys = (window.__THEME_META__[theme] || {}).keys || [];
+        const searches = window.__THEMES__[theme] || [];
+        return keys.some((key, i) => this._matches(theme, key, searches[i] || ''));
       },
 
       rowVisible(el) {
-        const { search: q, activeCategory: cat } = Alpine.store('ui');
-        if (cat && cat !== el.dataset.theme) return false;
-        const qLower = q.trim().toLowerCase();
-        if (!qLower) return true;
-        return el.dataset.search.includes(qLower);
+        const ui = Alpine.store('ui');
+        if (ui.activeCategory && ui.activeCategory !== el.dataset.theme) return false;
+        return this._matches(el.dataset.theme, el.dataset.key, el.dataset.search);
+      },
+
+      _nothingVisible() {
+        return Object.keys(window.__THEMES__).every(t => !this.themeVisible(t));
+      },
+
+      /* An empty favourites list is a different dead end from a search that
+         matched nothing, so each gets its own empty state. */
+      noFavourites() {
+        if (!this.favouritesOnly || Alpine.store('ui').favouriteCount > 0) return false;
+        return this._nothingVisible();
       },
 
       noResults() {
-        const { search: q, activeCategory: cat } = Alpine.store('ui');
-        if (!q.trim() && !cat) return false;
-        return Object.keys(window.__THEMES__).every(t => !this.themeVisible(t));
+        const ui = Alpine.store('ui');
+        if (this.favouritesOnly && ui.favouriteCount === 0) return false;
+        if (!this.favouritesOnly && !ui.search.trim() && !ui.activeCategory) return false;
+        return this._nothingVisible();
       },
     };
   }

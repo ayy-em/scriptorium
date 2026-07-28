@@ -135,31 +135,77 @@ def _themes_search_json(themes: dict) -> str:
     return json.dumps(data).replace("</", "<\\/")
 
 
+def _themes_meta_json(themes: dict) -> str:
+    """Serialise per-theme display metadata for client-side sorting.
+
+    The browser needs each theme's label and script count to reorder sections
+    without a round trip.
+
+    Args:
+        themes: Mapping of theme name → {script name → module}.
+
+    Returns:
+        JSON string with ``</`` escaped so it is safe inside a ``<script>`` tag.
+    """
+    labels = theme_labels()
+    data = {
+        theme: {
+            "label": labels.get(theme, theme),
+            "count": len(scripts),
+            # Index-aligned with the same theme's entry in __THEMES__, so the
+            # client can pair a script key with its searchable string.
+            "keys": [f"{theme}.{name}" for name in scripts],
+        }
+        for theme, scripts in themes.items()
+    }
+    return json.dumps(data).replace("</", "<\\/")
+
+
 _APP_VERSION = read_version()
 _GIT_HASH = _read_git_hash()
+
+
+def _browser_context(favourites_only: bool) -> dict:
+    """Build the template context for the script browser.
+
+    Shared by ``/`` and ``/favourites``: both render the same list, and which
+    rows are shown is decided client-side, since favourites live in the
+    browser's own storage and the server never sees them.
+
+    Args:
+        favourites_only: Whether the page should start filtered to favourites.
+
+    Returns:
+        Template context dict.
+    """
+    themes = discover_themes()
+    return {
+        "themes": themes,
+        "all_themes": themes,
+        "labels": theme_labels(),
+        "descriptions": theme_descriptions(),
+        "themes_data_json": _themes_search_json(themes),
+        "themes_meta_json": _themes_meta_json(themes),
+        "total_scripts": sum(len(s) for s in themes.values()),
+        "favourites_only": favourites_only,
+        "version": _APP_VERSION,
+        "git_hash": _GIT_HASH,
+    }
 
 
 @app.get("/")
 async def index(request: Request):
     """List all available scripts grouped by theme."""
-    themes = discover_themes()
-    labels = theme_labels()
-    descriptions = theme_descriptions()
-    total_scripts = sum(len(s) for s in themes.values())
-    return templates.TemplateResponse(
-        request,
-        "index.html",
-        {
-            "themes": themes,
-            "all_themes": themes,
-            "labels": labels,
-            "descriptions": descriptions,
-            "themes_data_json": _themes_search_json(themes),
-            "total_scripts": total_scripts,
-            "version": _APP_VERSION,
-            "git_hash": _GIT_HASH,
-        },
-    )
+    return templates.TemplateResponse(request, "index.html", _browser_context(favourites_only=False))
+
+
+@app.get("/favourites")
+async def favourites(request: Request):
+    """Show only the scripts the user has starred.
+
+    Renders the same browser as ``/``; the filtering happens client-side.
+    """
+    return templates.TemplateResponse(request, "index.html", _browser_context(favourites_only=True))
 
 
 @app.get("/history")

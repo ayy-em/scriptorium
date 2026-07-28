@@ -159,6 +159,29 @@ templates/
 top. **Design tokens are defined in pairs**: every custom property in `:root`
 has a matching entry in `html.dark`. Adding one without the other is a bug.
 
+### Client-side state
+
+Two preferences live in `localStorage` rather than `UserConfig`, because neither
+needs the server:
+
+| Key | Shape | Notes |
+|---|---|---|
+| `favourites` | array of script keys | `["av.filmstrip", …]` |
+| `sort_order` | `"az"` \| `"za"` \| `"count"` | validated against `SORT_ORDERS` on load |
+| `theme` | `"light"` \| `"dark"` | mirrors `UserConfig.theme` to avoid a dark-mode flash |
+| `onboarding_seen` | `"1"` | |
+
+Consequence: they are **per browser profile**, and the three launch tiers do not
+share storage. See BACKLOG.md — moving favourites into `UserConfig` is the fix
+if that becomes annoying.
+
+Because the server never sees favourites, `/favourites` renders every script and
+Alpine hides the rest; `[x-cloak]` covers the pre-init frame. `__THEME_META__`
+carries each theme's label, script count and script keys — index-aligned with
+that theme's entry in `__THEMES__` — so the client can filter and reorder
+without a round trip. Sections reorder via the flex `order` property, so no DOM
+nodes move.
+
 ### Splash screen
 
 `_splash.html` covers the window until Alpine initialises, replacing the
@@ -172,6 +195,7 @@ thing that failed. It clears when Alpine initialises and fonts are ready, with a
 | Endpoint | Purpose |
 |---|---|
 | `GET /` | script browser |
+| `GET /favourites` | the same browser, client-filtered to starred scripts |
 | `GET /scripts/{theme}/{script}` | detail page + generated form |
 | `GET /scripts/{theme}/{script}/run` | run the script, stream output as SSE |
 | `POST /api/runs/{run_id}/cancel` | kill a running script and its whole process tree |

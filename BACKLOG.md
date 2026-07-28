@@ -54,25 +54,30 @@ return icon *names* rather than `/static/...` URLs, and delete
   a raster. Repoint it at a logo PNG before deleting the icons directory.
 - Icon licensing is unresolved — see HUMAN_TODO.md, which must be settled first.
 
-## Sort and favourites
+## Favourites are per browser profile
 
-**Status:** deferred (2026-07-28), during the UI prettification pass.
+**Status:** known limitation, accepted 2026-07-28 when favourites shipped.
 
-Both controls exist in the layout and both are inert. They are rendered as
-disabled buttons with a "Coming soon!" tooltip via the `soon_button()` macro in
-`_components.html`, rather than as live controls that do nothing.
+Favourites and sort order live in `localStorage`, so they belong to whichever
+browser profile is running the UI. The packaged app has three launch tiers and
+they do not share storage:
 
-- **Sort** — the `A → Z` control in the page header. Wants A→Z / Z→A / by-script-
-  count over the rendered list. Pure client-side; the ordering can live in the
-  `scriptBrowser()` Alpine component in `index.html` next to the existing
-  `themeVisible` / `rowVisible` predicates.
-- **Favourites** — the heart on every script row, plus the inert *Favourites*
-  nav item in `_sidebar.html`. Needs a persisted set of script keys
-  (localStorage is enough for a single-user local app) and a filtered view.
+| Tier | Storage |
+|---|---|
+| pywebview (WebView2 / WebKit) | its own profile |
+| Chromium `--app` | `~/scriptorium/.browser-profile` |
+| default-browser fallback | the user's normal browser profile |
 
-Doing favourites means the sidebar gains a third real view, which is the point
-at which the nav probably wants a proper active-route concept rather than the
-current `active_page` template variable.
+So a user who normally opens the desktop app but occasionally hits
+`localhost:8000` in Chrome will see two different sets of favourites. Clearing
+browser data also wipes them.
+
+**The fix if this becomes annoying:** move them into `UserConfig`
+(`core/config.py`) alongside `theme`, `outputs_dir` and `close_behavior`, which
+is server-side and therefore shared across every tier. That means a
+`favourites: list[str]` field, a POST on each toggle, and the favourites page
+could then filter server-side instead of client-side. Roughly an hour's work;
+deliberately not done up front because localStorage needed no backend at all.
 
 ## Global drop overlay on script detail pages
 

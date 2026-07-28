@@ -6,8 +6,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from fastapi.testclient import TestClient
 
 from core.paths import read_version
-from core.registry import discover
-from webapp.app import _parse_version, _read_git_hash, _themes_search_json, app
+from core.registry import discover, discover_themes
+from webapp.app import _parse_version, _read_git_hash, _themes_meta_json, _themes_search_json, app
 
 client = TestClient(app)
 
@@ -641,3 +641,81 @@ class TestHistoryPage:
     def test_sidebar_history_link_is_no_longer_a_stub(self):
         response = client.get("/")
         assert 'href="/history"' in response.text
+
+
+class TestFavouritesPage:
+    """Cover the server side of favourites.
+
+    Favourites live in localStorage, so the server renders the full list and the
+    client filters it. These tests pin the contract that makes that work.
+    """
+
+    def test_returns_200(self):
+        assert client.get("/favourites").status_code == 200
+
+    def test_marks_the_sidebar_item_active(self):
+        response = client.get("/favourites")
+        assert 'class="sidebar-link active"' in response.text
+
+    def test_renders_every_script_for_the_client_to_filter(self):
+        favourites = client.get("/favourites")
+        index = client.get("/")
+        for key in discover():
+            theme, name = key.split(".", 1)
+            assert f'data-key="{theme}.{name}"' in favourites.text
+        assert favourites.text.count('class="script-row"') == index.text.count('class="script-row"')
+
+    def test_starts_in_favourites_only_mode(self):
+        assert "scriptBrowser(true)" in client.get("/favourites").text
+
+    def test_index_does_not(self):
+        assert "scriptBrowser(false)" in client.get("/").text
+
+    def test_titled_favourites(self):
+        assert "<title>Favourites" in client.get("/favourites").text
+
+    def test_sidebar_links_to_favourites(self):
+        assert 'href="/favourites"' in client.get("/").text
+
+
+class TestThemeMeta:
+    def test_index_emits_theme_meta(self):
+        assert "__THEME_META__" in client.get("/").text
+
+    def test_meta_carries_label_count_and_keys(self):
+        from webapp.app import _themes_meta_json  # noqa: PLC0415
+
+        themes = discover_themes()
+        meta = json.loads(_themes_meta_json(themes))
+        assert set(meta) == set(themes)
+        for theme, entry in meta.items():
+            assert entry["count"] == len(themes[theme])
+            assert len(entry["keys"]) == entry["count"]
+            assert all(k.startswith(f"{theme}.") for k in entry["keys"])
+
+    def test_keys_align_with_the_search_strings(self):
+        """The client pairs them by index, so the two must stay in step."""
+        from webapp.app import _themes_meta_json, _themes_search_json  # noqa: PLC0415
+
+        themes = discover_themes()
+        meta = json.loads(_themes_meta_json(themes))
+        search = json.loads(_themes_search_json(themes))
+        for theme, entry in meta.items():
+            assert len(entry["keys"]) == len(search[theme])
+            for key, text in zip(entry["keys"], search[theme], strict=True):
+                assert text.startswith(key.lower())
+
+    def test_escapes_closing_script_tags(self):
+        assert "</" not in _themes_meta_json({"x": {}})
+
+
+class TestSortControl:
+    def test_sort_button_is_live_not_disabled(self):
+        response = client.get("/")
+        assert "cycleSort()" in response.text
+        assert "btn-soon" not in response.text
+
+    def test_favourite_buttons_are_live(self):
+        response = client.get("/")
+        assert "toggleFavourite(" in response.text
+        assert "coming soon" not in response.text.lower()

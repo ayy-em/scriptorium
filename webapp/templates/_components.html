@@ -23,9 +23,12 @@
 {# A control that is deliberately not wired up yet.
 
    Renders as a real <button> so it keeps its place in the layout and in the
-   tab order, but is disabled and announces why. Used for sort, favourites and
-   run cancellation — all tracked in BACKLOG.md. Prefer this over a live-looking
-   control that silently does nothing.
+   tab order, but is disabled and announces why. Prefer this over a live-looking
+   control that silently does nothing — CLAUDE.md requires it.
+
+   Currently unused: sort, favourites and run cancellation all became real in
+   v0.5.2. Kept because the convention still applies to the next unbuilt
+   control, and re-deriving it costs more than the fifteen lines below.
 #}
 {% macro soon_button(label, icon_name='', cls='', hide_label=false) %}
 <button type="button"

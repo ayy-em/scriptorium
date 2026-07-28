@@ -51,9 +51,11 @@ Fonts and the JS runtime are served locally, so the UI works with no internet
 connection. Light and dark themes are both fully supported; switch from the top
 bar or in Settings.
 
-Sort and favourites are visible but not yet implemented — they render disabled
-with a "Coming soon!" tooltip rather than doing nothing quietly. See
-[BACKLOG.md](BACKLOG.md).
+**Favourites** — click the heart on any script row to pin it. The sidebar's
+Favourites view shows just those, with a live count. **Sort** cycles the category
+order between A → Z, Z → A and most-scripts-first. Both are remembered per
+browser profile; the three launch tiers each keep their own set (see
+[BACKLOG.md](BACKLOG.md)).
 
 ### Cancelling and re-running
 

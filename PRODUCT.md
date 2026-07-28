@@ -34,7 +34,7 @@ Neither theme is primary. Every design token is defined in pairs at the top of `
 
 ## UI principles
 
-- **Never ship a control that lies.** Features that are not built yet are rendered disabled with a "Coming soon!" tooltip and a BACKLOG.md entry — not as live controls that silently do nothing. This currently applies to sort and favourites. Cancel was held to the same rule until it could actually stop the work: killing the Python parent while ffmpeg carried on would have been exactly the kind of lie this principle forbids.
+- **Never ship a control that lies.** Features that are not built yet are rendered disabled with a "Coming soon!" tooltip and a BACKLOG.md entry — not as live controls that silently do nothing. As of v0.5.2 every visible control is real, so the pattern has no current users; the `soon_button()` macro stays because the rule still applies to the next unbuilt thing. Cancel was held to it longest: killing the Python parent while ffmpeg carried on would have been exactly the kind of lie this forbids.
 - **Don't claim what isn't known.** The UI states plainly that individual output files are not detected rather than guessing at them, and the progress bar is indeterminate because no script reports progress.
 - **Destructive choices belong to the user.** Cancelling a run stops the work but leaves whatever it already wrote on disk; the app does not delete files on the user's behalf.
 - **Motion is subtle and optional.** Transitions are 120–260ms and carry meaning (a pill sliding, a drawer opening). `prefers-reduced-motion: reduce` removes every scale, slide and pulse; colour changes carry the meaning instead.

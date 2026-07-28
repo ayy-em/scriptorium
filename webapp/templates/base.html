@@ -16,6 +16,14 @@
     }
   </script>
   <script>
+    /* Sort orders, in cycle order. Declared outside the store so the store's
+       own initialiser can validate a stored value against them. */
+    var SORT_ORDERS = [
+      { id: 'az',    label: 'A → Z' },
+      { id: 'za',    label: 'Z → A' },
+      { id: 'count', label: 'Most scripts' },
+    ];
+
     document.addEventListener('alpine:init', () => {
       Alpine.store('ui', {
         dark: localStorage.getItem('theme') === 'dark',
@@ -34,6 +42,58 @@
         latestVersion: '',
         onboardingOpen: false,
         onboardingStep: 0,
+
+        /* Favourites and sort order live in localStorage, so they are per
+           browser profile. The three launch tiers (pywebview, Chromium --app,
+           browser fallback) each keep their own — see BACKLOG.md. */
+        favourites: [],
+        sortOrder: 'az',
+
+        initPreferences() {
+          try {
+            var stored = JSON.parse(localStorage.getItem('favourites') || '[]');
+            if (Array.isArray(stored)) this.favourites = stored.filter((k) => typeof k === 'string');
+          } catch (e) { this.favourites = []; }
+
+          var order = localStorage.getItem('sort_order');
+          if (SORT_ORDERS.some((o) => o.id === order)) this.sortOrder = order;
+        },
+
+        isFavourite(key) {
+          return this.favourites.indexOf(key) !== -1;
+        },
+
+        toggleFavourite(key) {
+          var next = this.isFavourite(key)
+            ? this.favourites.filter((k) => k !== key)
+            : [...this.favourites, key];
+          this.favourites = next;
+          try {
+            localStorage.setItem('favourites', JSON.stringify(next));
+          } catch (e) { /* private mode — favourites last for this session only */ }
+        },
+
+        get favouriteCount() {
+          return this.favourites.length;
+        },
+
+        cycleSort() {
+          var i = SORT_ORDERS.findIndex((o) => o.id === this.sortOrder);
+          this.sortOrder = SORT_ORDERS[(i + 1) % SORT_ORDERS.length].id;
+          try {
+            localStorage.setItem('sort_order', this.sortOrder);
+          } catch (e) { /* not worth surfacing */ }
+        },
+
+        get sortLabel() {
+          var o = SORT_ORDERS.find((s) => s.id === this.sortOrder);
+          return o ? o.label : SORT_ORDERS[0].label;
+        },
+
+        get nextSortLabel() {
+          var i = SORT_ORDERS.findIndex((o) => o.id === this.sortOrder);
+          return SORT_ORDERS[(i + 1) % SORT_ORDERS.length].label;
+        },
 
         applyTheme(dark) {
           this.dark = dark;
@@ -151,6 +211,7 @@
         },
       });
 
+      Alpine.store('ui').initPreferences();
       Alpine.store('ui').loadSettings();
       Alpine.store('ui').checkUpdate();
       Alpine.store('ui').initOnboarding();

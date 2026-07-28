@@ -11,16 +11,19 @@
       </svg>
       Scripts
     </a>
-    {# Neither view exists yet — see BACKLOG.md. Shown inert with a tooltip
-       rather than hidden, so the shape of the app stays legible. #}
-    <span class="sidebar-link sidebar-link--stub" aria-disabled="true"
-          data-soon="Coming soon!" title="Favourites — coming soon">
+    <a href="/favourites"
+       class="sidebar-link{% if active_page == 'favourites' %} active{% endif %}">
       {# * star (asterisk-style) #}
       <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <path d="M8 2v12M3 5l10 6M3 11l10-6"/>
       </svg>
-      Favourites
-    </span>
+      <span class="sidebar-link-label">Favourites</span>
+      {# Favourites live in localStorage, so the count can only come from the
+         client once Alpine is up. #}
+      <span class="category-count sidebar-link-count"
+            x-show="$store.ui.favouriteCount"
+            x-text="$store.ui.favouriteCount" x-cloak></span>
+    </a>
     <a href="/history"
        class="sidebar-link{% if active_page == 'history' %} active{% endif %}">
       {# ↺ clock — squared face #}
