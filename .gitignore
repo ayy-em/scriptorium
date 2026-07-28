@@ -21,7 +21,9 @@ CLAUDE.md
 
 # Virtual environments
 .venv/
-uv.lock
+# uv.lock is intentionally tracked: this repo ships an application, and CI must
+# install the exact set that was verified locally. Leaving it ignored let local
+# and CI resolutions drift until a clean resolve broke the v0.5.2 release.
 
 # sensitive files
 .env

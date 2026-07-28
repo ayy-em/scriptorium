@@ -61,6 +61,19 @@ gif = [
 [tool.uv]
 package = true
 
+# Transitive pins. Both are upstream problems that only surface on a clean
+# resolve — which is what CI does — so they are constrained here rather than
+# left to chance. See the v0.5.2 CI failure for the original symptoms.
+constraint-dependencies = [
+    # pymatting 1.1.14 declares only `numba!=0.49.0`, an unbounded floor, so a
+    # resolver may legitimately pick numba 0.53.1 (2021) whose llvmlite 0.36.0
+    # cannot build on Python 3.14. 1.1.15 raises the floor to numba>=0.60.0.
+    "pymatting>=1.1.15",
+    # onnxruntime-gpu 1.28.0 ships its cp314 wheel for win_amd64 only; 1.27.0
+    # still has the cp314 manylinux wheel that the Linux build needs.
+    "onnxruntime-gpu<1.28",
+]
+
 [tool.setuptools.packages.find]
 include = ["core*", "scripts*", "webapp*"]
 
