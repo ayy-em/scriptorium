@@ -127,6 +127,8 @@
       trimmed: 0,
       exitCode: null,
       elapsed: 0,
+      runId: null,
+      cancelling: false,
       autoScroll: true,
       terminalOpen: true,
       _es: null,
@@ -261,19 +263,29 @@
         return params;
       },
 
+      /* Two entry points land here with values in the query string:
+         Drop-to-Discover (_prefill_file) and re-run from history (_rerun). */
       _applyPrefill() {
         var params = new URLSearchParams(window.location.search);
-        if (!params.has('_prefill_file')) return;
+        var isRerun = params.has('_rerun');
+        if (!params.has('_prefill_file') && !isRerun) return;
 
         var filePath = params.get('_prefill_file');
-        if (this.fileDest) {
+        if (filePath && this.fileDest) {
           this.values[this.fileDest] = filePath;
           this.filenames = [filePath.split(/[/\\]/).pop()];
         }
         params.forEach((val, key) => {
-          if (key === '_prefill_file') return;
+          if (key === '_prefill_file' || key === '_rerun') return;
           if (key in this.values) this.values[key] = val;
         });
+
+        /* A re-run carries its file path as an ordinary param, so the dropzone
+           has to be told it is holding a file. The path may since have been
+           deleted; the script reports that itself when it runs. */
+        if (isRerun && this.fileDest && this.values[this.fileDest]) {
+          this.filenames = [String(this.values[this.fileDest]).split(/[/\\]/).pop()];
+        }
 
         if (window.history.replaceState) {
           window.history.replaceState({}, '', window.location.pathname);
@@ -335,6 +347,8 @@
         this.trimmed = 0;
         this.exitCode = null;
         this.elapsed = 0;
+        this.runId = null;
+        this.cancelling = false;
         this.autoScroll = true;
         this.terminalOpen = true;
         this.state = 'starting';
@@ -347,6 +361,12 @@
         var qs = this._buildParams().toString();
         this._es = new EventSource(this.runUrl + (qs ? '?' + qs : ''));
 
+        /* The server sends this before any output; without it there is no
+           handle to cancel. */
+        this._es.addEventListener('start', (e) => {
+          try { this.runId = JSON.parse(e.data).run_id; } catch (err) { /* cancel stays unavailable */ }
+        });
+
         this._es.onmessage = (e) => {
           if (this.state === 'starting') this.state = 'running';
           this._push(_decodeLine(e.data));
@@ -357,18 +377,34 @@
           try { info = JSON.parse(e.data); } catch (err) { /* keep defaults */ }
           this.exitCode = info.exit_code;
           this.elapsed = typeof info.elapsed === 'number' ? info.elapsed : this.elapsed;
-          this.state = info.exit_code === 0 ? 'success' : 'error';
+          /* The server decides: a killed process exits non-zero but is a
+             cancellation, not a failure. */
+          this.state = info.status || (info.exit_code === 0 ? 'success' : 'error');
+          this.cancelling = false;
           this._stop();
         });
 
         /* Fires on network loss and on normal stream close after 'done'. */
         this._es.onerror = () => {
           if (this.isBusy) {
-            this.state = 'error';
-            this.exitCode = this.exitCode === null ? -1 : this.exitCode;
+            this.state = this.cancelling ? 'cancelled' : 'error';
+            if (!this.cancelling && this.exitCode === null) this.exitCode = -1;
           }
+          this.cancelling = false;
           this._stop();
         };
+      },
+
+      async cancel() {
+        if (!this.runId || this.cancelling || !this.isBusy) return;
+        this.cancelling = true;
+        try {
+          await fetch('/api/runs/' + this.runId + '/cancel', { method: 'POST' });
+          /* Leave the state alone — the stream's 'done' event reports the
+             outcome, so the terminal keeps whatever output arrived first. */
+        } catch (e) {
+          this.cancelling = false;
+        }
       },
 
       _push(line) {

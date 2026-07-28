@@ -1068,6 +1068,115 @@ html.dark .icon-night { opacity: 0; }
 
 a:focus-visible, button:focus-visible { outline-offset: 3px; }
 
+/* ─── Run history page ───────────────────────────────────────────────────── */
+.history-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.history-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.75rem 1rem;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--border-strong);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-sm);
+  transition: border-color var(--dur) ease, box-shadow var(--dur) ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .history-row:hover { box-shadow: var(--shadow-card); }
+}
+
+.history-row--success   { border-left-color: var(--green); }
+.history-row--error     { border-left-color: var(--red); }
+.history-row--cancelled { border-left-color: var(--text-faint); }
+
+.history-status { display: flex; align-items: center; }
+.history-row--success   .history-status { color: var(--green); }
+.history-row--error     .history-status { color: var(--red); }
+.history-row--cancelled .history-status { color: var(--text-faint); }
+
+.history-main { min-width: 0; }
+
+.history-head { display: flex; align-items: center; gap: 0.5rem; }
+
+.history-key {
+  font-family: var(--font-mono);
+  font-size: var(--fs-body);
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.history-title {
+  font-size: var(--fs-helper);
+  color: var(--text-muted);
+  margin-top: 0.1rem;
+}
+
+.history-argv {
+  margin-top: 0.2rem;
+  font-family: var(--font-mono);
+  font-size: var(--fs-badge);
+  color: var(--text-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.15rem;
+  font-size: var(--fs-helper);
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+
+.history-time { font-variant-numeric: tabular-nums; }
+
+.history-elapsed {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-family: var(--font-mono);
+  font-size: var(--fs-badge);
+}
+
+.history-exit { font-family: var(--font-mono); font-size: var(--fs-badge); color: var(--red); }
+
+.history-actions { display: flex; align-items: center; }
+
+.history-gone {
+  font-size: var(--fs-badge);
+  font-style: italic;
+  color: var(--text-faint);
+}
+
+.history-empty { display: flex; flex-direction: column; align-items: center; }
+
+.inline-code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.05rem 0.3rem;
+}
+
+@media (max-width: 900px) {
+  .history-row { grid-template-columns: auto minmax(0, 1fr); }
+  .history-meta { grid-column: 2; align-items: flex-start; }
+  .history-actions { grid-column: 2; }
+}
+
 /* ─── 8. Shared components ───────────────────────────────────────────────── */
 .sr-only {
   position: absolute;

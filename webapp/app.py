@@ -17,6 +17,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
+from core import history
 from core.categories import CATEGORY_EXTS, categorize
 from core.config import UserConfig
 from core.config import load as load_config
@@ -40,6 +41,7 @@ from core.registry import (
     theme_descriptions,
     theme_labels,
 )
+from webapp import _runs
 from webapp._badges import badges_for
 from webapp._form import (
     accepts_directory,
@@ -160,6 +162,39 @@ async def index(request: Request):
     )
 
 
+@app.get("/history")
+async def history_page(request: Request):
+    """Show past runs, newest first, with re-run links."""
+    records = history.load()
+    known = discover()
+    return templates.TemplateResponse(
+        request,
+        "history.html",
+        {
+            "records": records,
+            # A script can be removed or renamed after a run; its history entry
+            # stays, but there is nowhere to re-run it.
+            "known_keys": {r.key for r in records if r.key in known},
+            "titles": {key: mod.TITLE for key, mod in known.items()},
+            "all_themes": discover_themes(),
+            "labels": theme_labels(),
+            "version": _APP_VERSION,
+            "git_hash": _GIT_HASH,
+        },
+    )
+
+
+@app.post("/api/history/clear")
+async def clear_history() -> JSONResponse:
+    """Delete every stored run record.
+
+    Returns:
+        JSON acknowledgement.
+    """
+    history.clear()
+    return JSONResponse({"ok": True})
+
+
 @app.get("/scripts/{theme}/{script_name}")
 async def script_detail(theme: str, script_name: str, request: Request):
     """Show a script's detail page with an auto-generated argument form."""
@@ -203,12 +238,37 @@ async def run_script(theme: str, script_name: str, request: Request) -> Streamin
 
     form_data = dict(request.query_params)
     argv = build_argv(form_data, field_specs)
+    handle = _runs.new_handle(key, argv, form_data)
 
     return StreamingResponse(
-        _stream_script(key, argv),
+        _stream_script(handle),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+@app.post("/api/runs/{run_id}/cancel")
+async def cancel_run(run_id: str) -> JSONResponse:
+    """Stop a running script and everything it spawned.
+
+    Args:
+        run_id: Identifier from the stream's ``start`` event.
+
+    Returns:
+        JSON with ``cancelled`` reporting whether a process tree was signalled.
+
+    Raises:
+        HTTPException: 404 if no run with that id is currently in flight —
+            which includes runs that have already finished.
+    """
+    handle = _runs.get(run_id)
+    if handle is None:
+        raise HTTPException(status_code=404, detail="No such run in progress")
+
+    # terminate_tree blocks (it waits out a SIGTERM grace period on POSIX).
+    killed = await asyncio.to_thread(_runs.terminate_tree, handle)
+    logger.info("Cancelled run %s (%s), signalled=%s", run_id, handle.key, killed)
+    return JSONResponse({"run_id": run_id, "cancelled": killed})
 
 
 @app.post("/upload/{theme}")
@@ -607,16 +667,36 @@ async def preview_command(theme: str, script_name: str, request: Request) -> JSO
     return JSONResponse({"command": _quote_command([*_cli_prefix(), key, *argv])})
 
 
-async def _stream_script(key: str, argv: list[str]):
-    """Run a script as a subprocess and yield its output as SSE events.
+def _status_for(handle: _runs.RunHandle, exit_code: int | None) -> str:
+    """Classify how a run ended.
 
-    Yields stdout lines first, then stderr lines. Each line is HTML-escaped.
-    A final 'done' event signals the client to close the connection and
-    includes a JSON payload with the exit code and elapsed time.
+    A cancelled process still exits non-zero, so the handle's own flag has to
+    win over the exit code — otherwise every cancellation looks like a crash.
 
     Args:
-        key: Script key (e.g. "av.convert").
-        argv: Pre-built list of CLI arguments to pass after the script key.
+        handle: The run's handle.
+        exit_code: Process exit code, if any.
+
+    Returns:
+        One of the ``core.history`` status constants.
+    """
+    if handle.cancelled:
+        return history.CANCELLED
+    return history.SUCCESS if exit_code == 0 else history.ERROR
+
+
+async def _stream_script(handle: _runs.RunHandle):
+    """Run a script as a subprocess and yield its output as SSE events.
+
+    Emits a 'start' event carrying the run id (so the client can cancel), then
+    stdout lines, then stderr lines, each HTML-escaped. A final 'done' event
+    reports the exit code, elapsed time and whether the run was cancelled.
+
+    The run is recorded in history and dropped from the live registry however
+    it ends, including on cancellation.
+
+    Args:
+        handle: Registered handle describing the run to start.
 
     Yields:
         SSE-formatted byte strings.
@@ -624,36 +704,69 @@ async def _stream_script(key: str, argv: list[str]):
     import time  # noqa: PLC0415
 
     if FROZEN:
-        cmd = [sys.executable, "--run-script", key, *argv]
+        cmd = [sys.executable, "--run-script", handle.key, *handle.argv]
         cwd = None
     else:
-        cmd = [sys.executable, str(_REPO_ROOT / "main.py"), key, *argv]
+        cmd = [sys.executable, str(_REPO_ROOT / "main.py"), handle.key, *handle.argv]
         cwd = str(_REPO_ROOT)
 
     t0 = time.monotonic()
+    yield f"event: start\ndata: {json.dumps({'run_id': handle.run_id})}\n\n".encode()
 
-    proc = await asyncio.create_subprocess_exec(
-        *cmd,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-        cwd=cwd,
-    )
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            cwd=cwd,
+            **_runs.spawn_kwargs(),
+        )
+        handle.process = proc
 
-    async for line in proc.stdout:  # type: ignore[union-attr]
-        text = html.escape(line.decode(errors="replace").rstrip())
-        yield f"data: {text}\n\n".encode()
+        async for line in proc.stdout:  # type: ignore[union-attr]
+            text = html.escape(line.decode(errors="replace").rstrip())
+            yield f"data: {text}\n\n".encode()
 
-    async for line in proc.stderr:  # type: ignore[union-attr]
-        text = html.escape(line.decode(errors="replace").rstrip())
-        yield f"data: <span class='stderr'>{text}</span>\n\n".encode()
+        async for line in proc.stderr:  # type: ignore[union-attr]
+            text = html.escape(line.decode(errors="replace").rstrip())
+            yield f"data: <span class='stderr'>{text}</span>\n\n".encode()
 
-    await proc.wait()
-    rc = proc.returncode
-    elapsed = round(time.monotonic() - t0, 1)
-    css = "exit-ok" if rc == 0 else "exit-err"
-    yield f"data: <span class='{css}'>exit {rc}</span>\n\n".encode()
-    done_payload = json.dumps({"exit_code": rc, "elapsed": elapsed})
-    yield f"event: done\ndata: {done_payload}\n\n".encode()
+        await proc.wait()
+        rc = proc.returncode
+        elapsed = round(time.monotonic() - t0, 1)
+        status = _status_for(handle, rc)
+
+        if status == history.CANCELLED:
+            yield b"data: <span class='exit-err'>cancelled</span>\n\n"
+        else:
+            css = "exit-ok" if rc == 0 else "exit-err"
+            yield f"data: <span class='{css}'>exit {rc}</span>\n\n".encode()
+
+        history.append(
+            history.RunRecord(
+                run_id=handle.run_id,
+                key=handle.key,
+                status=status,
+                started_at=handle.started_at.isoformat(timespec="seconds"),
+                elapsed=elapsed,
+                exit_code=rc,
+                argv=handle.argv,
+                params=handle.params,
+            )
+        )
+
+        done_payload = json.dumps(
+            {
+                "exit_code": rc,
+                "elapsed": elapsed,
+                "status": status,
+                "cancelled": status == history.CANCELLED,
+                "run_id": handle.run_id,
+            }
+        )
+        yield f"event: done\ndata: {done_payload}\n\n".encode()
+    finally:
+        _runs.discard(handle.run_id)
 
 
 def get_parser() -> argparse.ArgumentParser:

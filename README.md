@@ -51,9 +51,21 @@ Fonts and the JS runtime are served locally, so the UI works with no internet
 connection. Light and dark themes are both fully supported; switch from the top
 bar or in Settings.
 
-Sort, favourites and run cancellation are visible but not yet implemented — they
-render disabled with a "Coming soon!" tooltip rather than doing nothing quietly.
-See [BACKLOG.md](BACKLOG.md).
+Sort and favourites are visible but not yet implemented — they render disabled
+with a "Coming soon!" tooltip rather than doing nothing quietly. See
+[BACKLOG.md](BACKLOG.md).
+
+### Cancelling and re-running
+
+**Cancel** appears next to the status strip while a script is running. It kills
+the whole process tree, not just the Python parent — so the ffmpeg or yt-dlp
+doing the actual work stops too, rather than carrying on invisibly. Whatever the
+run already wrote to disk is left alone.
+
+**History** records every run at `~/scriptorium/history.json` — script,
+arguments, outcome, duration — newest first, capped at 200. Open it from the
+sidebar. **Re-run** takes you back to the script's form with the original
+arguments filled in, so you can adjust something before running it again.
 
 ### Drop to discover
 

@@ -2,52 +2,24 @@
 
 Deferred work with enough context to pick up cold.
 
-## Run process handling: cancel, history, re-runs
+## Remaining run-lifecycle work
 
-**Status:** deferred (2026-07-28), during the UI prettification pass. To be
-picked up as one deliberate piece of work rather than piecemeal.
+**Status:** partially delivered (2026-07-28). Cancellation, the `RunHandle`
+value type, persisted history and re-run all shipped. What is left:
 
-The UI now has a full run lifecycle — `idle → starting → running → success /
-error / cancelled` — but only the first four states can actually occur. There
-is no process handling behind it.
-
-**What exists today.** `GET /scripts/{theme}/{script}/run` spawns
-`python main.py <key> …` via `asyncio.create_subprocess_exec` and streams stdout
-then stderr as SSE. The client holds an `EventSource`. Nothing tracks the
-process after it is spawned; nothing records that a run happened.
-
-**Why Cancel is a disabled button.** Closing the `EventSource` stops the client
-listening but does not stop the child, and killing the child alone is not
-enough: `python main.py` in turn spawns ffmpeg, yt-dlp and friends, which
-survive their parent. A correct cancel needs the whole tree —
-`taskkill /T /F /PID` on Windows, `os.killpg` with `start_new_session=True` on
-POSIX. Shipping a Cancel button that silently orphans an ffmpeg process would be
-worse than not having one, so it renders disabled with a "Coming soon!" tooltip
-alongside sort and favourites.
-
-**What to build, in order:**
-
-1. **A `RunHandle` value type** — *which script, which argv, which process,
-   started when, ended how*. Everything below needs this record; building it
-   first is what makes the rest cheap. Note this is the same shape the
-   *BatchPlan abstraction* entry below wants, so design the two together.
-2. **A run registry** keyed by a `run_id`, emitted to the client as an SSE
-   `event: start` before the first output line.
-3. **`POST /api/runs/{run_id}/cancel`** doing the process-tree kill described
-   above, and a `cancelled` flag on the existing `done` payload. The client
-   already renders a distinct `cancelled` state — wire it up and drop the
-   `soon_button` in `_terminal.html`.
-4. **Persisted history** — the sidebar has had an inert *History* nav item since
-   before this pass. A list of past `RunHandle`s backs it.
-5. **Re-run from history** — replay a stored handle's argv.
-
-**Also unlocked by this:** a real progress bar. The status strip's bar is
-indeterminate because no script reports progress; a `RunHandle` gives somewhere
-to put structured progress events if scripts ever emit them.
-
-**Where to start:** `webapp/app.py` (`run_script`, `_stream_script`),
-`webapp/templates/script.html` (the `scriptRunner` Alpine component — `run()`,
-`_stop()`, `statusLabel()`), and `webapp/templates/_terminal.html`.
+- **Progress reporting.** The status strip's bar is indeterminate because no
+  script emits progress. A `RunRecord` is somewhere to put structured progress
+  events if scripts ever grow them; ffmpeg's `-progress` output is the obvious
+  first source.
+- **Cancel does not clean up partial output.** Deliberate — half a transcode is
+  sometimes useful, and deleting a user's file on their behalf is a bigger
+  decision than it looks. Revisit only if it becomes annoying in practice.
+- **Navigating away mid-run lets the script finish.** Also deliberate: the run
+  completes and writes its output. Cancel is the explicit way to stop.
+- **History has no search or filter.** Capped at 200 entries, which is scannable
+  without pagination. Add filtering if the cap ever needs raising.
+- **POSIX `killpg` is unverified on real hardware.** Unit-tested against stubs;
+  see HUMAN_TODO.md.
 
 ## PNG icon sweep
 
@@ -137,8 +109,8 @@ another reason; not worth a dedicated pass.
 **Status:** deferred (2026-07-28), during the UI prettification pass.
 
 A "last few outputs, with timestamps and an open action" panel for the script
-page's context column. Two things are missing: there is no run history (see
-*Run process handling* above) and no output detection.
+page's context column. Run history now exists (`core.history`), so the only
+missing half is output detection.
 
 **Output detection is the harder half.** Scripts report what they wrote
 inconsistently — `av.filmstrip` does `print(out)`, `gif.make_gif` does
@@ -186,18 +158,23 @@ state means deleting the `is_disabled` branch in `_drop_chooser.html`.
 
 ## BatchPlan abstraction
 
-**Status:** deferred (2026-07-27), same revamp.
+**Status:** deferred (2026-07-27), same revamp. Partly superseded 2026-07-28.
 
 `batch_mode_for()` plus the (future) fan-out runner are the first real
 "plan a multi-file job" logic in the codebase. Extracting a small `BatchPlan`
 value type — *which script runs, against which inputs, producing what* — would
 make several queued features much cheaper:
 
-- **Re-run from History** — the sidebar already has a History nav item with no
-  backing implementation. A stored `BatchPlan` is exactly the record needed.
+- ~~**Re-run from History**~~ — delivered. `core.history.RunRecord` is the
+  single-invocation version of this shape: script key, argv, params, outcome.
 - **Job queue** — chaining plans, running them in order.
 - **`--dry-run`** — render a plan without executing it, so the UI can preview
   "this will produce 8 files in outputs/av/" before the user commits.
+
+`RunRecord` describes *one* invocation; a batch is *N invocations over a file
+set*. The cheapest bridge is an optional `batch_id` on `RunRecord`, letting
+per-file fan-out group its runs without a second type — worth deciding when
+fan-out is actually built rather than speculatively now.
 
 Deliberately not built yet: with only one batch class actually wired up, the
 abstraction would have a single implementation and nothing to generalise over.

@@ -34,8 +34,9 @@ Neither theme is primary. Every design token is defined in pairs at the top of `
 
 ## UI principles
 
-- **Never ship a control that lies.** Features that are not built yet are rendered disabled with a "Coming soon!" tooltip and a BACKLOG.md entry — not as live controls that silently do nothing. This currently applies to sort, favourites and run cancellation.
+- **Never ship a control that lies.** Features that are not built yet are rendered disabled with a "Coming soon!" tooltip and a BACKLOG.md entry — not as live controls that silently do nothing. This currently applies to sort and favourites. Cancel was held to the same rule until it could actually stop the work: killing the Python parent while ffmpeg carried on would have been exactly the kind of lie this principle forbids.
 - **Don't claim what isn't known.** The UI states plainly that individual output files are not detected rather than guessing at them, and the progress bar is indeterminate because no script reports progress.
+- **Destructive choices belong to the user.** Cancelling a run stops the work but leaves whatever it already wrote on disk; the app does not delete files on the user's behalf.
 - **Motion is subtle and optional.** Transitions are 120–260ms and carry meaning (a pill sliding, a drawer opening). `prefers-reduced-motion: reduce` removes every scale, slide and pulse; colour changes carry the meaning instead.
 - **Keyboard first-class.** Modals trap focus and close on `Esc`; icon-only buttons carry `aria-label`; every interactive element has a visible focus ring in the accent colour.
 - **No build step.** Jinja templates, one stylesheet, Alpine.js. Shared UI is a macro (`_components.html`, `_icons.html`) or a CSS class, never a bundled component.

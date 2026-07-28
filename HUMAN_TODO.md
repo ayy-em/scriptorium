@@ -90,7 +90,16 @@ could not be verified there and need a human with the app actually open.
       disabled with an explanatory tooltip — that path is verified. The actual
       native folder dialog is not.
 - [ ] **macOS and Linux.** All verification was on Windows. Font rendering,
-      the tray icon, and the folder dialog are the likely divergences.
+      the tray icon, the folder dialog, and run cancellation are the likely
+      divergences.
+- [ ] **POSIX run cancellation.** The Windows path is verified end to end — a
+      real ffmpeg transcode was started through the UI and cancelled, and the
+      ffmpeg process count went from 1 to 0 rather than being orphaned. The
+      POSIX equivalent (`start_new_session=True` at spawn, then
+      `killpg(SIGTERM)` escalating to `SIGKILL`) is unit-tested against stubs
+      but has never delivered a real signal. Worth one check on macOS or Linux:
+      start a long transcode, hit Cancel, confirm with `ps` that no ffmpeg
+      survives.
 - [ ] **Reduced motion.** `prefers-reduced-motion: reduce` rules are written but
       were not exercised. Toggle it in your OS settings and confirm nothing
       slides, scales or pulses.

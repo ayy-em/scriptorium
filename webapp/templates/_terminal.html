@@ -1,5 +1,4 @@
 {% from "_icons.html" import icon %}
-{% from "_components.html" import soon_button %}
 {# Run status strip + streaming output console.
 
    The strip is hidden while idle and swaps between starting / running /
@@ -28,8 +27,13 @@
   </span>
 
   <template x-if="isBusy">
-    {# No progress data exists to drive a real bar; see BACKLOG.md. #}
-    {{ soon_button('Cancel run', 'ban', 'btn-soon--sm', true) }}
+    <button type="button" class="btn btn--danger btn--sm"
+            @click="cancel()"
+            :disabled="cancelling"
+            aria-label="Cancel run">
+      {{ icon('ban', 14) }}
+      <span x-text="cancelling ? 'Stopping…' : 'Cancel'">Cancel</span>
+    </button>
   </template>
 
   <template x-if="state === 'success'">

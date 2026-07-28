@@ -21,6 +21,7 @@ scriptorium/
 ├── core/
 │   ├── argparse.py          # ScriptoriumParser with ui_label support
 │   ├── config.py            # user settings persistence (UserConfig, load, save)
+│   ├── history.py           # run history persistence (RunRecord, load, append)
 │   ├── env.py               # centralized .env loading
 │   ├── outputs.py           # standardized output path resolution
 │   ├── paths.py             # centralized path resolution (frozen vs dev)
@@ -36,6 +37,7 @@ scriptorium/
 │   ├── _badges.py           # ACCEPTS-derived compatibility badges
 │   ├── _form.py             # argparse introspection for auto-generated forms
 │   ├── _icons.py            # PNG icon lookup for scripts and file categories
+│   ├── _runs.py             # live run registry + process-tree termination
 │   ├── static/
 │   │   ├── style.css        # the entire stylesheet, sectioned (see below)
 │   │   ├── fonts/           # self-hosted Inter + JetBrains Mono (OFL 1.1)
@@ -139,6 +141,7 @@ templates/
 ├── base.html              # shell: topnav, sidebar slot, $store.ui, splash
 ├── index.html             # script browser + Drop-to-Discover (scriptBrowser())
 ├── script.html            # script detail page (scriptRunner())
+├── history.html           # past runs with re-run links
 ├── _splash.html           # boot overlay, plain JS — see below
 ├── _icons.html            # icon(name, size, cls) — inline SVG UI icon set
 ├── _components.html       # badge(), empty_state(), soon_button()
@@ -171,6 +174,9 @@ thing that failed. It clears when Alpine initialises and fonts are ready, with a
 | `GET /` | script browser |
 | `GET /scripts/{theme}/{script}` | detail page + generated form |
 | `GET /scripts/{theme}/{script}/run` | run the script, stream output as SSE |
+| `POST /api/runs/{run_id}/cancel` | kill a running script and its whole process tree |
+| `GET /history` | past runs, newest first, with re-run links |
+| `POST /api/history/clear` | delete every stored run record |
 | `GET /api/script-fields/{theme}/{script}` | field specs, minus the file input |
 | `GET /api/preview-command/{theme}/{script}` | CLI equivalent of the current form state |
 | `POST /upload/{theme}` | single-file upload |
@@ -203,8 +209,59 @@ One special case: `core/runner.py` writes its own run banner
 handling, every successful run would render as a wall of warnings, so the client
 demotes lines matching `^\[<key>\] ` to info — unless they say `failed`.
 
-There is no cancellation and no output-artifact detection; both are tracked in
-BACKLOG.md, and the UI states as much rather than implying otherwise.
+There is no output-artifact detection; the UI states as much rather than
+implying otherwise. Tracked in BACKLOG.md.
+
+---
+
+## Run lifecycle
+
+### Cancellation
+
+A run is not one process. `main.py` spawns the script, which shells out to
+ffmpeg or yt-dlp — so killing the direct child leaves the real worker running
+and writing to disk. On Windows this is not a subtlety: `Process.kill()` is an
+alias for `terminate()`, which calls `TerminateProcess` on that PID alone.
+
+`webapp/_runs.py` therefore kills the tree:
+
+| Platform | Spawn (`spawn_kwargs()`) | Kill |
+|---|---|---|
+| Windows | `creationflags=CREATE_NO_WINDOW` | `taskkill /T /F /PID` — `/T` walks the tree |
+| POSIX | `start_new_session=True` — child leads its own process group | `killpg(SIGTERM)`, then `SIGKILL` after a 3s grace |
+
+Flow: `run_script` mints a `run_id` and registers a `RunHandle`;
+`_stream_script` emits `event: start` carrying that id before any output;
+`POST /api/runs/{run_id}/cancel` looks the handle up and kills the tree.
+A finished run is discarded from the registry, so cancelling it returns 404.
+
+A killed process still exits non-zero, so `handle.cancelled` — not the exit
+code — decides whether an ending is a cancellation or a failure.
+
+Cancel deliberately leaves partial output files in place, and navigating away
+mid-run still lets the script finish. Both are choices, not omissions.
+
+### History
+
+`core/history.py` stores completed runs in `~/scriptorium/history.json`
+alongside `config.json`, newest first, capped at `MAX_ENTRIES` (200). It holds
+no live process state — a `RunRecord` is a plain value: key, argv, params,
+status, exit code, start time, elapsed.
+
+`argv` is what actually ran; `params` is what the user typed. Re-run needs the
+latter, which is why both are stored.
+
+A corrupt file degrades to an empty history rather than raising, and a single
+malformed entry is skipped instead of discarding the rest.
+
+### Re-run
+
+Re-run is a **link**, not an endpoint:
+`/scripts/{theme}/{script}?_rerun=1&<params>`. It reuses the query-param
+prefill the Drop-to-Discover flow already had; `_applyPrefill()` triggers on
+either `_prefill_file` or `_rerun`. It lands on a filled-in form rather than
+firing immediately — re-running a long transcode from one unseen click is a
+footgun. Stored paths may no longer exist; the script reports that itself.
 
 ### Building a standalone app
 

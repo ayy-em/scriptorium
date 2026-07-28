@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% from "_components.html" import badge, empty_state %}
+{% block title %}History — Scriptorium{% endblock %}
+{% set active_page = "history" %}
+{% block content %}
+
+{% set status_variant = {"success": "green", "error": "red", "cancelled": "neutral"} %}
+{% set status_icon = {"success": "check-circle", "error": "x-circle", "cancelled": "ban"} %}
+
+<div x-data="{ clearing: false }">
+  <div class="page-header">
+    <h1>History</h1>
+    {% if records %}
+    <button type="button" class="btn btn--ghost btn--sm"
+            :disabled="clearing"
+            @click="clearing = true;
+                    fetch('/api/history/clear', { method: 'POST' })
+                      .then(() => window.location.reload())
+                      .catch(() => { clearing = false; })">
+      {{ icon('trash', 14) }}
+      <span x-text="clearing ? 'Clearing…' : 'Clear history'">Clear history</span>
+    </button>
+    {% endif %}
+  </div>
+  <p class="page-subtitle">
+    {% if records %}
+    The last {{ records | length }} run{{ 's' if records | length != 1 else '' }}, newest first.
+    Kept in <code class="inline-code">~/scriptorium/history.json</code>.
+    {% else %}
+    Runs are recorded here once you start using scripts.
+    {% endif %}
+  </p>
+
+  {% if records %}
+  <ol class="history-list">
+    {% for r in records %}
+    <li class="history-row history-row--{{ r.status }}">
+      <span class="history-status" title="{{ r.status }}">
+        {{ icon(status_icon.get(r.status, 'info'), 16) }}
+      </span>
+
+      <div class="history-main">
+        <div class="history-head">
+          <span class="history-key">{{ r.key }}</span>
+          {{ badge(r.status, status_variant.get(r.status, 'neutral')) }}
+        </div>
+        {% if titles.get(r.key) %}
+        <p class="history-title">{{ titles[r.key] }}</p>
+        {% endif %}
+        {% if r.argv %}
+        <p class="history-argv" title="{{ r.argv | join(' ') }}">{{ r.argv | join(' ') }}</p>
+        {% endif %}
+      </div>
+
+      <div class="history-meta">
+        <span class="history-time">{{ r.started_at[:16] | replace('T', ' ') }}</span>
+        <span class="history-elapsed">
+          {{ icon('clock', 12) }}
+          {{ '%.1f'|format(r.elapsed) }}s
+        </span>
+        {% if r.status == 'error' and r.exit_code is not none %}
+        <span class="history-exit">exit {{ r.exit_code }}</span>
+        {% endif %}
+      </div>
+
+      <div class="history-actions">
+        {% if r.key in known_keys %}
+        {# Lands on a prefilled form rather than firing immediately — re-running
+           a long transcode from one click, unseen, is a footgun. #}
+        <a class="btn btn--secondary btn--sm"
+           href="/scripts/{{ r.theme }}/{{ r.script_name }}?_rerun=1{% if r.params %}&{{ r.params | urlencode }}{% endif %}">
+          {{ icon('reset', 14) }}
+          <span>Re-run</span>
+        </a>
+        {% else %}
+        <span class="history-gone" title="This script no longer exists">unavailable</span>
+        {% endif %}
+      </div>
+    </li>
+    {% endfor %}
+  </ol>
+  {% else %}
+  <div class="history-empty">
+    {{ empty_state('clock', 'No runs yet',
+                   'Run a script and it will show up here, with its arguments and how it ended.') }}
+    <a class="btn btn--secondary btn--sm" href="/">Browse scripts</a>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

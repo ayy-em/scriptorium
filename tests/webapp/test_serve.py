@@ -470,3 +470,174 @@ class TestAcceptExts:
         from webapp.app import accept_exts_for  # noqa: PLC0415
 
         assert accept_exts_for(SimpleNamespace()) == ""
+
+
+class TestCancelRun:
+    def test_unknown_run_returns_404(self):
+        assert client.post("/api/runs/nosuchrun/cancel").status_code == 404
+
+    def test_cancels_an_in_flight_run(self):
+        from webapp import _runs  # noqa: PLC0415
+
+        handle = _runs.new_handle("av.filmstrip", ["clip.mp4"], {"source": "clip.mp4"})
+        try:
+            with patch.object(_runs, "terminate_tree", return_value=True) as kill:
+                response = client.post(f"/api/runs/{handle.run_id}/cancel")
+            assert response.status_code == 200
+            assert response.json() == {"run_id": handle.run_id, "cancelled": True}
+            kill.assert_called_once_with(handle)
+        finally:
+            _runs.discard(handle.run_id)
+
+    def test_reports_when_there_was_nothing_left_to_kill(self):
+        from webapp import _runs  # noqa: PLC0415
+
+        handle = _runs.new_handle("av.filmstrip", [], {})
+        try:
+            with patch.object(_runs, "terminate_tree", return_value=False):
+                assert client.post(f"/api/runs/{handle.run_id}/cancel").json()["cancelled"] is False
+        finally:
+            _runs.discard(handle.run_id)
+
+    def test_a_finished_run_is_no_longer_cancellable(self):
+        """The registry drops handles on completion, so this is a 404 by design."""
+        from webapp import _runs  # noqa: PLC0415
+
+        handle = _runs.new_handle("av.filmstrip", [], {})
+        _runs.discard(handle.run_id)
+        assert client.post(f"/api/runs/{handle.run_id}/cancel").status_code == 404
+
+
+class TestRunLifecycle:
+    """The stream must announce its run id and record the outcome."""
+
+    @staticmethod
+    def _fake_proc(rc=0, stdout=b"ok\n", stderr=b""):
+        async def _out():
+            if stdout:
+                yield stdout
+
+        async def _err():
+            if stderr:
+                yield stderr
+
+        proc = MagicMock()
+        proc.stdout = _out()
+        proc.stderr = _err()
+        proc.pid = 999
+        proc.returncode = rc
+        proc.wait = AsyncMock(return_value=rc)
+        return proc
+
+    def _run(self, tmp_path, monkeypatch, rc=0, cancel=False):
+        from core import history  # noqa: PLC0415
+        from webapp import _runs  # noqa: PLC0415
+
+        monkeypatch.setattr(history, "_HISTORY_PATH", tmp_path / "history.json")
+
+        proc = self._fake_proc(rc=rc)
+
+        async def fake_create(*args, **kwargs):
+            if cancel:
+                # Simulate the cancel endpoint landing while the run is live.
+                for rid in _runs.active_ids():
+                    _runs.get(rid).cancelled = True
+            return proc
+
+        with patch("asyncio.create_subprocess_exec", new=fake_create):
+            response = client.get("/scripts/lora/validate/run")
+        return response, history
+
+    def test_stream_emits_a_start_event_with_the_run_id(self, tmp_path, monkeypatch):
+        response, _ = self._run(tmp_path, monkeypatch)
+        assert b"event: start" in response.content
+        assert b'"run_id"' in response.content
+
+    def test_successful_run_is_recorded(self, tmp_path, monkeypatch):
+        response, history = self._run(tmp_path, monkeypatch, rc=0)
+        records = history.load()
+        assert len(records) == 1
+        assert records[0].status == history.SUCCESS
+        assert records[0].key == "lora.validate"
+        assert b'"status": "success"' in response.content
+
+    def test_failed_run_is_recorded_as_error(self, tmp_path, monkeypatch):
+        _, history = self._run(tmp_path, monkeypatch, rc=1)
+        assert history.load()[0].status == history.ERROR
+
+    def test_cancelled_run_is_recorded_as_cancelled_despite_a_nonzero_exit(self, tmp_path, monkeypatch):
+        """A killed process exits non-zero; the handle's flag has to win."""
+        response, history = self._run(tmp_path, monkeypatch, rc=1, cancel=True)
+        assert history.load()[0].status == history.CANCELLED
+        assert b'"cancelled": true' in response.content
+        assert b"cancelled" in response.content
+
+    def test_registry_is_emptied_when_the_run_ends(self, tmp_path, monkeypatch):
+        from webapp import _runs  # noqa: PLC0415
+
+        self._run(tmp_path, monkeypatch)
+        assert _runs.active_ids() == []
+
+
+class TestHistoryPage:
+    def test_renders_with_no_history(self, tmp_path, monkeypatch):
+        from core import history  # noqa: PLC0415
+
+        monkeypatch.setattr(history, "_HISTORY_PATH", tmp_path / "history.json")
+        response = client.get("/history")
+        assert response.status_code == 200
+        assert "No runs yet" in response.text
+
+    def test_lists_a_recorded_run_with_a_rerun_link(self, tmp_path, monkeypatch):
+        from core import history  # noqa: PLC0415
+
+        monkeypatch.setattr(history, "_HISTORY_PATH", tmp_path / "history.json")
+        history.append(
+            history.RunRecord(
+                run_id="r1",
+                key="av.filmstrip",
+                status=history.SUCCESS,
+                started_at="2026-07-28T02:31:05",
+                elapsed=1.5,
+                exit_code=0,
+                argv=["clip.mp4"],
+                params={"source": "clip.mp4", "grid": "2x5"},
+            )
+        )
+        response = client.get("/history")
+        assert "av.filmstrip" in response.text
+        assert "/scripts/av/filmstrip?_rerun=1" in response.text
+        assert "grid=2x5" in response.text
+
+    def test_marks_a_run_whose_script_no_longer_exists(self, tmp_path, monkeypatch):
+        from core import history  # noqa: PLC0415
+
+        monkeypatch.setattr(history, "_HISTORY_PATH", tmp_path / "history.json")
+        history.append(
+            history.RunRecord(
+                run_id="r1",
+                key="gone.forever",
+                status=history.SUCCESS,
+                started_at="2026-07-28T02:31:05",
+                elapsed=1.0,
+            )
+        )
+        response = client.get("/history")
+        assert "unavailable" in response.text
+        assert "/scripts/gone/forever" not in response.text
+
+    def test_clear_empties_the_history(self, tmp_path, monkeypatch):
+        from core import history  # noqa: PLC0415
+
+        monkeypatch.setattr(history, "_HISTORY_PATH", tmp_path / "history.json")
+        history.append(
+            history.RunRecord(
+                run_id="r1", key="av.trim", status=history.SUCCESS, started_at="2026-07-28T02:31:05", elapsed=1.0
+            )
+        )
+        assert client.post("/api/history/clear").status_code == 200
+        assert history.load() == []
+
+    def test_sidebar_history_link_is_no_longer_a_stub(self):
+        response = client.get("/")
+        assert 'href="/history"' in response.text
