@@ -211,6 +211,14 @@ run_fn(export, Path("inputs"), Path("outputs/lora/captions.json"))
 
 ## Version History
 
+### v0.5.2
+- **Run control** — Cancel a running script and it stops the whole process tree, so ffmpeg and yt-dlp die with it instead of carrying on invisibly
+- **History & re-run** — every run is recorded; the History view lists them and Re-run reopens the form with the original arguments
+- **Favourites & sort** — star scripts into their own view, and cycle category order between A→Z, Z→A and most-scripts-first
+- **UI overhaul** — redesigned settings modal, two-column script page with a live CLI command preview, timestamped terminal output, boot splash, and a full light/dark token set
+- **Works offline** — fonts and Alpine.js are now self-hosted, so the packaged app no longer depends on a CDN
+- Plus the Drop-to-Discover wheel, the `av.trim` waveform editor, `scriptorium.exe` CLI mode, and `av.join` loudness normalisation, all previously unreleased
+
 ### v0.5.1
 - **Standardized output paths** — all scripts use a unified `--output` flag with `YYYYMMDD_HHmm.ext` default naming and `_001`–`_999` collision avoidance
 - **Console flickering fix** — windowed app no longer flashes cmd.exe windows when running subprocess-heavy scripts

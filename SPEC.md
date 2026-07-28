@@ -103,11 +103,13 @@ uv run webapp                           # start the local web UI (default: http:
 uv run webapp --port 9000               # custom port
 ```
 
-The web UI lists all scripts grouped by theme, with live search and dark/light mode.
-Clicking a script opens a detail page with an auto-generated form (built from
-`get_parser()`). Path-typed arguments render as drag-and-drop file upload fields
-(except `--output` and `--inputs` directory args, which remain text fields).
-Submitting the form runs the script and streams its output via SSE.
+The web UI lists all scripts grouped by theme, with live search, sortable
+categories, favourites, and dark/light mode. Clicking a script opens a detail
+page with an auto-generated form (built from `get_parser()`). Path-typed
+arguments render as drag-and-drop file upload fields (except `--output` and
+`--inputs` directory args, which remain text fields). Submitting the form runs
+the script and streams its output via SSE, which can be cancelled mid-run;
+completed runs are recorded and re-runnable from `/history`.
 
 Uploaded files are saved to the theme's inputs directory via `POST /upload/{theme}`.
 
@@ -161,8 +163,8 @@ has a matching entry in `html.dark`. Adding one without the other is a bug.
 
 ### Client-side state
 
-Two preferences live in `localStorage` rather than `UserConfig`, because neither
-needs the server:
+These live in `localStorage` rather than `UserConfig`, because none of them needs
+the server:
 
 | Key | Shape | Notes |
 |---|---|---|
@@ -196,13 +198,13 @@ thing that failed. It clears when Alpine initialises and fonts are ready, with a
 |---|---|
 | `GET /` | script browser |
 | `GET /favourites` | the same browser, client-filtered to starred scripts |
-| `GET /scripts/{theme}/{script}` | detail page + generated form |
-| `GET /scripts/{theme}/{script}/run` | run the script, stream output as SSE |
+| `GET /scripts/{theme}/{script_name}` | detail page + generated form |
+| `GET /scripts/{theme}/{script_name}/run` | run the script, stream output as SSE |
 | `POST /api/runs/{run_id}/cancel` | kill a running script and its whole process tree |
 | `GET /history` | past runs, newest first, with re-run links |
 | `POST /api/history/clear` | delete every stored run record |
-| `GET /api/script-fields/{theme}/{script}` | field specs, minus the file input |
-| `GET /api/preview-command/{theme}/{script}` | CLI equivalent of the current form state |
+| `GET /api/script-fields/{theme}/{script_name}` | field specs, minus the file input |
+| `GET /api/preview-command/{theme}/{script_name}` | CLI equivalent of the current form state |
 | `POST /upload/{theme}` | single-file upload |
 | `POST /api/drop-upload` | multi-file drop; returns matching scripts |
 | `GET`/`POST /api/settings` | read/write `UserConfig` |

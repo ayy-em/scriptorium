@@ -11,7 +11,7 @@
 ;   dist\ScriptoriumSetup.exe
 
 #define MyAppName      "Scriptorium"
-#define MyAppVersion   "0.5.1"
+#define MyAppVersion   "0.5.2"
 #define MyAppPublisher "ayy-em"
 #define MyAppExeName   "ScriptoriumApp.exe"
 #define MyAppURL       "https://github.com/ayy-em/scriptorium"
