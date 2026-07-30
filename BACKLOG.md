@@ -21,6 +21,130 @@ value type, persisted history and re-run all shipped. What is left:
 - **POSIX `killpg` is unverified on real hardware.** Unit-tested against stubs;
   see HUMAN_TODO.md.
 
+## Runtime dependencies need one coherent story
+
+**Status:** open (2026-07-30). Rough note — needs a proper design pass, not
+piecemeal fixes.
+
+The `.app` bundles its Python dependencies but not the heavy native ones, and
+each missing piece currently fails in its own unrelated way. Nothing states, in
+one place, what a clean Mac actually needs. Verified against
+`/Applications/Scriptorium.app` (0.5.2):
+
+| Dependency | Bundled? | Needed by | Behaviour when absent |
+|---|---|---|---|
+| ffmpeg / ffprobe | no | ~15 scripts (`av.*`, `gif.*`, `formats.convert_{audio,video}`) | detected; sidebar banner with an install hint |
+| pango / cairo / glib | no | `formats.convert_docs`, `telegram.*` PDF output | Homebrew-only; `scripts/telegram/_runtime.py` patches `cffi.FFI.dlopen` to search `/opt/homebrew/lib` and `/usr/local/lib`. No Homebrew, no PDF |
+| rembg model weights | no | `photo.remove_bg` | silent 167–170MB download per model on first use, into `~/.u2net/` |
+| `OPENAI_API_KEY` | n/a | `speech.transcribe` | needs `.env`; no equivalent of the ffmpeg banner |
+
+Three things to decide together rather than one at a time:
+
+1. **Bundle or require?** Bundling ffmpeg and the pango/cairo/glib stack makes
+   the `.app` genuinely self-contained and removes the Homebrew assumption,
+   at a large size cost and real relocation/signing work. Requiring them is
+   the status quo and needs honest first-run docs instead.
+2. **Uniform detection.** `core.paths.has_ffmpeg()` is the only capability check
+   that exists, it is evaluated once at import (`webapp/app.py:68`, so installing
+   ffmpeg mid-session does not clear the banner until restart), and nothing
+   equivalent covers pango, model weights, or API keys. One mechanism, surfaced
+   the same way for every dependency, beats four bespoke failure modes.
+3. **First-run cost should be visible.** A 167MB download with no progress and
+   no warning is the worst case (see the streaming issue: the tqdm bar goes to
+   stderr and is not shown until the run ends). Options: ship the default model,
+   pre-fetch on first launch with visible progress, or confirm before download.
+
+Also fix while here: `remove_bg.py:253` claims "Non-default models download
+weights on first use". The default `u2net` downloads too — nothing pre-seeds the
+cache. And README.md's build table says macOS prerequisites are "None (tools are
+auto-installed)", which is true of the *build* (`build.sh` installs uv, Homebrew,
+ffmpeg) but not of the shipped `.app` on someone else's Mac; SPEC.md lists build
+prerequisites only. Runtime prerequisites are documented nowhere.
+
+## CLI invocations should honour the current directory
+
+**Status:** open (2026-07-30). Reported from real use on macOS after the frozen
+app was put on `PATH`.
+
+Not a macOS issue despite where it surfaced — the behaviour is identical for the
+Linux binary and `scriptorium.exe` on Windows. Do not implement it as a
+`sys.platform == "darwin"` special case.
+
+**What happens.** With the binary symlinked onto `PATH`
+(`~/.local/bin/scriptorium` → `Scriptorium.app/Contents/MacOS/scriptorium`),
+running it from an arbitrary directory does not behave like a normal CLI tool:
+
+```sh
+cd ~/Movies/holiday
+scriptorium av.trim thing.mp4 00:12 01:07
+# error: ffmpeg ... exit status 254
+#   because it looked for ~/scriptorium/inputs/thing.mp4
+```
+
+Two separate causes:
+
+1. **Relative inputs are redirected.** 18 scripts contain some spelling of
+
+   ```python
+   if source.parent == Path("."):
+       source = <theme>_inputs_dir() / source.name
+   ```
+
+   so a bare filename resolves against `~/scriptorium/inputs/<theme>/`, not the
+   cwd. `./thing.mp4` does not escape it either — `Path("./thing.mp4").parent`
+   is also `Path(".")`. The failure surfaces as a raw ffmpeg exit code, with the
+   substituted path visible only inside the quoted command.
+
+2. **Outputs ignore the cwd.** `resolve_output`, `resolve_output_dir` and
+   `resolve_single_output` in `core/outputs.py` default to
+   `outputs_dir(theme)` — `~/scriptorium/outputs/<theme>/` when frozen. Writing
+   next to the input requires an explicit `--output "$PWD/clip.mp4"`.
+
+Both are *correct for the web UI*, which uploads into the inputs dir and shows
+results from the outputs dir. Neither is correct for a human in a terminal. The
+two callers are currently indistinguishable at the point of resolution.
+
+**Suggested approach.** `--run-script` is already the marker for "the webapp
+spawned this" (`webapp/app.py`, frozen branch) and is stripped by
+`entrypoint.main` before dispatch. Turn that into an explicit mode — an env var
+or a module-level flag set in that branch — and have both resolvers consult it:
+
+| Caller | Relative input | Default output |
+|---|---|---|
+| webapp (`--run-script`) | `inputs_dir(theme)` — unchanged | `outputs_dir(theme)` — unchanged |
+| human CLI | cwd | cwd |
+
+Do not key this off `_wants_cli()`: it answers a different question (should this
+process show a window) and is deliberately blind to who the caller is.
+
+**Scope.** 18 script modules, the three resolvers in `core/outputs.py`, and
+their tests. Worth one pass rather than script-by-script drift — and worth a
+shared helper, since 18 hand-written copies of the same `parent == Path(".")`
+check is how the inconsistency arose. Document the final rule in SPEC.md and the
+`PATH` setup itself in README.md, which currently only covers double-clicking.
+
+## macOS: no tray icon in the Chromium fallback tier
+
+**Status:** open (2026-07-29). Deliberately skipped, not broken.
+
+`Icon.run()` in pystray's macOS backend calls `-[NSApplication run]`, and AppKit
+aborts the process with SIGTRAP ("NSUpdateCycleInitialize() is called off the
+main thread") if that happens on any thread but the main one. A signal is not an
+exception, so no `try`/`except` in `_start_gui` can contain it — the app dies
+outright.
+
+Tier 1 is fine: `_create_tray_icon` passes `detached=True` on macOS, so
+`run_detached()` attaches the status item to the shared `NSApplication` that
+`webview.start()` then runs. Both libraries use
+`NSApplication.sharedApplication()`, so one loop drives both.
+
+Tier 2 has no GUI main loop at all — it waits on a browser process — so there is
+nothing to service an `NSStatusItem`. `_chromium_app_window` skips the tray on
+macOS and logs why, which means `close_behavior = "tray"` is inert there. If a
+Mac user ever lands in tier 2 (no working WebKit window) and wants the setting,
+the fix is to run an `NSApplication` loop on the main thread and wait on the
+browser process from a background thread instead.
+
 ## pywebview cannot start in the frozen Windows app
 
 **Status:** open (2026-07-28). Worked around, not fixed.

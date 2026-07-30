@@ -328,6 +328,41 @@ binary, different argv). The sidebar hides the CLI usage section and shows a
 Quit button when running in frozen mode. A `/api/quit` endpoint (frozen-only)
 allows the UI to signal the server to shut down.
 
+#### CLI vs GUI dispatch
+
+One binary serves both modes, so `packaging/entrypoint.py` has to decide which
+the user meant. In order:
+
+| Condition | Mode |
+|---|---|
+| `--run-script <key>` | CLI (internal subprocess dispatch) |
+| Any other argument present | CLI |
+| Bare launch, stdout is a tty | CLI (lists all scripts) |
+| Bare launch, stdout is not a tty | GUI |
+
+The tty check is the load-bearing part, and it must not be weakened back to
+`sys.stdout is not None`. Only a Windows windowed build gets `None` streams; a
+macOS `.app` launched from Finder inherits valid stdio from launchd pointed at
+`/dev/null`, so the `None` check sent every Finder launch into the CLI, which
+printed the script list to nowhere and exited — a dock bounce and no window.
+`-psn_0_<pid>`, which LaunchServices may append, is stripped before the argument
+check so it is not mistaken for a script key.
+
+#### Tray icon threading
+
+`close_behavior = "tray"` keeps the app resident when the window closes. The
+threading model is platform-specific by necessity: pystray's macOS backend calls
+`-[NSApplication run]` inside `Icon.run`, and AppKit aborts the process with
+SIGTRAP if that happens off the main thread — a signal, so no `except` can
+contain it.
+
+| Tier | macOS | Windows / Linux |
+|---|---|---|
+| 1 — pywebview | `run_detached()`, serviced by the shared `NSApplication` that `webview.start()` runs | `Icon.run` on a background thread |
+| 2 — Chromium `--app` | no tray (no GUI main loop to service an `NSStatusItem`) | `Icon.run` on a background thread |
+
+See BACKLOG.md for the tier-2 macOS gap.
+
 On startup the app checks GitHub Releases for a newer version and shows a
 banner in the sidebar if an update is available.
 

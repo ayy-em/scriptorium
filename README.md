@@ -98,7 +98,7 @@ A single command builds the distributable app for your platform:
 
 Mac:
 ```sh
-build.sh
+bash build.sh
 ```
 
 Windows:
@@ -117,9 +117,19 @@ and runs the full build pipeline. No manual setup required.
 
 ### macOS app
 
-Double-clicking the app starts the web server and opens a browser window.
+Double-clicking the app starts the web server and opens a native window
+(WKWebView), falling back to a Chromium `--app` window and then the default
+browser if that is unavailable.
+
 File outputs go to `~/scriptorium/outputs/<theme>/`; uploaded inputs are saved to
 the shared `~/scriptorium/inputs/` folder.
+
+Run the binary inside the bundle directly for CLI access — with a script key to
+run one, or bare to list them all:
+
+```sh
+dist/Scriptorium.app/Contents/MacOS/scriptorium av.trim input.mp4 00:10
+```
 
 On a Mac that did not build it, clear the quarantine flag first:
 `xattr -cr dist/Scriptorium.app`.

@@ -2,11 +2,11 @@
 
 Handles three modes:
   <theme.script> [args...]       Run a script directly from the terminal (CLI
-                                 mode — only active when scriptorium.exe is the
-                                 console-mode build and stdout is attached).
+                                 mode — any explicit argument, or a bare launch
+                                 from an interactive tty).
   --run-script <key> [args...]   Run a script via the CLI dispatcher (used
                                  internally by the webapp subprocess runner).
-  (no args / windowed build)     Start the web server in a background thread
+  (windowed launch, no args)     Start the web server in a background thread
                                  and open a desktop window.  Tries three tiers:
                                  1. pywebview native window
                                  2. Edge/Chrome --app mode (chromeless)
@@ -17,6 +17,8 @@ import socket
 import sys
 import threading
 import time
+
+_MACOS = sys.platform == "darwin"
 
 
 def _find_free_port(start: int = 57200, end: int = 57300) -> int:
@@ -289,7 +291,16 @@ def _chromium_app_window(url: str, uv_server, logger) -> None:  # noqa: ANN001
         logger.info("Launching %s in app mode: %s", name, exe_path)
         return subprocess.Popen(cmd)  # noqa: S603
 
-    tray_icon = _create_tray_icon_for(reopen.set, quit_requested.set)
+    # This tier has no GUI main loop of its own — it just waits on a browser
+    # process — so on macOS there is nothing to service an NSStatusItem. A
+    # background pystray thread would abort the process instead (see
+    # _create_tray_icon_for), so the setting is skipped rather than fatal.
+    if _MACOS:
+        tray_icon = None
+        logger.info("Chromium tier on macOS: no tray icon (no NSApplication loop to service it)")
+    else:
+        tray_icon = _create_tray_icon_for(reopen.set, quit_requested.set)
+
     if tray_icon is None:
         logger.info("No tray icon available; window close will exit the app")
 
@@ -331,7 +342,7 @@ def _close_to_tray() -> bool:
     return load_config().close_behavior == "tray"
 
 
-def _create_tray_icon_for(on_show, on_quit):  # noqa: ANN001, ANN201
+def _create_tray_icon_for(on_show, on_quit, *, detached: bool = False):  # noqa: ANN001, ANN201
     """Create a tray icon wired to arbitrary show/quit callbacks.
 
     The pywebview tier can show and hide its own window, but the Chromium tier
@@ -341,9 +352,15 @@ def _create_tray_icon_for(on_show, on_quit):  # noqa: ANN001, ANN201
     Args:
         on_show: Called when the user picks "Show Scriptorium".
         on_quit: Called when the user picks "Quit".
+        detached: Attach the icon to a main loop the caller is about to enter,
+            rather than driving it from a background thread. Required on macOS,
+            where ``Icon.run`` calls ``-[NSApplication run]`` — AppKit aborts
+            the whole process with SIGTRAP ("NSUpdateCycleInitialize() is
+            called off the main thread") if that happens anywhere but the main
+            thread, and a signal is not an exception, so nothing can catch it.
 
     Returns:
-        Running ``pystray.Icon`` instance, or ``None`` if unavailable.
+        A live ``pystray.Icon`` instance, or ``None`` if unavailable.
     """
     try:
         import pystray  # noqa: PLC0415
@@ -357,7 +374,11 @@ def _create_tray_icon_for(on_show, on_quit):  # noqa: ANN001, ANN201
             pystray.MenuItem("Quit", lambda icon, item: on_quit()),
         )
         tray = pystray.Icon("Scriptorium", icon_image, "Scriptorium", menu)
-        threading.Thread(target=tray.run, daemon=True).start()
+        if detached:
+            # Returns immediately; the caller's main loop services the icon.
+            tray.run_detached()
+        else:
+            threading.Thread(target=tray.run, daemon=True).start()
         return tray
     except Exception:
         return None
@@ -408,11 +429,15 @@ def _load_tray_icon():  # noqa: ANN201
 def _create_tray_icon(window):  # noqa: ANN001, ANN201
     """Create a tray icon that shows and hides a pywebview window.
 
+    On macOS the icon is attached detached-style to the shared NSApplication
+    that ``webview.start()`` is about to run — both pystray and pywebview use
+    ``NSApplication.sharedApplication()``, so that one loop drives both.
+
     Args:
         window: The pywebview window to show/hide.
 
     Returns:
-        Running ``pystray.Icon`` instance, or ``None`` if pystray is unavailable.
+        A live ``pystray.Icon`` instance, or ``None`` if pystray is unavailable.
     """
 
     def _quit() -> None:
@@ -420,7 +445,7 @@ def _create_tray_icon(window):  # noqa: ANN001, ANN201
 
         os._exit(0)  # noqa: SLF001
 
-    return _create_tray_icon_for(window.show, _quit)
+    return _create_tray_icon_for(window.show, _quit, detached=_MACOS)
 
 
 def _make_closing_handler(window, tray_icon):  # noqa: ANN001, ANN201
@@ -442,6 +467,48 @@ def _make_closing_handler(window, tray_icon):  # noqa: ANN001, ANN201
         return None
 
     return _handler
+
+
+def _cli_args() -> list[str]:
+    """Return the user-supplied argv, minus anything the OS injected.
+
+    macOS LaunchServices can append a ``-psn_0_<pid>`` process-serial argument
+    when opening a bundle, which must not be mistaken for a script key.
+
+    Returns:
+        The argument list the user actually passed.
+    """
+    return [a for a in sys.argv[1:] if not a.startswith("-psn_")]
+
+
+def _wants_cli() -> bool:
+    """Report whether this invocation should run the CLI instead of the GUI.
+
+    Called before the stdio streams are patched, because the answer depends on
+    what the OS handed us.
+
+    Two things mean "CLI": explicit arguments (a script key, ``--help``), or a
+    bare invocation from an interactive terminal, where listing the scripts is
+    the useful response.
+
+    A tty check rather than ``sys.stdout is not None``: only a Windows windowed
+    build gets None streams. macOS and Linux windowed launches inherit valid
+    stdio from launchd/the desktop session — pointed at /dev/null or the system
+    log, but not None — so the None check sent every Finder launch into the CLI,
+    which printed the script list to nowhere and exited. That is a dock bounce
+    and no window.
+
+    Returns:
+        True to run the CLI, False to start the desktop GUI.
+    """
+    if _cli_args():
+        return True
+
+    try:
+        return sys.stdout is not None and sys.stdout.isatty()
+    except AttributeError, ValueError, OSError:
+        # Closed or exotic stream: no terminal to talk to, so treat as windowed.
+        return False
 
 
 def _run_cli() -> None:
@@ -538,11 +605,11 @@ def _patch_webview2_external_drop() -> None:
 def main() -> None:
     """Dispatch to CLI or start the desktop GUI.
 
-    Console-mode build (scriptorium.exe, console=True): always routes to CLI.
-    Windowed build (ScriptoriumApp.exe, console=False): starts the GUI server.
-    Both builds support --run-script for internal subprocess dispatch.
+    Terminal invocation — with a script key, or bare from a tty — routes to the
+    CLI. A windowed launch (Finder, Start menu, .desktop file) starts the GUI
+    server. Every build supports --run-script for internal subprocess dispatch.
     """
-    _console_mode = sys.stdout is not None  # check BEFORE patching streams
+    _cli = _wants_cli()  # decide BEFORE patching streams
     _patch_missing_streams()
 
     if len(sys.argv) > 1 and sys.argv[1] == "--run-script":
@@ -550,7 +617,7 @@ def main() -> None:
         _run_cli()
         return
 
-    if _console_mode:
+    if _cli:
         _run_cli()
         return
 
