@@ -6,7 +6,7 @@ import sys
 
 from core.argparse import ScriptoriumParser
 from core.outputs import resolve_output
-from core.paths import inputs_dir
+from core.paths import inputs_dir, resolve_input
 
 TITLE = "Make a gif"
 DESCRIPTION = "Takes a folder full of sequentially named pics, creates a gif."
@@ -140,8 +140,7 @@ def run() -> None:
     args = get_parser().parse_args()
 
     source = args.source
-    if source.parent == Path("."):
-        source = _inputs() / source.name
+    source = resolve_input(source, "gif")
 
     output = resolve_output(args.output, theme="gif", ext=".gif")
 

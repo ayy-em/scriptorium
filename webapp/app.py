@@ -23,6 +23,7 @@ from core.config import UserConfig
 from core.config import load as load_config
 from core.config import save as save_config
 from core.env import load_env
+from core.invocation import webapp_spawn_env
 from core.paths import (
     FROZEN,
     drop_session_dir,
@@ -756,6 +757,11 @@ async def _stream_script(handle: _runs.RunHandle):
         cmd = [sys.executable, str(_REPO_ROOT / "main.py"), handle.key, *handle.argv]
         cwd = str(_REPO_ROOT)
 
+    # Scripts resolve relative inputs and default outputs differently depending
+    # on who asked. The development command line above is exactly what a human
+    # types, so the marker has to be out-of-band rather than an argument.
+    env = webapp_spawn_env()
+
     t0 = time.monotonic()
     yield f"event: start\ndata: {json.dumps({'run_id': handle.run_id})}\n\n".encode()
 
@@ -765,6 +771,7 @@ async def _stream_script(handle: _runs.RunHandle):
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             cwd=cwd,
+            env=env,
             **_runs.spawn_kwargs(),
         )
         handle.process = proc

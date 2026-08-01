@@ -13,7 +13,8 @@ from typing import TYPE_CHECKING
 
 from core.argparse import ScriptoriumParser
 from core.outputs import resolve_output
-from scripts.av._utils import av_inputs_dir, run_ffmpeg, run_ffprobe
+from core.paths import resolve_input
+from scripts.av._utils import run_ffmpeg, run_ffprobe
 
 if TYPE_CHECKING:
     from PIL import ImageDraw as _ImageDrawModule
@@ -352,8 +353,7 @@ def run() -> None:
     args = get_parser().parse_args()
 
     source = args.source
-    if source.parent == Path("."):
-        source = av_inputs_dir() / source.name
+    source = resolve_input(source, "av")
 
     output = resolve_output(args.output, theme="av", ext=f".{args.format}")
 

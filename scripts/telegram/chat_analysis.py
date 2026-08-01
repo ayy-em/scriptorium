@@ -11,7 +11,7 @@ import zipfile
 
 from core.argparse import ScriptoriumParser
 from core.outputs import resolve_output
-from core.paths import inputs_dir as _core_inputs_dir
+from core.paths import resolve_input
 from scripts.telegram._parsing import InvalidExportError, load_chat
 
 TITLE = "Analyze your Telegram chat history and generate a report full of insights"
@@ -135,8 +135,7 @@ def run() -> None:
     """CLI entrypoint. Parses argv and dispatches to chat_analysis()."""
     args = get_parser().parse_args()
     source: Path = args.source
-    if source.parent == Path("."):
-        source = _core_inputs_dir("telegram") / source.name
+    source = resolve_input(source, "telegram")
     output = resolve_output(args.output, theme="telegram", ext=".zip")
     try:
         out_path = chat_analysis(source, output)

@@ -9,7 +9,8 @@ import tempfile
 
 from core.argparse import ScriptoriumParser
 from core.outputs import resolve_output
-from scripts.av._utils import COVER_SUPPORTED_EXTS, av_inputs_dir, read_tags, run_ffmpeg
+from core.paths import resolve_input
+from scripts.av._utils import COVER_SUPPORTED_EXTS, read_tags, run_ffmpeg
 
 TITLE = "Read/write media metadata tags"
 DESCRIPTION = (
@@ -154,8 +155,7 @@ def run() -> None:
     args = get_parser().parse_args()
 
     input_file = args.input
-    if input_file.parent == Path("."):
-        input_file = av_inputs_dir() / input_file.name
+    input_file = resolve_input(input_file, "av")
 
     has_write_flags = any([args.title, args.artist, args.album, args.date, args.comment, args.cover])
 

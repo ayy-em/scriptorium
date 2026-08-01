@@ -552,12 +552,42 @@ outputs/
     <theme>/        # results land here, one subdirectory per theme
 ```
 
-Scripts resolve a bare filename (no directory component in the path) against
-`inputs/` automatically, so users can type just a filename:
+### Relative paths depend on who is calling
+
+The web UI and a person at a terminal want opposite things from a relative
+path, and both reach a script through the same `argv`. The caller is therefore
+announced out of band, via `SCRIPTORIUM_CALLER=webapp` in the spawned
+environment (`core/invocation.py`), and the two resolvers read it:
+
+| | Bare-filename input | Default output (no `--output`) |
+|---|---|---|
+| Web UI | `inputs/` | `outputs/<theme>/` |
+| Human CLI | current directory | current directory |
 
 ```sh
-uv run main.py av.convert clip.mp4 --to mp3   # resolves to inputs/clip.mp4
+# from a terminal — reads ./clip.mp4, writes ./<stamp>.mp3
+cd ~/Music && scriptorium av.convert clip.mp4 --to mp3
 ```
+
+An **environment variable rather than a flag**, because the two spawn paths do
+not share an argv shape: frozen runs go through `--run-script`, but a
+development run is `python main.py <key>`, which is exactly what a human types.
+There is nothing in the arguments to key off.
+
+Two deliberate exceptions:
+
+- **No argument at all still means `inputs/`, for both callers.** `scriptorium
+  photo.remove_bg` with no source means "process the inputs folder". Making it
+  mean "process every image in my current directory" is destructive by default
+  in a way an explicit path is not.
+- **`./name` does not force the cwd.** `Path` normalises the leading `./` away
+  at construction, so it is indistinguishable from `name`. Use a real directory
+  part if you need to be explicit.
+
+Scripts must not hand-roll this. `core.paths.resolve_input(source, theme)` is
+the single implementation — 18 hand-written copies of a
+`if source.parent == Path("."):` check is how the inconsistency arose in the
+first place.
 
 ### Post-processing: archiving input files
 

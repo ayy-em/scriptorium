@@ -14,6 +14,7 @@ import zipfile
 from core.argparse import ScriptoriumParser
 from core.outputs import resolve_output
 from core.paths import inputs_dir as _core_inputs_dir
+from core.paths import resolve_input
 from scripts.telegram._group_metrics import DEFAULT_MSG_SHARE_THRESHOLD
 from scripts.telegram._group_parsing import InvalidExportError
 
@@ -197,8 +198,8 @@ def run() -> None:
     source: Path = args.source
     if source is None:
         source = _core_inputs_dir("telegram") / _DEFAULT_SOURCE
-    elif source.parent == Path("."):
-        source = _core_inputs_dir("telegram") / source.name
+    else:
+        source = resolve_input(source, "telegram")
     output = resolve_output(args.output, theme="telegram", ext=".zip")
     try:
         out_path = group_analysis(

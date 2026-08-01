@@ -170,6 +170,34 @@ uv run main.py <theme>.<script> --help  # usage for a specific script
 uv run main.py <theme>.<script> [args]  # run it
 ```
 
+### Using the packaged app from anywhere
+
+The desktop build ships a console binary alongside the windowed one, so you can
+use Scriptorium as an ordinary command-line tool. Put it on your `PATH`:
+
+```sh
+# macOS
+ln -s /Applications/Scriptorium.app/Contents/MacOS/scriptorium ~/.local/bin/scriptorium
+
+# Linux — from the extracted tarball
+ln -s "$PWD/scriptorium/scriptorium" ~/.local/bin/scriptorium
+```
+
+On Windows the installer offers **Add to PATH** during setup; tick it and
+`scriptorium` works in any new terminal.
+
+It then behaves like any other CLI tool — relative paths are relative to where
+you are standing, and results are written beside them:
+
+```sh
+cd ~/Movies/holiday
+scriptorium av.trim thing.mp4 00:12 01:07   # reads ./thing.mp4, writes ./<stamp>.mp4
+```
+
+Run it with no source argument and it falls back to the shared `inputs/` folder
+instead, which is what the web UI uses. Pass `--output` at any time to be
+explicit.
+
 ## Scripts Available
 
 | Script     | Description                     |

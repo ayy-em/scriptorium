@@ -2,24 +2,19 @@
 
 Deferred work with enough context to pick up cold.
 
+Everything above the **Settled** heading is open work. Below it are closed
+entries, kept because the reasoning is worth not having to reconstruct.
+
 ## Remaining run-lifecycle work
 
 **Status:** partially delivered (2026-07-28). Cancellation, the `RunHandle`
-value type, persisted history and re-run all shipped. What is left:
+value type, persisted history and re-run all shipped. One item of real work is
+left; the rest moved to **Settled** below.
 
 - **Progress reporting.** The status strip's bar is indeterminate because no
   script emits progress. A `RunRecord` is somewhere to put structured progress
   events if scripts ever grow them; ffmpeg's `-progress` output is the obvious
   first source.
-- **Cancel does not clean up partial output.** Deliberate — half a transcode is
-  sometimes useful, and deleting a user's file on their behalf is a bigger
-  decision than it looks. Revisit only if it becomes annoying in practice.
-- **Navigating away mid-run lets the script finish.** Also deliberate: the run
-  completes and writes its output. Cancel is the explicit way to stop.
-- **History has no search or filter.** Capped at 200 entries, which is scannable
-  without pagination. Add filtering if the cap ever needs raising.
-- **POSIX `killpg` is unverified on real hardware.** Unit-tested against stubs;
-  see HUMAN_TODO.md.
 
 ## Runtime dependencies need one coherent story
 
@@ -60,90 +55,6 @@ cache. And README.md's build table says macOS prerequisites are "None (tools are
 auto-installed)", which is true of the *build* (`build.sh` installs uv, Homebrew,
 ffmpeg) but not of the shipped `.app` on someone else's Mac; SPEC.md lists build
 prerequisites only. Runtime prerequisites are documented nowhere.
-
-## CLI invocations should honour the current directory
-
-**Status:** open (2026-07-30). Reported from real use on macOS after the frozen
-app was put on `PATH`.
-
-Not a macOS issue despite where it surfaced — the behaviour is identical for the
-Linux binary and `scriptorium.exe` on Windows. Do not implement it as a
-`sys.platform == "darwin"` special case.
-
-**What happens.** With the binary symlinked onto `PATH`
-(`~/.local/bin/scriptorium` → `Scriptorium.app/Contents/MacOS/scriptorium`),
-running it from an arbitrary directory does not behave like a normal CLI tool:
-
-```sh
-cd ~/Movies/holiday
-scriptorium av.trim thing.mp4 00:12 01:07
-# error: ffmpeg ... exit status 254
-#   because it looked for ~/scriptorium/inputs/thing.mp4
-```
-
-Two separate causes:
-
-1. **Relative inputs are redirected.** 18 scripts contain some spelling of
-
-   ```python
-   if source.parent == Path("."):
-       source = <theme>_inputs_dir() / source.name
-   ```
-
-   so a bare filename resolves against `~/scriptorium/inputs/<theme>/`, not the
-   cwd. `./thing.mp4` does not escape it either — `Path("./thing.mp4").parent`
-   is also `Path(".")`. The failure surfaces as a raw ffmpeg exit code, with the
-   substituted path visible only inside the quoted command.
-
-2. **Outputs ignore the cwd.** `resolve_output`, `resolve_output_dir` and
-   `resolve_single_output` in `core/outputs.py` default to
-   `outputs_dir(theme)` — `~/scriptorium/outputs/<theme>/` when frozen. Writing
-   next to the input requires an explicit `--output "$PWD/clip.mp4"`.
-
-Both are *correct for the web UI*, which uploads into the inputs dir and shows
-results from the outputs dir. Neither is correct for a human in a terminal. The
-two callers are currently indistinguishable at the point of resolution.
-
-**Suggested approach.** `--run-script` is already the marker for "the webapp
-spawned this" (`webapp/app.py`, frozen branch) and is stripped by
-`entrypoint.main` before dispatch. Turn that into an explicit mode — an env var
-or a module-level flag set in that branch — and have both resolvers consult it:
-
-| Caller | Relative input | Default output |
-|---|---|---|
-| webapp (`--run-script`) | `inputs_dir(theme)` — unchanged | `outputs_dir(theme)` — unchanged |
-| human CLI | cwd | cwd |
-
-Do not key this off `_wants_cli()`: it answers a different question (should this
-process show a window) and is deliberately blind to who the caller is.
-
-**Scope.** 18 script modules, the three resolvers in `core/outputs.py`, and
-their tests. Worth one pass rather than script-by-script drift — and worth a
-shared helper, since 18 hand-written copies of the same `parent == Path(".")`
-check is how the inconsistency arose. Document the final rule in SPEC.md and the
-`PATH` setup itself in README.md, which currently only covers double-clicking.
-
-## macOS: no tray icon in the Chromium fallback tier
-
-**Status:** open (2026-07-29). Deliberately skipped, not broken.
-
-`Icon.run()` in pystray's macOS backend calls `-[NSApplication run]`, and AppKit
-aborts the process with SIGTRAP ("NSUpdateCycleInitialize() is called off the
-main thread") if that happens on any thread but the main one. A signal is not an
-exception, so no `try`/`except` in `_start_gui` can contain it — the app dies
-outright.
-
-Tier 1 is fine: `_create_tray_icon` passes `detached=True` on macOS, so
-`run_detached()` attaches the status item to the shared `NSApplication` that
-`webview.start()` then runs. Both libraries use
-`NSApplication.sharedApplication()`, so one loop drives both.
-
-Tier 2 has no GUI main loop at all — it waits on a browser process — so there is
-nothing to service an `NSStatusItem`. `_chromium_app_window` skips the tray on
-macOS and logs why, which means `close_behavior = "tray"` is inert there. If a
-Mac user ever lands in tier 2 (no working WebKit window) and wants the setting,
-the fix is to run an `NSApplication` loop on the main thread and wait on the
-browser process from a background thread instead.
 
 ## pywebview cannot start in the frozen Windows app
 
@@ -228,20 +139,6 @@ and deciding what a drop on a detail page should even do — route back to the
 wheel on `/`, or prefill the current script's file input if the type matches
 (the more useful answer, and the one that needs `ACCEPTS` checked client-side).
 
-## Unify the trim.html console
-
-**Status:** deferred (2026-07-28), during the UI prettification pass.
-
-`scripts/av/trim.html` is a hand-written template with its own ~600 lines of
-vanilla JS, streaming into `#output` / `#run-result` rather than the new
-`_terminal.html` component. It was restyled to match — same dark panel, mono
-font and status colours — but it has no header row, no Live indicator, no
-timestamps, no Clear, no collapse and no "Jump to latest".
-
-Unifying means porting its waveform editor onto the `scriptRunner()` Alpine
-component in `script.html`. Worth doing when that file is next opened for
-another reason; not worth a dedicated pass.
-
 ## Recent outputs panel
 
 **Status:** deferred (2026-07-28), during the UI prettification pass.
@@ -298,6 +195,62 @@ state means deleting the `is_disabled` branch in `_drop_chooser.html`.
 
 Args of two types: simple (just select a model by choosing "fast" or "high quality") and advanced (full args like they currently are).
 
+# Settled
+
+Closed, and kept only for the reasoning — either delivered, or considered and
+deliberately not built. Nothing here is queued work.
+
+## Cancel does not clean up partial output
+
+Half a transcode is sometimes useful, and deleting a user's file on their behalf
+is a bigger decision than it looks. Revisit only if it becomes annoying in
+practice.
+
+## Navigating away mid-run lets the script finish
+
+The run completes and writes its output. Cancel is the explicit way to stop one.
+
+## History has no search or filter
+
+Capped at 200 entries, which is scannable without pagination. Add filtering if
+the cap ever needs raising.
+
+## macOS: no tray icon in the Chromium fallback tier
+
+**Status:** open (2026-07-29). Deliberately skipped, not broken.
+
+`Icon.run()` in pystray's macOS backend calls `-[NSApplication run]`, and AppKit
+aborts the process with SIGTRAP ("NSUpdateCycleInitialize() is called off the
+main thread") if that happens on any thread but the main one. A signal is not an
+exception, so no `try`/`except` in `_start_gui` can contain it — the app dies
+outright.
+
+Tier 1 is fine: `_create_tray_icon` passes `detached=True` on macOS, so
+`run_detached()` attaches the status item to the shared `NSApplication` that
+`webview.start()` then runs. Both libraries use
+`NSApplication.sharedApplication()`, so one loop drives both.
+
+Tier 2 has no GUI main loop at all — it waits on a browser process — so there is
+nothing to service an `NSStatusItem`. `_chromium_app_window` skips the tray on
+macOS and logs why, which means `close_behavior = "tray"` is inert there. If a
+Mac user ever lands in tier 2 (no working WebKit window) and wants the setting,
+the fix is to run an `NSApplication` loop on the main thread and wait on the
+browser process from a background thread instead.
+
+## Unify the trim.html console
+
+**Status:** deferred (2026-07-28), during the UI prettification pass.
+
+`scripts/av/trim.html` is a hand-written template with its own ~600 lines of
+vanilla JS, streaming into `#output` / `#run-result` rather than the new
+`_terminal.html` component. It was restyled to match — same dark panel, mono
+font and status colours — but it has no header row, no Live indicator, no
+timestamps, no Clear, no collapse and no "Jump to latest".
+
+Unifying means porting its waveform editor onto the `scriptRunner()` Alpine
+component in `script.html`. Worth doing when that file is next opened for
+another reason; not worth a dedicated pass.
+
 ## BatchPlan abstraction
 
 **Status:** deferred (2026-07-27), same revamp. Partly superseded 2026-07-28.
@@ -322,3 +275,83 @@ Deliberately not built yet: with only one batch class actually wired up, the
 abstraction would have a single implementation and nothing to generalise over.
 Revisit once per-file fan-out lands, since that is the second implementation
 that gives the shape meaning.
+
+## CLI invocations should honour the current directory
+
+**Status:** delivered 2026-08-01. Kept for the reasoning; see SPEC.md
+"Relative paths depend on who is calling" for the rule as shipped.
+
+`core/invocation.py` marks webapp-spawned runs with
+`SCRIPTORIUM_CALLER=webapp`; `core.paths.resolve_input` and the defaults in
+`core/outputs.py` read it. The 18 hand-written redirects are gone.
+
+Two departures from the sketch below. The marker is an **environment variable,
+not `--run-script`** — that flag only exists on the frozen path, and a
+development run is `python main.py <key>`, argv-identical to what a human types.
+And **a missing source argument still means `inputs/` for both callers**:
+`scriptorium photo.remove_bg` with no arguments meaning "every image in my cwd"
+is destructive in a way an explicit path is not.
+
+Original write-up follows.
+
+---
+
+**Status:** open (2026-07-30). Reported from real use on macOS after the frozen
+app was put on `PATH`.
+
+Not a macOS issue despite where it surfaced — the behaviour is identical for the
+Linux binary and `scriptorium.exe` on Windows. Do not implement it as a
+`sys.platform == "darwin"` special case.
+
+**What happens.** With the binary symlinked onto `PATH`
+(`~/.local/bin/scriptorium` → `Scriptorium.app/Contents/MacOS/scriptorium`),
+running it from an arbitrary directory does not behave like a normal CLI tool:
+
+```sh
+cd ~/Movies/holiday
+scriptorium av.trim thing.mp4 00:12 01:07
+# error: ffmpeg ... exit status 254
+#   because it looked for ~/scriptorium/inputs/thing.mp4
+```
+
+Two separate causes:
+
+1. **Relative inputs are redirected.** 18 scripts contain some spelling of
+
+   ```python
+   if source.parent == Path("."):
+       source = <theme>_inputs_dir() / source.name
+   ```
+
+   so a bare filename resolves against `~/scriptorium/inputs/<theme>/`, not the
+   cwd. `./thing.mp4` does not escape it either — `Path("./thing.mp4").parent`
+   is also `Path(".")`. The failure surfaces as a raw ffmpeg exit code, with the
+   substituted path visible only inside the quoted command.
+
+2. **Outputs ignore the cwd.** `resolve_output`, `resolve_output_dir` and
+   `resolve_single_output` in `core/outputs.py` default to
+   `outputs_dir(theme)` — `~/scriptorium/outputs/<theme>/` when frozen. Writing
+   next to the input requires an explicit `--output "$PWD/clip.mp4"`.
+
+Both are *correct for the web UI*, which uploads into the inputs dir and shows
+results from the outputs dir. Neither is correct for a human in a terminal. The
+two callers are currently indistinguishable at the point of resolution.
+
+**Suggested approach.** `--run-script` is already the marker for "the webapp
+spawned this" (`webapp/app.py`, frozen branch) and is stripped by
+`entrypoint.main` before dispatch. Turn that into an explicit mode — an env var
+or a module-level flag set in that branch — and have both resolvers consult it:
+
+| Caller | Relative input | Default output |
+|---|---|---|
+| webapp (`--run-script`) | `inputs_dir(theme)` — unchanged | `outputs_dir(theme)` — unchanged |
+| human CLI | cwd | cwd |
+
+Do not key this off `_wants_cli()`: it answers a different question (should this
+process show a window) and is deliberately blind to who the caller is.
+
+**Scope.** 18 script modules, the three resolvers in `core/outputs.py`, and
+their tests. Worth one pass rather than script-by-script drift — and worth a
+shared helper, since 18 hand-written copies of the same `parent == Path(".")`
+check is how the inconsistency arose. Document the final rule in SPEC.md and the
+`PATH` setup itself in README.md, which currently only covers double-clicking.

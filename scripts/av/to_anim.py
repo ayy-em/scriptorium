@@ -9,7 +9,8 @@ import tempfile
 
 from core.argparse import ScriptoriumParser
 from core.outputs import resolve_output
-from scripts.av._utils import av_inputs_dir, probe_streams, run_ffmpeg
+from core.paths import resolve_input
+from scripts.av._utils import probe_streams, run_ffmpeg
 
 _CREATION_FLAGS = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
 
@@ -391,8 +392,7 @@ def run() -> None:
     args = get_parser().parse_args()
 
     source = args.source
-    if source.parent == Path("."):
-        source = av_inputs_dir() / source.name
+    source = resolve_input(source, "av")
 
     output = resolve_output(args.output, theme="av", ext=f".{args.fmt}")
 

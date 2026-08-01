@@ -6,7 +6,8 @@ import sys
 
 from core.argparse import ScriptoriumParser
 from core.outputs import default_stem, resolve_output_dir
-from scripts.av._utils import av_inputs_dir, format_time, parse_time, run_ffmpeg
+from core.paths import resolve_input
+from scripts.av._utils import format_time, parse_time, run_ffmpeg
 
 TITLE = "Split media file in multiple segments"
 DESCRIPTION = "Split a media file at one or more timestamp breakpoints into numbered segments."
@@ -96,8 +97,7 @@ def run() -> None:
     args = get_parser().parse_args()
 
     input_file = args.input
-    if input_file.parent == Path("."):
-        input_file = av_inputs_dir() / input_file.name
+    input_file = resolve_input(input_file, "av")
 
     out_dir = resolve_output_dir(args.output, theme="av")
 

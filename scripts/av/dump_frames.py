@@ -7,7 +7,8 @@ import sys
 
 from core.argparse import ScriptoriumParser
 from core.outputs import resolve_output_dir
-from scripts.av._utils import av_inputs_dir, run_ffmpeg
+from core.paths import resolve_input
+from scripts.av._utils import run_ffmpeg
 
 TITLE = "Dump all frames from a video clip"
 DESCRIPTION = "Extract every frame between two timestamps to JPEG files."
@@ -135,8 +136,7 @@ def run() -> None:
     args = get_parser().parse_args()
 
     video = args.video
-    if video.parent == Path("."):
-        video = av_inputs_dir() / video.name
+    video = resolve_input(video, "av")
 
     outputs_dir = resolve_output_dir(args.output, theme="av")
 

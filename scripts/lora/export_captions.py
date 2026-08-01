@@ -7,7 +7,7 @@ import sys
 
 from core.argparse import ScriptoriumParser
 from core.outputs import resolve_output
-from core.paths import inputs_dir
+from core.paths import inputs_dir, resolve_input
 from scripts.lora._dataset import find_captions
 
 TITLE = "Export captions to JSON"
@@ -75,8 +75,7 @@ def run() -> None:
     """CLI entrypoint. Parse arguments and dispatch to export()."""
     args = get_parser().parse_args()
     inputs = args.inputs or _inputs()
-    if inputs.parent == Path("."):
-        inputs = _inputs() / inputs.name
+    inputs = resolve_input(inputs, "lora")
     out = None
     if args.output is not None:
         raw = None if args.output == "__default__" else args.output

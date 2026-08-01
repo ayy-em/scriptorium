@@ -3,7 +3,24 @@
 from datetime import datetime
 from pathlib import Path
 
+from core.invocation import is_webapp_run
 from core.paths import outputs_dir
+
+
+def _default_output_dir(theme: str) -> Path:
+    """Return where output goes when the user did not say.
+
+    The web UI reads results out of the managed outputs tree, so that has to
+    stay its default. A person at a terminal expects a tool to write where they
+    are standing, not into a directory they would have to go looking for.
+
+    Args:
+        theme: Script theme slug.
+
+    Returns:
+        The managed theme outputs directory, or the current working directory.
+    """
+    return outputs_dir(theme) if is_webapp_run() else Path.cwd()
 
 
 def default_stem() -> str:
@@ -73,13 +90,13 @@ def resolve_output(
     stamp = default_stem()
 
     if output is None:
-        path = outputs_dir(theme) / f"{stamp}{ext}"
+        path = _default_output_dir(theme) / f"{stamp}{ext}"
     else:
         p = Path(output)
         if p.is_dir():
             path = p / f"{stamp}{ext}"
         elif p.suffix:
-            path = p if p.parent != Path(".") else outputs_dir(theme) / p
+            path = p if p.parent != Path(".") else _default_output_dir(theme) / p
         else:
             path = p / f"{stamp}{ext}"
 
@@ -150,13 +167,13 @@ def resolve_output_dir(
         Resolved directory ``Path``.
     """
     if output is None:
-        d = outputs_dir(theme)
+        d = _default_output_dir(theme)
     else:
         p = Path(output)
         if p.is_dir():
             d = p
         elif p.suffix:
-            d = outputs_dir(theme) if p.parent == Path(".") else p.parent
+            d = _default_output_dir(theme) if p.parent == Path(".") else p.parent
         else:
             d = p
 

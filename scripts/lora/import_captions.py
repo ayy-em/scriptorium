@@ -8,7 +8,7 @@ import sys
 
 from core.argparse import ScriptoriumParser
 from core.outputs import resolve_output_dir
-from core.paths import inputs_dir
+from core.paths import inputs_dir, resolve_input
 
 TITLE = "Import captions from JSON"
 DESCRIPTION = "Read a captions.json and write individual img_NNN.txt files to outputs/generated_captions/."
@@ -114,7 +114,6 @@ def run() -> None:
     """CLI entrypoint. Parse arguments and dispatch to import_captions()."""
     args = get_parser().parse_args()
     input_file = args.input or (_inputs() / "captions.json")
-    if input_file.parent == Path("."):
-        input_file = _inputs() / input_file.name
+    input_file = resolve_input(input_file, "lora")
     out_dir = resolve_output_dir(args.output, theme="lora")
     import_captions(input_file, out_dir)

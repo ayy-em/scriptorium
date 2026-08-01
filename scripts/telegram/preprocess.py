@@ -11,7 +11,7 @@ import ijson
 
 from core.argparse import ScriptoriumParser
 from core.outputs import resolve_output
-from core.paths import inputs_dir
+from core.paths import inputs_dir, resolve_input
 
 TITLE = "Preprocess Telegram export for embeddings"
 DESCRIPTION = "Strip the fat, rename keys, split by year, and emit a single zip ready for embedding."
@@ -177,8 +177,7 @@ def run() -> None:
     args = get_parser().parse_args()
 
     source = args.source
-    if source.parent == Path("."):
-        source = _inputs() / source.name
+    source = resolve_input(source, "telegram")
 
     output = resolve_output(args.output, theme="telegram", ext=".zip")
 

@@ -6,6 +6,8 @@ import shutil
 import sys
 import tomllib
 
+from core.invocation import is_webapp_run
+
 FROZEN = getattr(sys, "frozen", False)
 
 
@@ -45,6 +47,35 @@ def inputs_dir(theme: str) -> Path:  # noqa: ARG001
     d = _user_data_dir() / "inputs" if FROZEN else _bundle_dir() / "inputs"
     d.mkdir(parents=True, exist_ok=True)
     return d
+
+
+def resolve_input(source: Path, theme: str) -> Path:
+    """Resolve a user-supplied input path for whoever supplied it.
+
+    A bare filename is the only ambiguous case. From the web UI it names a file
+    staged in ``inputs/``; from a terminal it names a file in the current
+    directory, the way every other command-line tool behaves. Anything with a
+    directory part, relative or absolute, is already unambiguous and is returned
+    untouched.
+
+    ``./name`` is *not* a way to force the cwd: ``Path`` normalises the leading
+    ``./`` away at construction, so it arrives here identical to ``name``. That
+    costs nothing in practice — the web UI passes absolute paths (the upload
+    endpoint returns one), so its bare-filename branch only ever serves a human
+    who put a file in ``inputs/`` and typed its name.
+
+    Args:
+        source: Path exactly as the caller supplied it.
+        theme: Script theme slug, for the inputs directory lookup.
+
+    Returns:
+        The path to actually read from.
+    """
+    if source.parent != Path(".") or source.is_absolute():
+        return source
+    if is_webapp_run():
+        return inputs_dir(theme) / source.name
+    return source
 
 
 def drop_session_dir(session_id: str) -> Path:

@@ -6,6 +6,7 @@ from unittest.mock import patch
 
 import pytest
 
+from core.invocation import CALLER_ENV_VAR
 from core.outputs import (
     deduplicate,
     default_stem,
@@ -60,7 +61,9 @@ class TestDeduplicate:
 
 class TestResolveOutput:
     @pytest.fixture()
-    def mock_outputs(self, tmp_path):
+    def mock_outputs(self, tmp_path, monkeypatch):
+        """The managed outputs dir, as the webapp caller sees it."""
+        monkeypatch.setenv(CALLER_ENV_VAR, "webapp")
         d = tmp_path / "default_outputs"
         d.mkdir()
         with patch("core.outputs.outputs_dir", return_value=d):
@@ -121,7 +124,9 @@ class TestResolveOutput:
 
 class TestResolveOutputDir:
     @pytest.fixture()
-    def mock_outputs(self, tmp_path):
+    def mock_outputs(self, tmp_path, monkeypatch):
+        """The managed outputs dir, as the webapp caller sees it."""
+        monkeypatch.setenv(CALLER_ENV_VAR, "webapp")
         d = tmp_path / "default_outputs"
         d.mkdir()
         with patch("core.outputs.outputs_dir", return_value=d):
@@ -182,6 +187,7 @@ class TestResolveSingleOutput:
         assert got.name == "taken_001.png"
 
     def test_bare_filename_lands_in_the_theme_outputs_dir(self, tmp_path, monkeypatch):
+        monkeypatch.setenv(CALLER_ENV_VAR, "webapp")
         monkeypatch.setattr("core.paths._user_data_dir", lambda: tmp_path)
         monkeypatch.setattr("core.outputs.outputs_dir", lambda theme: tmp_path / theme)
         got = resolve_single_output("just_a_name.png", theme="photo", ext=".png")

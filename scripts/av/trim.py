@@ -6,7 +6,8 @@ import sys
 
 from core.argparse import ScriptoriumParser
 from core.outputs import resolve_output
-from scripts.av._utils import av_inputs_dir, format_time, parse_time, run_ffmpeg
+from core.paths import resolve_input
+from scripts.av._utils import format_time, parse_time, run_ffmpeg
 
 TITLE = "Trim the media file that's just too damn long"
 DESCRIPTION = "Cut a video or audio file by skipping ahead to a start point, optionally stopping at an end point."
@@ -83,8 +84,7 @@ def run() -> None:
     args = get_parser().parse_args()
 
     input_file = args.input
-    if input_file.parent == Path("."):
-        input_file = av_inputs_dir() / input_file.name
+    input_file = resolve_input(input_file, "av")
 
     output = resolve_output(args.output, theme="av", ext=input_file.suffix)
 

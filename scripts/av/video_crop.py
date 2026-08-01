@@ -6,7 +6,8 @@ import sys
 
 from core.argparse import ScriptoriumParser
 from core.outputs import resolve_output
-from scripts.av._utils import av_inputs_dir, probe_streams, run_ffmpeg
+from core.paths import resolve_input
+from scripts.av._utils import probe_streams, run_ffmpeg
 
 TITLE = "Crop a video by trimming its edges"
 DESCRIPTION = "Remove pixels from the top, right, bottom, and/or left edges of a video file."
@@ -123,8 +124,7 @@ def run() -> None:
     args = get_parser().parse_args()
 
     source = args.source
-    if source.parent == Path("."):
-        source = av_inputs_dir() / source.name
+    source = resolve_input(source, "av")
 
     output = resolve_output(args.output, theme="av", ext=source.suffix)
 

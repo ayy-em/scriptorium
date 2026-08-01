@@ -5,7 +5,7 @@ from pathlib import Path
 import sys
 
 from core.argparse import ScriptoriumParser
-from core.paths import inputs_dir
+from core.paths import inputs_dir, resolve_input
 from scripts.lora._dataset import IMG_NAME_RE, find_captions, find_images
 
 TITLE = "Validate a LoRA training dataset"
@@ -82,6 +82,5 @@ def run() -> None:
     """CLI entrypoint. Parse arguments and dispatch to validate()."""
     args = get_parser().parse_args()
     inputs = args.inputs or _inputs()
-    if inputs.parent == Path("."):
-        inputs = _inputs() / inputs.name
+    inputs = resolve_input(inputs, "lora")
     sys.exit(0 if validate(inputs) else 1)

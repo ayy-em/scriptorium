@@ -6,7 +6,8 @@ import sys
 
 from core.argparse import ScriptoriumParser
 from core.outputs import resolve_output
-from scripts.av._utils import av_inputs_dir, probe_streams, run_ffmpeg, run_ffprobe
+from core.paths import resolve_input
+from scripts.av._utils import probe_streams, run_ffmpeg, run_ffprobe
 
 TITLE = "Adjust audio volume, normalize, or apply fade-in/out"
 DESCRIPTION = "Apply composable volume operations in a single ffmpeg pass: amplify -> normalize -> fade-in -> fade-out."
@@ -146,8 +147,7 @@ def run() -> None:
     args = get_parser().parse_args()
 
     input_file = args.input
-    if input_file.parent == Path("."):
-        input_file = av_inputs_dir() / input_file.name
+    input_file = resolve_input(input_file, "av")
 
     output = resolve_output(args.output, theme="av", ext=input_file.suffix)
 

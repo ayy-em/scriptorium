@@ -5,7 +5,7 @@ from pathlib import Path
 import sys
 
 from core.argparse import ScriptoriumParser
-from core.paths import inputs_dir
+from core.paths import inputs_dir, resolve_input
 from scripts.lora._dataset import find_images
 
 TITLE = "Renumber LoRA dataset images"
@@ -91,6 +91,5 @@ def run() -> None:
     """CLI entrypoint. Parse arguments and dispatch to renumber()."""
     args = get_parser().parse_args()
     inputs = args.inputs or _inputs()
-    if inputs.parent == Path("."):
-        inputs = _inputs() / inputs.name
+    inputs = resolve_input(inputs, "lora")
     renumber(inputs, dry_run=not args.apply)

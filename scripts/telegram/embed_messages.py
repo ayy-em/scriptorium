@@ -10,7 +10,7 @@ import zipfile
 
 from core.argparse import ScriptoriumParser
 from core.outputs import resolve_output_dir
-from core.paths import inputs_dir
+from core.paths import inputs_dir, resolve_input
 
 TITLE = "Embed preprocessed Telegram messages"
 DESCRIPTION = "Embed every message with sliding-window context; write embeddings.jsonl + manifest."
@@ -282,8 +282,7 @@ def run() -> None:
     args = get_parser().parse_args()
 
     source = args.source
-    if source.parent == Path("."):
-        source = _inputs() / source.name
+    source = resolve_input(source, "telegram")
 
     output_dir = resolve_output_dir(args.output, theme="telegram")
 

@@ -6,7 +6,7 @@ import sys
 
 from core.argparse import ScriptoriumParser
 from core.outputs import resolve_output
-from core.paths import inputs_dir
+from core.paths import inputs_dir, resolve_input
 from scripts.speech._providers import (
     DEFAULT_PROVIDER,
     SUPPORTED_PROVIDERS,
@@ -115,8 +115,7 @@ def run() -> None:
     args = get_parser().parse_args()
 
     audio = args.audio
-    if audio.parent == Path("."):
-        audio = _inputs() / audio.name
+    audio = resolve_input(audio, "speech")
 
     output_path = resolve_output(args.output, theme="speech", ext=f".{args.format}")
 
