@@ -141,6 +141,29 @@ def accepts_directory(spec: FieldSpec | None) -> bool:
     return spec.widget == "file-multi" or spec.dest == "inputs"
 
 
+#: Fields that hold a filesystem path but render as a text input rather than a
+#: dropzone — an output location need not exist yet, and a directory cannot be
+#: chosen through a browser file picker.
+PATH_TEXT_DESTS = frozenset({"output", "outputs", "inputs"})
+
+
+def spans_full_row(spec: FieldSpec) -> bool:
+    """Report whether a field should take the whole width of the form grid.
+
+    Two kinds qualify. A textarea needs the room for its own sake. A path field
+    needs it because paths are long and unpredictable — half a row shows the
+    middle of a path and scrolls the ends out of sight, which is exactly where
+    the information is.
+
+    Args:
+        spec: The field descriptor.
+
+    Returns:
+        True if the field should span every grid column.
+    """
+    return spec.widget == "textarea" or spec.dest in PATH_TEXT_DESTS
+
+
 def batch_mode_for(specs: list[FieldSpec]) -> str:
     """Classify how a script should handle a batch of dropped files.
 

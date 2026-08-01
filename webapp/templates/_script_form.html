@@ -117,8 +117,7 @@
   {% if param_specs %}
   <div class="field-grid">
     {% for spec in param_specs %}
-    {% set wide = spec.widget in ('textarea',) %}
-    <div class="field {{ 'field--wide' if wide else '' }} {{ 'field--required' if spec.required else 'field--optional' }}">
+    <div class="field {{ 'field--wide' if spans_full_row(spec) else '' }} {{ 'field--required' if spec.required else 'field--optional' }}">
 
       {% if spec.widget == "checkbox" %}
       {# The label keeps --fs-body rather than the caption size the other fields

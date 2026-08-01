@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 
 from core.argparse import ScriptoriumParser
+from core.registry import discover
 from webapp._form import (
     FieldSpec,
     accepts_directory,
@@ -14,6 +15,7 @@ from webapp._form import (
     field_specs_payload,
     fields_from_parser,
     file_input_for,
+    spans_full_row,
 )
 
 
@@ -361,3 +363,50 @@ class TestFieldSpecsPayload:
         parser = _parser()
         parser.add_argument("input", type=Path)
         json.dumps(field_specs_payload(fields_from_parser(parser)))
+
+
+class TestSpansFullRow:
+    """Path fields get the whole row — half a row hides the ends of a path."""
+
+    def _spec(self, dest, widget="text"):
+        return FieldSpec(
+            dest=dest,
+            label=dest,
+            help="",
+            widget=widget,
+            required=False,
+            default=None,
+            choices=None,
+            is_positional=False,
+            multiple=False,
+            flag=f"--{dest}",
+        )
+
+    def test_output_field_is_full_width(self):
+        assert spans_full_row(self._spec("output")) is True
+
+    def test_directory_flags_are_full_width(self):
+        assert spans_full_row(self._spec("inputs")) is True
+        assert spans_full_row(self._spec("outputs")) is True
+
+    def test_textarea_is_full_width(self):
+        assert spans_full_row(self._spec("terms", widget="textarea")) is True
+
+    def test_ordinary_fields_share_a_row(self):
+        assert spans_full_row(self._spec("model", widget="select")) is False
+        assert spans_full_row(self._spec("quality", widget="number")) is False
+        assert spans_full_row(self._spec("alpha_matting", widget="checkbox")) is False
+
+
+class TestEveryOutputFieldIsFullWidth:
+    def test_no_script_renders_a_half_width_output(self):
+        """Catches a script whose output flag uses an unexpected dest."""
+        offenders = []
+        for key, mod in discover().items():
+            if not hasattr(mod, "get_parser"):
+                continue
+            for spec in fields_from_parser(mod.get_parser()):
+                looks_like_a_path = spec.flag in ("--output", "--outputs", "--inputs")
+                if looks_like_a_path and not spans_full_row(spec):
+                    offenders.append(f"{key}:{spec.dest}")
+        assert offenders == [], f"half-width path fields: {offenders}"

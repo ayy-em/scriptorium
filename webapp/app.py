@@ -51,6 +51,7 @@ from webapp._form import (
     field_specs_payload,
     fields_from_parser,
     file_input_for,
+    spans_full_row,
 )
 from webapp._icons import icon_for_category, icon_for_script
 
@@ -68,6 +69,7 @@ templates = Jinja2Templates(directory=str(templates_dir()))
 templates.env.globals["is_frozen"] = FROZEN
 templates.env.globals["has_ffmpeg"] = has_ffmpeg()
 templates.env.globals["accepts_directory"] = accepts_directory
+templates.env.globals["spans_full_row"] = spans_full_row
 
 # A callable, not a value: the globals below are evaluated once at import, but
 # favourites change on every click. base.html calls this per render so the
