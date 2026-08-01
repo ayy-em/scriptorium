@@ -602,6 +602,19 @@
           }
         }
         this.runnerOpen = true;
+
+        /* The card finishes its expansion scaled to 1.55 with fill-mode
+           forwards, so it stays oversized and keeps widening the scroll
+           container. Clearing this now that the chooser is hidden also means a
+           trip back through closeRunner() finds the wheel in its normal state. */
+        this.expandingIndex = null;
+
+        /* .main-content is the scroll container, and it was just holding a
+           viewport-tall chooser. Without this the form can open below the fold. */
+        this.$nextTick(() => {
+          var c = document.querySelector('.main-content');
+          if (c) c.scrollTop = 0;
+        });
       },
 
       closeRunner() {

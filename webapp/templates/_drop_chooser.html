@@ -4,8 +4,10 @@
    matching scripts on the right. Rotation is driven by wheel, drag and arrow
    keys; see the wheel* methods in the scriptBrowser() component. #}
 
+{# Hidden once the runner opens: the two are siblings in the flow, so a chooser
+   left on screen pushes the form a full viewport down the scroll container. #}
 <div class="chooser"
-     x-show="chooserOpen"
+     x-show="chooserOpen && !runnerOpen"
      x-transition:enter="chooser-enter"
      x-transition:enter-start="chooser-enter-from"
      x-transition:enter-end="chooser-enter-to"

@@ -3068,6 +3068,12 @@ html.dark .wheel-connectors { color: oklch(32% 0.02 280); }
   }
 }
 
+/* The expanding card grows to 100% width and scales past it, and nothing
+   between here and .main-content clips — so for the half-second the animation
+   runs it hands the scroll container a horizontal scrollbar. Clip only while a
+   card is expanding, so the resting wheel is free to lay out as it likes. */
+.wheel-stage:has(.is-expanding) { overflow: hidden; }
+
 .wheel-stage:has(.is-expanding) .wheel-card:not(.is-expanding),
 .wheel-stage:has(.is-expanding) .file-chip,
 .wheel-stage:has(.is-expanding) .wheel-connectors,

@@ -20,6 +20,11 @@ import time
 
 _MACOS = sys.platform == "darwin"
 
+# How long _stop_tray waits for an icon's loop to come up before stopping it.
+# Only reached when tier 1 fails after its icon was created, which the backend
+# probe in _start_gui already rules out for the common case.
+_TRAY_READY_TIMEOUT = 5.0
+
 
 def _find_free_port(start: int = 57200, end: int = 57300) -> int:
     """Find the first available TCP port in the given range.
@@ -377,32 +382,84 @@ def _create_tray_icon_for(on_show, on_quit, *, detached: bool = False):  # noqa:
             pystray.MenuItem("Quit", lambda icon, item: on_quit()),
         )
         tray = pystray.Icon("Scriptorium", icon_image, "Scriptorium", menu)
+
+        # pystray's Icon.stop() begins `if self._running:`, and _running is only
+        # set once the icon's own loop has come up — on another thread. Stopping
+        # before that does nothing at all, and the icon then appears with
+        # nothing left able to remove it. Publish readiness so _stop_tray can
+        # wait for the loop rather than race it.
+        ready = threading.Event()
+
+        def _setup(icon) -> None:
+            # A custom setup replaces pystray's default, which is what shows the
+            # icon in the first place — so this has to do it explicitly.
+            icon.visible = True
+            ready.set()
+
+        tray._scriptorium_ready = ready  # noqa: SLF001
+
         if detached:
             # Returns immediately; the caller's main loop services the icon.
-            tray.run_detached()
+            tray.run_detached(setup=_setup)
         else:
-            threading.Thread(target=tray.run, daemon=True).start()
+            threading.Thread(target=tray.run, kwargs={"setup": _setup}, daemon=True).start()
         return tray
     except Exception:
         return None
 
 
 def _stop_tray(tray_icon) -> None:  # noqa: ANN001
-    """Tear down a tray icon, tolerating one that never finished starting.
+    """Tear down a tray icon, waiting for it to exist first if need be.
 
-    ``Icon.run`` is on a background thread, so a caller unwinding from an error
-    can reach here before the icon's own loop is ready and ``stop()`` raises.
-    That must not mask the original failure or block the next window tier.
+    ``Icon.stop()`` is documented as a no-op when the icon is not running, and
+    the icon does not count as running until its loop has started on another
+    thread. A caller unwinding from an early failure therefore reaches here
+    before there is anything to stop, the stop is discarded, and the icon
+    appears a moment later and stays for the life of the process. Waiting for
+    the readiness signal published by ``_create_tray_icon_for`` is what makes
+    the teardown actually take effect.
 
     Args:
         tray_icon: A ``pystray.Icon`` instance, or ``None``.
     """
     if tray_icon is None:
         return
+    ready = getattr(tray_icon, "_scriptorium_ready", None)
+    if ready is not None:
+        ready.wait(timeout=_TRAY_READY_TIMEOUT)
     try:
         tray_icon.stop()
     except Exception:
         pass
+
+
+def _pywebview_backend_ready(logger) -> bool:  # noqa: ANN001
+    """Import pywebview's GUI backend before tier 1 commits to anything.
+
+    ``webview.start()`` calls ``guilib.initialize()`` itself, but only after a
+    window and a tray icon already exist. On Windows that import is exactly
+    where the frozen build dies — pywebview's WinForms backend imports ``clr``,
+    which raises ``RuntimeError: Failed to initialize Python.Runtime.dll``, and
+    ``import_winforms`` only catches ``ImportError`` so it propagates. Finding
+    out here means tier 1 creates no tray icon to leak.
+
+    Calling ``initialize()`` twice is safe: the Windows ``setup_app()`` guards
+    itself with ``_already_set_up_app`` and the macOS one is a no-op.
+
+    Args:
+        logger: Logger for diagnostic messages.
+
+    Returns:
+        True if the backend loaded, False if tier 1 cannot run here.
+    """
+    try:
+        import importlib  # noqa: PLC0415
+
+        importlib.import_module("webview.guilib").initialize()
+        return True
+    except Exception:
+        logger.exception("pywebview GUI backend unavailable — skipping the native window")
+        return False
 
 
 def _browser_fallback(url: str, server_thread: threading.Thread, logger) -> None:  # noqa: ANN001
@@ -569,6 +626,11 @@ def _start_gui(logger, url: str, uv_server, server_thread: threading.Thread, app
     except ImportError:
         webview = None
         logger.info("pywebview not available, skipping native window")
+
+    # Settle whether tier 1 can run *before* it creates a window or a tray icon,
+    # so a failure leaves nothing behind for tier 2 to collide with.
+    if webview is not None and not _pywebview_backend_ready(logger):
+        webview = None
 
     # Bound before the try so the handler can tear the icon down no matter how
     # far tier 1 got.

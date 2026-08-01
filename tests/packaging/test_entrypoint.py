@@ -1,6 +1,7 @@
 """Tests for the frozen-app entrypoint helpers."""
 
 import sys
+import threading
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -13,6 +14,7 @@ from entrypoint import (
     _find_chromium_browser,
     _find_free_port,
     _patch_missing_streams,
+    _pywebview_backend_ready,
     _start_gui,
     _stop_tray,
     _wait_for_server,
@@ -155,7 +157,8 @@ class TestCreateTrayIconFor:
             tray = _create_tray_icon_for(MagicMock(), MagicMock(), detached=True)
 
         thread.assert_not_called()
-        tray.run_detached.assert_called_once_with()
+        tray.run_detached.assert_called_once()
+        assert callable(tray.run_detached.call_args.kwargs["setup"])
 
     def test_non_detached_runs_on_a_background_thread(self):
         module = self._fake_pystray()
@@ -168,7 +171,25 @@ class TestCreateTrayIconFor:
 
         thread.assert_called_once()
         assert thread.call_args.kwargs["target"] is tray.run
+        assert callable(thread.call_args.kwargs["kwargs"]["setup"])
         tray.run_detached.assert_not_called()
+
+    def test_setup_shows_the_icon_and_signals_readiness(self):
+        """A custom setup replaces the default that would have shown the icon."""
+        module = self._fake_pystray()
+        with (
+            self._patched(module),
+            patch("entrypoint._load_tray_icon", return_value=MagicMock()),
+            patch("threading.Thread") as thread,
+        ):
+            tray = _create_tray_icon_for(MagicMock(), MagicMock())
+
+        setup = thread.call_args.kwargs["kwargs"]["setup"]
+        assert not tray._scriptorium_ready.is_set()
+        icon = MagicMock()
+        setup(icon)
+        assert icon.visible is True
+        assert tray._scriptorium_ready.is_set()
 
     def test_returns_none_without_an_icon_image(self):
         module = self._fake_pystray()
@@ -199,10 +220,12 @@ class TestTrayIconIsNotLeakedBetweenTiers:
     """
 
     def _start_gui_with_failing_webview(self, tier1_tray):
+        """Backend probe passes, then start() dies — the icon already exists."""
         fake_webview = MagicMock()
-        fake_webview.start.side_effect = RuntimeError("Failed to initialize Python.Runtime.dll")
+        fake_webview.start.side_effect = RuntimeError("window died after the probe")
         with (
             patch.dict(sys.modules, {"webview": fake_webview}),
+            patch("entrypoint._pywebview_backend_ready", return_value=True),
             patch("entrypoint._patch_webview2_external_drop"),
             patch("entrypoint._create_tray_icon", return_value=tier1_tray),
             patch("entrypoint._chromium_app_window") as chromium,
@@ -230,6 +253,7 @@ class TestTrayIconIsNotLeakedBetweenTiers:
         fake_webview.create_window.side_effect = RuntimeError("no window")
         with (
             patch.dict(sys.modules, {"webview": fake_webview}),
+            patch("entrypoint._pywebview_backend_ready", return_value=True),
             patch("entrypoint._patch_webview2_external_drop"),
             patch("entrypoint._chromium_app_window") as chromium,
             patch("entrypoint._MACOS", False),
@@ -247,6 +271,60 @@ class TestStopTray:
         tray.stop.side_effect = RuntimeError("not running")
         _stop_tray(tray)
         tray.stop.assert_called_once_with()
+
+    def test_waits_for_the_icon_loop_before_stopping(self):
+        """Pystray's stop() is `if self._running:` — early stops are discarded.
+
+        Without the wait the icon comes up after the stop and nothing is left
+        to take it down, which is how two icons ended up on screen at once.
+        """
+        tray = MagicMock()
+        ready = threading.Event()
+        tray._scriptorium_ready = ready
+
+        order = []
+        ready.wait = lambda timeout=None: order.append("waited")
+        tray.stop.side_effect = lambda: order.append("stopped")
+
+        _stop_tray(tray)
+        assert order == ["waited", "stopped"]
+
+    def test_stops_an_icon_that_never_published_readiness(self):
+        tray = MagicMock(spec=["stop"])
+        _stop_tray(tray)
+        tray.stop.assert_called_once_with()
+
+
+class TestPywebviewBackendProbe:
+    """Tier 1 must not create anything before it knows it can run.
+
+    A tray icon created and then abandoned cannot be reliably removed, so the
+    backend import is settled up front instead.
+    """
+
+    def test_reports_false_when_the_backend_will_not_load(self):
+        module = MagicMock()
+        module.initialize.side_effect = RuntimeError("Failed to initialize Python.Runtime.dll")
+        with patch("importlib.import_module", return_value=module):
+            assert _pywebview_backend_ready(MagicMock()) is False
+
+    def test_reports_true_when_the_backend_loads(self):
+        with patch("importlib.import_module", return_value=MagicMock()):
+            assert _pywebview_backend_ready(MagicMock()) is True
+
+    def test_a_dead_backend_creates_no_tray_icon(self):
+        fake_webview = MagicMock()
+        with (
+            patch.dict(sys.modules, {"webview": fake_webview}),
+            patch("entrypoint._pywebview_backend_ready", return_value=False),
+            patch("entrypoint._create_tray_icon") as create_tray,
+            patch("entrypoint._chromium_app_window") as chromium,
+        ):
+            _start_gui(MagicMock(), "http://127.0.0.1:1", MagicMock(), MagicMock(), MagicMock())
+
+        create_tray.assert_not_called()
+        fake_webview.create_window.assert_not_called()
+        assert chromium.called
 
 
 class TestFindChromiumBrowser:
