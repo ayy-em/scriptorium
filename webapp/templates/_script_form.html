@@ -121,10 +121,18 @@
     <div class="field {{ 'field--wide' if wide else '' }} {{ 'field--required' if spec.required else 'field--optional' }}">
 
       {% if spec.widget == "checkbox" %}
+      {# The label keeps --fs-body rather than the caption size the other fields
+         use: it sits beside a 16px box as the control's own clickable text, not
+         above it as a caption. It carries the same required/optional marker
+         though, or it reads as a different style rather than a deliberate one. #}
       <label class="checkbox-row" for="f_{{ spec.dest }}">
         <input type="checkbox" id="f_{{ spec.dest }}" name="{{ spec.dest }}" value="on"
                x-model="values['{{ spec.dest }}']">
-        <span class="field-label field-label--inline">{{ spec.label }}</span>
+        <span class="field-label field-label--inline">
+          {{ spec.label }}
+          {%- if spec.required %}<span class="req" aria-hidden="true">*</span><span class="sr-only"> (required)</span>
+          {%- else %}<span class="optional-tag">optional</span>{% endif %}
+        </span>
       </label>
 
       {% else %}

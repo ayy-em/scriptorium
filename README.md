@@ -221,6 +221,12 @@ run_fn(export, Path("inputs"), Path("outputs/lora/captions.json"))
 
 ## Version History
 
+### v0.5.3
+- **Background removal works in the packaged app** — `photo.remove_bg` failed to start in every built release; two separate packaging faults, both now guarded by tests
+- **One tray icon** — Windows launched with two, the first of them dead
+- **Drop-to-Discover fixed** — choosing a script from the wheel now takes you to the form instead of stranding you on an oversized page
+- **New logo set** — vector logo across splash, top bar and favicon, with cut-to-size rasters for the tray and installers
+
 ### v0.5.2
 - **Run control** — Cancel a running script and it stops the whole process tree, so ffmpeg and yt-dlp die with it instead of carrying on invisibly
 - **History & re-run** — every run is recorded; the History view lists them and Re-run reopens the form with the original arguments

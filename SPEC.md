@@ -412,6 +412,21 @@ contain it.
 
 See BACKLOG.md for the tier-2 macOS gap.
 
+Two rules keep the tiers from each showing an icon at once:
+
+- **Tier 1 settles whether it can run before it creates anything.**
+  `_pywebview_backend_ready` calls `webview.guilib.initialize()` up front.
+  `webview.start()` would do that itself, but only after a window and a tray
+  icon exist — and on Windows that import is where the frozen build dies, in
+  pywebview's WinForms backend on `import clr`.
+- **`_stop_tray` waits for the icon's loop before stopping it.**
+  `pystray.Icon.stop()` begins `if self._running:`, and `_running` is only set
+  once `Icon.run` has come up on its own thread. Stopping earlier is silently
+  discarded and the icon appears afterwards, with nothing left able to remove
+  it. `_create_tray_icon_for` therefore publishes a readiness `Event` from its
+  `setup` callback — which, being custom, must also set `visible` itself,
+  because it replaces the default callback that would have shown the icon.
+
 On startup the app checks GitHub Releases for a newer version and shows a
 banner in the sidebar if an update is available.
 
