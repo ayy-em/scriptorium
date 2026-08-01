@@ -5,7 +5,10 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Personal script runner with auto-generated forms and streaming output.">
-  <link rel="icon" href="/static/logo.webp" type="image/webp">
+  {# SVG first for sharpness at any tab size; the .ico is the fallback for
+     engines that will not take a vector favicon. #}
+  <link rel="icon" href="/static/logo.svg" type="image/svg+xml">
+  <link rel="alternate icon" href="/static/favicon.ico" sizes="32x32">
   <link rel="preload" href="/static/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="/static/fonts/jetbrains-mono-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="/static/style.css">
@@ -232,7 +235,7 @@
   <!-- Fixed top navbar -->
   <header class="topnav">
     <a href="/" class="topnav-brand" @click="$store.ui.activeCategory = null">
-      <img src="/static/logo.webp" alt="" width="22" height="22" aria-hidden="true">
+      <img src="/static/logo.svg" alt="" width="22" height="22" aria-hidden="true">
       <span>Scriptorium</span>
     </a>
 

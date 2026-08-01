@@ -54,6 +54,35 @@ class TestNativeDependencies:
         assert "def _collect(" in spec
         assert "except Exception" in spec
 
+    def test_does_not_exclude_unittest(self, name):
+        """Scipy needs stdlib unittest at import time, via numpy.
+
+        scipy pulls in array_api_compat, which runs ``from numpy import *``.
+        ``testing`` is in numpy's ``__all__``, so that fires numpy's lazy
+        ``__getattr__`` into ``numpy/testing/__init__.py``, whose first line is
+        ``from unittest import TestCase``. Excluding unittest therefore breaks
+        photo.remove_bg (rembg -> pymatting -> scipy) in the built app only.
+        """
+        assert '"unittest"' not in _spec(name)
+
+    def test_collects_numpy_testing(self, name):
+        """Only reachable through numpy's lazy __getattr__, so declare it."""
+        assert '"numpy.testing"' in _spec(name)
+
+    def test_copies_rembg_dependency_metadata(self, name):
+        """Pymatting reads its own dist-info at import time, unguarded.
+
+        ``pymatting/__init__.py`` ends with
+        ``importlib.metadata.version(__name__)``. rembg wraps its own lookup in
+        ``PackageNotFoundError``; pymatting does not, so a bundle missing the
+        dist-info fails photo.remove_bg at run time. Recursive covers the whole
+        graph instead of waiting for the next dependency to do the same.
+        """
+        spec = _spec(name)
+        assert "copy_metadata" in spec
+        assert "recursive=True" in spec
+        assert '_metadata("rembg")' in spec
+
 
 class TestWindowsNativeWindow:
     def test_collects_pythonnet_for_pywebview(self):

@@ -13,6 +13,8 @@ from entrypoint import (
     _find_chromium_browser,
     _find_free_port,
     _patch_missing_streams,
+    _start_gui,
+    _stop_tray,
     _wait_for_server,
     _wants_cli,
 )
@@ -184,6 +186,67 @@ class TestCreateTrayIcon:
         with patch("entrypoint._create_tray_icon_for") as create, patch("entrypoint._MACOS", False):
             _create_tray_icon(MagicMock())
         assert create.call_args.kwargs["detached"] is False
+
+
+class TestTrayIconIsNotLeakedBetweenTiers:
+    """One running app must never show two tray icons.
+
+    The pywebview tier creates its icon *before* ``webview.start()``, because the
+    closing handler needs it. On Windows the frozen build is exactly where
+    ``start()`` fails, so the error path has to take the icon down before the
+    Chromium tier creates its own — otherwise the user gets two, and the first
+    one's menu drives a window that never opened.
+    """
+
+    def _start_gui_with_failing_webview(self, tier1_tray):
+        fake_webview = MagicMock()
+        fake_webview.start.side_effect = RuntimeError("Failed to initialize Python.Runtime.dll")
+        with (
+            patch.dict(sys.modules, {"webview": fake_webview}),
+            patch("entrypoint._patch_webview2_external_drop"),
+            patch("entrypoint._create_tray_icon", return_value=tier1_tray),
+            patch("entrypoint._chromium_app_window") as chromium,
+            patch("entrypoint._MACOS", False),
+        ):
+            _start_gui(MagicMock(), "http://127.0.0.1:1", MagicMock(), MagicMock(), MagicMock())
+        return chromium
+
+    def test_failed_pywebview_tier_stops_its_icon(self):
+        tier1_tray = MagicMock()
+        chromium = self._start_gui_with_failing_webview(tier1_tray)
+        assert chromium.called, "should have fallen through to the Chromium tier"
+        tier1_tray.stop.assert_called_once_with()
+
+    def test_an_unstoppable_icon_does_not_block_the_next_tier(self):
+        """stop() can raise if Icon.run has not reached its loop yet."""
+        tier1_tray = MagicMock()
+        tier1_tray.stop.side_effect = RuntimeError("icon not running")
+        chromium = self._start_gui_with_failing_webview(tier1_tray)
+        assert chromium.called
+
+    def test_no_icon_when_pywebview_fails_before_creating_one(self):
+        """create_window failing must not NameError on the unbound icon."""
+        fake_webview = MagicMock()
+        fake_webview.create_window.side_effect = RuntimeError("no window")
+        with (
+            patch.dict(sys.modules, {"webview": fake_webview}),
+            patch("entrypoint._patch_webview2_external_drop"),
+            patch("entrypoint._chromium_app_window") as chromium,
+            patch("entrypoint._MACOS", False),
+        ):
+            _start_gui(MagicMock(), "http://127.0.0.1:1", MagicMock(), MagicMock(), MagicMock())
+        assert chromium.called
+
+
+class TestStopTray:
+    def test_none_is_a_no_op(self):
+        _stop_tray(None)
+
+    def test_swallows_a_failing_stop(self):
+        tray = MagicMock()
+        tray.stop.side_effect = RuntimeError("not running")
+        _stop_tray(tray)
+        tray.stop.assert_called_once_with()
 
 
 class TestFindChromiumBrowser:

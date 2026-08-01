@@ -304,30 +304,33 @@ def _chromium_app_window(url: str, uv_server, logger) -> None:  # noqa: ANN001
     if tray_icon is None:
         logger.info("No tray icon available; window close will exit the app")
 
-    proc = _open()
-    while True:
-        try:
-            proc.wait()
-        except KeyboardInterrupt:
-            proc.terminate()
-            break
+    # A failure here falls through to the browser tier, which has no tray of its
+    # own — so the icon has to go with the window rather than outliving it.
+    try:
+        proc = _open()
+        while True:
+            try:
+                proc.wait()
+            except KeyboardInterrupt:
+                proc.terminate()
+                break
 
-        if quit_requested.is_set() or tray_icon is None or not _close_to_tray():
-            break
+            if quit_requested.is_set() or tray_icon is None or not _close_to_tray():
+                break
 
-        # Window closed but the user wants us resident: idle until the tray asks
-        # for the window back, or for the app to quit.
-        logger.info("Window closed — staying in the tray")
-        reopen.clear()
-        while not reopen.wait(timeout=0.5):
+            # Window closed but the user wants us resident: idle until the tray
+            # asks for the window back, or for the app to quit.
+            logger.info("Window closed — staying in the tray")
+            reopen.clear()
+            while not reopen.wait(timeout=0.5):
+                if quit_requested.is_set():
+                    break
             if quit_requested.is_set():
                 break
-        if quit_requested.is_set():
-            break
-        proc = _open()
+            proc = _open()
+    finally:
+        _stop_tray(tray_icon)
 
-    if tray_icon is not None:
-        tray_icon.stop()
     uv_server.should_exit = True
 
 
@@ -384,6 +387,24 @@ def _create_tray_icon_for(on_show, on_quit, *, detached: bool = False):  # noqa:
         return None
 
 
+def _stop_tray(tray_icon) -> None:  # noqa: ANN001
+    """Tear down a tray icon, tolerating one that never finished starting.
+
+    ``Icon.run`` is on a background thread, so a caller unwinding from an error
+    can reach here before the icon's own loop is ready and ``stop()`` raises.
+    That must not mask the original failure or block the next window tier.
+
+    Args:
+        tray_icon: A ``pystray.Icon`` instance, or ``None``.
+    """
+    if tray_icon is None:
+        return
+    try:
+        tray_icon.stop()
+    except Exception:
+        pass
+
+
 def _browser_fallback(url: str, server_thread: threading.Thread, logger) -> None:  # noqa: ANN001
     """Open the app in the default browser and block until the server stops.
 
@@ -409,9 +430,9 @@ def _browser_fallback(url: str, server_thread: threading.Thread, logger) -> None
 def _load_tray_icon():  # noqa: ANN201
     """Load the app logo for the system tray.
 
-    pystray needs a raster, so this reads the PNG logo rather than any of the
-    inline SVG glyphs. A purpose-cut 64px logo is still on the wish list — see
-    HUMAN_TODO.md.
+    pystray needs a raster, so this reads a PNG logo rather than the vector
+    ``logo.svg`` the UI uses. ``logo-64.png`` is already cut to the tray size;
+    the 512px master is only a fallback and gets downsampled on every launch.
 
     Returns:
         A PIL ``Image`` instance, or ``None`` if loading fails.
@@ -421,10 +442,14 @@ def _load_tray_icon():  # noqa: ANN201
 
         from core.paths import static_dir  # noqa: PLC0415
 
-        icon_path = static_dir() / "logo.png"
-        if icon_path.exists():
-            img = PIL.Image.open(icon_path).convert("RGBA").resize((64, 64), PIL.Image.LANCZOS)
-            return img
+        static = static_dir()
+        for name in ("logo-64.png", "logo.png"):
+            icon_path = static / name
+            if icon_path.exists():
+                img = PIL.Image.open(icon_path).convert("RGBA")
+                if img.size != (64, 64):
+                    img = img.resize((64, 64), PIL.Image.LANCZOS)
+                return img
     except Exception:
         pass
     return None
@@ -545,6 +570,10 @@ def _start_gui(logger, url: str, uv_server, server_thread: threading.Thread, app
         webview = None
         logger.info("pywebview not available, skipping native window")
 
+    # Bound before the try so the handler can tear the icon down no matter how
+    # far tier 1 got.
+    tray_icon = None
+
     if webview is not None:
         try:
             import os  # noqa: PLC0415
@@ -559,12 +588,17 @@ def _start_gui(logger, url: str, uv_server, server_thread: threading.Thread, app
 
             webview.start()
 
-            if tray_icon is not None:
-                tray_icon.stop()
+            _stop_tray(tray_icon)
             uv_server.should_exit = True
             server_thread.join(timeout=5.0)
             os._exit(0)  # noqa: SLF001
         except Exception:
+            # By the time webview.start() fails the tier-1 icon is already live
+            # on its own thread, and its menu points at a window that never
+            # opened. Left up, it sits alongside the icon the Chromium tier is
+            # about to create — two Scriptorium icons, the first one broken.
+            _stop_tray(tray_icon)
+            tray_icon = None
             uv_server.should_exit = False
             if app is not None:
                 app.state.webview_window = None

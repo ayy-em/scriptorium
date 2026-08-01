@@ -42,7 +42,9 @@ scriptorium/
 │   │   ├── style.css        # the entire stylesheet, sectioned (see below)
 │   │   ├── fonts/           # self-hosted Inter + JetBrains Mono (OFL 1.1)
 │   │   ├── js/              # vendored Alpine.js + focus plugin
-│   │   └── logo.{png,webp}  # logo.png doubles as the tray icon source
+│   │   ├── logo.svg         # splash, top bar, favicon
+│   │   ├── logo-{64,128,256,512}.png  # logo-64.png is the tray icon
+│   │   └── logo.{png,webp}, favicon.ico  # raster fallbacks, README, browser tab
 │   └── templates/           # Jinja2 (see "Web UI layer" below)
 └── packaging/
     ├── entrypoint.py            # frozen app entry (web server + --run-script mode)
@@ -333,6 +335,30 @@ A GitHub Actions workflow (`.github/workflows/release.yml`) builds all three
 platforms and uploads artifacts to a GitHub Release on tag push (`v*`).
 
 The platform-specific scripts below can still be invoked directly.
+
+#### Spec constraints that apply to all three platforms
+
+A frozen build fails *silently*: `core.registry.discover` skips any script whose
+imports raise, so a missing module removes the script from the UI rather than
+producing an error. `tests/packaging/test_specs.py` guards the rules below
+without needing a build.
+
+- **Scripts and core are collected, never hand-listed.** `collect_submodules`
+  in every spec; a literal module list drifts the moment a script is added.
+- **`rembg`, `onnxruntime` and (Windows) `clr_loader`/`pythonnet` need
+  `collect_all`.** Static analysis cannot see them.
+- **`unittest` must not be excluded.** scipy imports `array_api_compat`, which
+  runs `from numpy import *`; `testing` is in numpy's `__all__`, so that fires
+  numpy's lazy `__getattr__` into `numpy/testing/__init__.py` and its
+  `from unittest import TestCase`. Excluding it breaks `photo.remove_bg`
+  (rembg → pymatting → scipy) in the built app only. `numpy.testing` is listed
+  in `hiddenimports` for the same reason — the lazy import is invisible to
+  static analysis.
+- **rembg's dependency metadata is copied recursively.** `pymatting/__init__.py`
+  ends with `importlib.metadata.version(__name__)` and does not guard it, so a
+  bundle without its `dist-info` raises `PackageNotFoundError` on import.
+  `_metadata("rembg")` uses `copy_metadata(..., recursive=True)` to cover the
+  whole graph rather than one package at a time.
 
 ### macOS app
 

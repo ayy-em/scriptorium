@@ -9,32 +9,7 @@ of it. Nothing below is a blocker.
 
 ---
 
-## 1. App logo set
-
-**Status:** the app currently reuses `webapp/static/logo.webp` (10KB) everywhere,
-including the new splash screen at 88×88. It is a raster and it is the only
-logo asset the UI has.
-
-What to supply, into `webapp/static/logo/`:
-
-| File | Used by | Notes |
-|---|---|---|
-| `logo.svg` | splash, top bar, future favicon | The important one. Vector means the splash logo stops looking soft. |
-| `logo-64.png` | tray icon | pystray needs a raster; currently downsamples `logo.png` (512px) on every launch. |
-| `logo-128.png` | installers, docs | |
-| `logo-256.png` | Windows installer | |
-| `logo-512.png` | macOS `.icns` source | |
-| `favicon.ico` | browser tab | `webapp/static/favicon.ico` exists; replace if the mark changes. |
-
-Once `logo.svg` exists, point these at it:
-- `webapp/templates/_splash.html` → `.splash-logo` `src`
-- `webapp/templates/base.html` → `.topnav-brand img` `src`
-- `packaging/entrypoint.py` → `_load_tray_icon()` (needs the PNG, not the SVG)
-- `packaging/logo.ico` / `packaging/logo.icns` for the installers
-
----
-
-## 2. Optional illustrations
+## 1. Optional illustrations
 
 Small spot art for empty states. The shared `empty_state()` macro currently
 renders a single icon in a lavender rounded square, which is fine — this is
@@ -47,7 +22,7 @@ polish, not a gap.
 
 ---
 
-## 3. Checks that need a real desktop session
+## 2. Checks that need a real desktop session
 
 The prettification pass was verified in a headless browser pane. The following
 could not be verified there and need a human with the app actually open.
@@ -59,6 +34,11 @@ could not be verified there and need a human with the app actually open.
       one file drop of each category, in both light and dark. The three sizes to
       judge are 14px (sidebar), 24px (wheel card) and 72px (file chip) — the
       last uses a lighter stroke and is the most likely to look wrong.
+- [ ] **The SVG logo.** `logo.svg` now drives the splash (88×88), the top bar
+      (22×22) and the favicon. It is a 129-path trace of the raster mark and no
+      SVG renderer was available here, so it was never actually drawn. Worth one
+      look at all three sizes — the 22×22 top bar is where a coarse trace would
+      show first.
 - [ ] **Animation timing.** The verification pane runs with
       `document.hidden === true`, so `requestAnimationFrame` never fires and CSS
       transitions never advance. Every *end state* was verified; the motion
@@ -75,7 +55,9 @@ could not be verified there and need a human with the app actually open.
       divergences.
 - [ ] **Close-to-tray, one click.** The tray icon is now created in the Chromium
       fallback tier (verified: the frozen app launches, the icon is created, and
-      `close_behavior: "tray"` is read). What could not be verified without a
+      `close_behavior: "tray"` is read). Confirm there is exactly **one** icon —
+      a leak that showed two was fixed on 2026-08-01, but only ever reproduced
+      in the frozen build. What could not be verified without a
       human at the machine is the actual interaction — close the window and
       confirm the app stays resident, then use the tray's "Show Scriptorium" to
       bring it back and "Quit" to exit. pywebview's native window still fails to
@@ -94,7 +76,7 @@ could not be verified there and need a human with the app actually open.
 
 ---
 
-## 4. Housekeeping
+## 3. Housekeeping
 
 - [ ] **Alpine is pinned at 3.15.12** in `webapp/static/js/`. It is vendored, so
       updating means re-downloading both `alpinejs.min.js` and

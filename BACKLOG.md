@@ -167,6 +167,14 @@ resolve at runtime, and PyInstaller does not lay those out correctly on its own.
 tray icon and reopens the window on demand, so the setting is honoured either
 way — see `_chromium_app_window` in `packaging/entrypoint.py`.
 
+That mitigation briefly made the failure visible: tier 1 creates its icon
+*before* `webview.start()`, because the closing handler needs it, and the error
+path did not take it down again — so on Windows every launch showed two tray
+icons, the first wired to a window that never opened. `_start_gui` now stops the
+tier-1 icon before falling through (`_stop_tray`), guarded by
+`TestTrayIconIsNotLeakedBetweenTiers`. This only ever reproduced where
+`webview.start()` fails, i.e. the frozen Windows build.
+
 **Options, if a native window is wanted:**
 
 1. Lay out `Python.Runtime.dll` plus a `runtimeconfig.json` by hand in the spec
@@ -285,6 +293,10 @@ client-side loop issuing N sequential requests and concatenating the streams.
 **Where to start:** `webapp/templates/index.html` (the `runScript` path in the
 Alpine component) and `webapp/_form.py` (`batch_mode_for`). Removing the dimmed
 state means deleting the `is_disabled` branch in `_drop_chooser.html`.
+
+## Photos.Remove_bg user friendliness
+
+Args of two types: simple (just select a model by choosing "fast" or "high quality") and advanced (full args like they currently are).
 
 ## BatchPlan abstraction
 

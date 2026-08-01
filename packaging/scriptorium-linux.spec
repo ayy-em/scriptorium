@@ -8,7 +8,7 @@ Build from the repo root:
 import os
 from pathlib import Path
 
-from PyInstaller.utils.hooks import collect_all, collect_submodules
+from PyInstaller.utils.hooks import collect_all, collect_submodules, copy_metadata
 
 ROOT = Path(os.path.abspath(os.path.join(SPECPATH, "..")))
 
@@ -24,6 +24,22 @@ def _collect(package):
     except Exception:  # pragma: no cover - build-time only
         print(f"WARNING: could not collect {package!r}; scripts needing it will be missing")
         return [], [], []
+
+
+def _metadata(package):
+    """Copy a package's dist-info, and that of everything it requires.
+
+    Some libraries resolve their own version through importlib.metadata at
+    import time and do not guard the lookup — pymatting is one, so a bundle
+    without its dist-info raises PackageNotFoundError and takes photo.remove_bg
+    down with it. Recursive covers the rest of the graph rather than waiting for
+    the next transitive dependency to do the same thing.
+    """
+    try:
+        return copy_metadata(package, recursive=True)
+    except Exception:  # pragma: no cover - build-time only
+        print(f"WARNING: could not copy metadata for {package!r}")
+        return []
 
 
 # rembg drives photo.remove_bg and onnxruntime is its inference backend. Neither
@@ -73,6 +89,8 @@ hidden_imports = collect_submodules("scripts") + collect_submodules("core") + [
     "ijson",
     "ijson.backends",
     "ijson.backends.python",
+    # Reached only through numpy's lazy __getattr__, so static analysis misses it.
+    "numpy.testing",
 ]
 hidden_imports += wp_hidden + rembg_hidden + ort_hidden
 
@@ -84,6 +102,7 @@ datas = [
     (str(ROOT / "pyproject.toml"), "."),
 ]
 datas += wp_datas + rembg_datas + ort_datas
+datas += _metadata("rembg")
 
 a = Analysis(
     [str(ROOT / "packaging" / "entrypoint.py")],
@@ -94,7 +113,11 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=["tkinter", "test", "unittest"],
+    # 'unittest' must stay collected. scipy imports array_api_compat, which does
+    # `from numpy import *`; 'testing' is in numpy's __all__, so that triggers
+    # numpy/testing/__init__.py -> `from unittest import TestCase`. Excluding it
+    # broke photo.remove_bg (rembg -> pymatting -> scipy) at run time only.
+    excludes=["tkinter", "test"],
     noarchive=False,
     optimize=0,
 )
