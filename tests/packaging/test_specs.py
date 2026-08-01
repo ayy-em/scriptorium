@@ -84,16 +84,29 @@ class TestNativeDependencies:
         assert '_metadata("rembg")' in spec
 
 
-class TestWindowsNativeWindow:
-    def test_collects_pythonnet_for_pywebview(self):
-        """Guard the pywebview native-window dependency chain.
+class TestWindowsHasNoNativeWindow:
+    """Windows ships without pywebview, deliberately.
 
-        Without pythonnet/clr, pywebview raises "Failed to initialize
-        Python.Runtime.dll" and the app silently drops to the Chromium tier.
-        """
+    The WinForms backend imports clr, which raises "Failed to initialize
+    Python.Runtime.dll" in every frozen build — bundling clr_loader and
+    pythonnet was tried and verified not to help. Chromium --app is the
+    supported tier there, so the whole stack is left out of the bundle.
+    """
+
+    def test_does_not_bundle_the_pythonnet_stack(self):
         spec = _spec("scriptorium-win.spec")
-        assert '_collect("clr_loader")' in spec
-        assert '_collect("pythonnet")' in spec
+        assert '_collect("clr_loader")' not in spec
+        assert '_collect("pythonnet")' not in spec
+
+    def test_excludes_webview_and_clr(self):
+        spec = _spec("scriptorium-win.spec")
+        for name in ('"webview"', '"clr"', '"clr_loader"', '"pythonnet"'):
+            assert name in spec, f"{name} should be in the Windows excludes"
+
+    def test_other_platforms_still_collect_pywebview(self):
+        """MacOS and Linux use tier 1 for real; only Windows opts out."""
+        for name in ("scriptorium.spec", "scriptorium-linux.spec"):
+            assert '"webview"' in _spec(name), name
 
 
 @pytest.mark.parametrize("name", SPECS)

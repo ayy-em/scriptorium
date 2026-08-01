@@ -13,8 +13,8 @@ from entrypoint import (
     _create_tray_icon_for,
     _find_chromium_browser,
     _find_free_port,
+    _load_webview,
     _patch_missing_streams,
-    _pywebview_backend_ready,
     _start_gui,
     _stop_tray,
     _wait_for_server,
@@ -225,8 +225,7 @@ class TestTrayIconIsNotLeakedBetweenTiers:
         fake_webview.start.side_effect = RuntimeError("window died after the probe")
         with (
             patch.dict(sys.modules, {"webview": fake_webview}),
-            patch("entrypoint._pywebview_backend_ready", return_value=True),
-            patch("entrypoint._patch_webview2_external_drop"),
+            patch("entrypoint._load_webview", return_value=fake_webview),
             patch("entrypoint._create_tray_icon", return_value=tier1_tray),
             patch("entrypoint._chromium_app_window") as chromium,
             patch("entrypoint._MACOS", False),
@@ -253,8 +252,7 @@ class TestTrayIconIsNotLeakedBetweenTiers:
         fake_webview.create_window.side_effect = RuntimeError("no window")
         with (
             patch.dict(sys.modules, {"webview": fake_webview}),
-            patch("entrypoint._pywebview_backend_ready", return_value=True),
-            patch("entrypoint._patch_webview2_external_drop"),
+            patch("entrypoint._load_webview", return_value=fake_webview),
             patch("entrypoint._chromium_app_window") as chromium,
             patch("entrypoint._MACOS", False),
         ):
@@ -295,28 +293,50 @@ class TestStopTray:
         tray.stop.assert_called_once_with()
 
 
-class TestPywebviewBackendProbe:
+class TestLoadWebview:
     """Tier 1 must not create anything before it knows it can run.
 
-    A tray icon created and then abandoned cannot be reliably removed, so the
-    backend import is settled up front instead.
+    A tray icon created and then abandoned cannot be reliably removed, so
+    whether pywebview is usable is settled before a window or an icon exists.
     """
 
-    def test_reports_false_when_the_backend_will_not_load(self):
-        module = MagicMock()
-        module.initialize.side_effect = RuntimeError("Failed to initialize Python.Runtime.dll")
-        with patch("importlib.import_module", return_value=module):
-            assert _pywebview_backend_ready(MagicMock()) is False
+    def test_windows_never_attempts_the_native_window(self):
+        """Pywebview's WinForms backend cannot start in the frozen build.
 
-    def test_reports_true_when_the_backend_loads(self):
-        with patch("importlib.import_module", return_value=MagicMock()):
-            assert _pywebview_backend_ready(MagicMock()) is True
+        Not a probe that happens to fail — it has never once succeeded, so the
+        import is not attempted at all.
+        """
+        with (
+            patch("entrypoint.sys.platform", "win32"),
+            patch("importlib.import_module") as import_module,
+        ):
+            assert _load_webview(MagicMock()) is None
+        import_module.assert_not_called()
+
+    def test_returns_none_when_the_backend_will_not_load(self):
+        guilib = MagicMock()
+        guilib.initialize.side_effect = RuntimeError("no display")
+        with (
+            patch("entrypoint.sys.platform", "darwin"),
+            patch.dict(sys.modules, {"webview": MagicMock()}),
+            patch("importlib.import_module", return_value=guilib),
+        ):
+            assert _load_webview(MagicMock()) is None
+
+    def test_returns_the_module_when_the_backend_loads(self):
+        fake_webview = MagicMock()
+        with (
+            patch("entrypoint.sys.platform", "darwin"),
+            patch.dict(sys.modules, {"webview": fake_webview}),
+            patch("importlib.import_module", return_value=MagicMock()),
+        ):
+            assert _load_webview(MagicMock()) is fake_webview
 
     def test_a_dead_backend_creates_no_tray_icon(self):
         fake_webview = MagicMock()
         with (
             patch.dict(sys.modules, {"webview": fake_webview}),
-            patch("entrypoint._pywebview_backend_ready", return_value=False),
+            patch("entrypoint._load_webview", return_value=None),
             patch("entrypoint._create_tray_icon") as create_tray,
             patch("entrypoint._chromium_app_window") as chromium,
         ):

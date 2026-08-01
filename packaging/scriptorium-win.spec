@@ -50,12 +50,13 @@ def _metadata(package):
 rembg_datas, rembg_binaries, rembg_hidden = _collect("rembg")
 ort_datas, ort_binaries, ort_hidden = _collect("onnxruntime")
 
-# pywebview reaches the native window through pythonnet/clr, which loads a
-# managed runtime at import time. Missing pieces here make pywebview raise
-# "Failed to initialize Python.Runtime.dll", silently downgrading the app to
-# the Chromium fallback tier — which has no system tray.
-clr_datas, clr_binaries, clr_hidden = _collect("clr_loader")
-pn_datas, pn_binaries, pn_hidden = _collect("pythonnet")
+# No pywebview on Windows. Its WinForms backend imports clr, and in a frozen
+# build that raises "Failed to initialize Python.Runtime.dll" every time —
+# pythonnet needs its managed Python.Runtime.dll assembly and a .NET runtime
+# config laid out in a way PyInstaller does not produce, and collect_all does
+# not fix it. Bundling clr_loader and pythonnet was verified not to help, so
+# the whole stack is left out and the Chromium --app tier is the supported
+# path here. entrypoint._load_webview refuses tier 1 on win32 to match.
 
 # Every script module, discovered rather than listed. core.registry finds
 # scripts by walking the package at runtime, so a hand-maintained list here
@@ -85,9 +86,6 @@ hidden_imports = collect_submodules("scripts") + collect_submodules("core") + [
     "openpyxl",
     "requests",
     "ffmpeg",
-    "webview",
-    "webview.platforms.edgechromium",
-    "webview.platforms.winforms",
     "pystray",
     "pystray._win32",
     "matplotlib",
@@ -103,7 +101,7 @@ hidden_imports = collect_submodules("scripts") + collect_submodules("core") + [
     # Reached only through numpy's lazy __getattr__, so static analysis misses it.
     "numpy.testing",
 ]
-hidden_imports += wp_hidden + rembg_hidden + ort_hidden + clr_hidden + pn_hidden
+hidden_imports += wp_hidden + rembg_hidden + ort_hidden
 
 datas = [
     (str(ROOT / "webapp" / "templates"), "webapp/templates"),
@@ -112,9 +110,9 @@ datas = [
     (str(ROOT / "scripts" / "telegram" / "templates"), "scripts/telegram/templates"),
     (str(ROOT / "pyproject.toml"), "."),
 ]
-datas += wp_datas + rembg_datas + ort_datas + clr_datas + pn_datas
+datas += wp_datas + rembg_datas + ort_datas
 datas += _metadata("rembg")
-binaries = wp_binaries + rembg_binaries + ort_binaries + clr_binaries + pn_binaries
+binaries = wp_binaries + rembg_binaries + ort_binaries
 
 a = Analysis(
     [str(ROOT / "packaging" / "entrypoint.py")],
@@ -129,7 +127,7 @@ a = Analysis(
     # `from numpy import *`; 'testing' is in numpy's __all__, so that triggers
     # numpy/testing/__init__.py -> `from unittest import TestCase`. Excluding it
     # broke photo.remove_bg (rembg -> pymatting -> scipy) at run time only.
-    excludes=["tkinter", "test"],
+    excludes=["tkinter", "test", "webview", "clr", "clr_loader", "pythonnet"],
     noarchive=False,
     optimize=0,
 )

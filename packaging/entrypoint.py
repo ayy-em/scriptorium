@@ -433,33 +433,46 @@ def _stop_tray(tray_icon) -> None:  # noqa: ANN001
         pass
 
 
-def _pywebview_backend_ready(logger) -> bool:  # noqa: ANN001
-    """Import pywebview's GUI backend before tier 1 commits to anything.
+def _load_webview(logger):  # noqa: ANN001, ANN201
+    """Return the pywebview module if tier 1 can actually run here.
 
-    ``webview.start()`` calls ``guilib.initialize()`` itself, but only after a
-    window and a tray icon already exist. On Windows that import is exactly
-    where the frozen build dies — pywebview's WinForms backend imports ``clr``,
-    which raises ``RuntimeError: Failed to initialize Python.Runtime.dll``, and
-    ``import_winforms`` only catches ``ImportError`` so it propagates. Finding
-    out here means tier 1 creates no tray icon to leak.
+    Windows is excluded outright. pywebview's WinForms backend imports ``clr``,
+    and in the frozen build that raises ``RuntimeError: Failed to initialize
+    Python.Runtime.dll`` every single time — PyInstaller does not lay out
+    pythonnet's managed assembly and .NET runtime config, and no amount of
+    ``collect_all`` fixes that. Attempting it bought nothing but a stack trace
+    in every launch log and a window that never opened. The Chromium ``--app``
+    tier is the supported path on Windows.
 
-    Calling ``initialize()`` twice is safe: the Windows ``setup_app()`` guards
-    itself with ``_already_set_up_app`` and the macOS one is a no-op.
+    Elsewhere the backend is imported up front rather than left to
+    ``webview.start()``, which only gets to it after a window and a tray icon
+    already exist — a failure at that point strands the icon. Calling
+    ``initialize()`` twice is safe: the macOS ``setup_app()`` is a no-op and the
+    Windows one guards itself, though that path is now unreachable.
 
     Args:
         logger: Logger for diagnostic messages.
 
     Returns:
-        True if the backend loaded, False if tier 1 cannot run here.
+        The ``webview`` module, or ``None`` to fall through to Chromium.
     """
+    if sys.platform == "win32":
+        logger.info("Windows: native window tier disabled, using Chromium app mode")
+        return None
+
     try:
         import importlib  # noqa: PLC0415
 
+        import webview  # noqa: PLC0415
+
         importlib.import_module("webview.guilib").initialize()
-        return True
+    except ImportError:
+        logger.info("pywebview not available, skipping native window")
+        return None
     except Exception:
         logger.exception("pywebview GUI backend unavailable — skipping the native window")
-        return False
+        return None
+    return webview
 
 
 def _browser_fallback(url: str, server_thread: threading.Thread, logger) -> None:  # noqa: ANN001
@@ -621,16 +634,7 @@ def _start_gui(logger, url: str, uv_server, server_thread: threading.Thread, app
             tier 1 has a window; the other tiers leave it unset, which is how
             the UI knows to disable the folder picker.
     """
-    try:
-        import webview  # noqa: PLC0415
-    except ImportError:
-        webview = None
-        logger.info("pywebview not available, skipping native window")
-
-    # Settle whether tier 1 can run *before* it creates a window or a tray icon,
-    # so a failure leaves nothing behind for tier 2 to collide with.
-    if webview is not None and not _pywebview_backend_ready(logger):
-        webview = None
+    webview = _load_webview(logger)
 
     # Bound before the try so the handler can tear the icon down no matter how
     # far tier 1 got.
@@ -640,7 +644,6 @@ def _start_gui(logger, url: str, uv_server, server_thread: threading.Thread, app
         try:
             import os  # noqa: PLC0415
 
-            _patch_webview2_external_drop()
             window = webview.create_window("Scriptorium", url, width=1200, height=800)
             if app is not None:
                 app.state.webview_window = window
@@ -675,31 +678,6 @@ def _start_gui(logger, url: str, uv_server, server_thread: threading.Thread, app
 
     _browser_fallback(url, server_thread, logger)
     server_thread.join(timeout=5.0)
-
-
-def _patch_webview2_external_drop() -> None:
-    """Force AllowExternalDrop=True on the WebView2 WinForms control.
-
-    WebView2 WinForms SDK 1.0.1340+ exposes AllowExternalDrop on the wrapper
-    control. pywebview never sets it, and some runtime versions silently default
-    it to False, which blocks OS-level file drag-and-drop from reaching the
-    HTML5 drag events used by the drop overlay.
-    """
-    try:
-        from webview.platforms import edgechromium as _ec  # noqa: PLC0415
-
-        _orig_init = _ec.EdgeChrome.__init__
-
-        def _patched_init(self, form, window, cache_dir):  # type: ignore[override]
-            _orig_init(self, form, window, cache_dir)
-            try:
-                self.webview.AllowExternalDrop = True
-            except Exception:
-                pass
-
-        _ec.EdgeChrome.__init__ = _patched_init
-    except Exception:
-        pass
 
 
 def main() -> None:

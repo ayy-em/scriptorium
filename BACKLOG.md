@@ -56,48 +56,6 @@ auto-installed)", which is true of the *build* (`build.sh` installs uv, Homebrew
 ffmpeg) but not of the shipped `.app` on someone else's Mac; SPEC.md lists build
 prerequisites only. Runtime prerequisites are documented nowhere.
 
-## pywebview cannot start in the frozen Windows app
-
-**Status:** open (2026-07-28). Worked around, not fixed.
-
-`ScriptoriumApp.exe` never gets a native window. pywebview's WinForms backend
-imports `clr`, which raises:
-
-```
-RuntimeError: Failed to initialize Python.Runtime.dll
-```
-
-so `_start_gui` silently falls through to tier 2, the Chromium `--app` window.
-Bundling `clr_loader` and `pythonnet` via `collect_all` (both *are* in the
-bundle now — verified) is **not** sufficient: pythonnet also needs its managed
-`Python.Runtime.dll` assembly and a .NET runtime config that `clr_loader` can
-resolve at runtime, and PyInstaller does not lay those out correctly on its own.
-
-**Consequence, now mitigated:** the tray only existed in the pywebview tier, so
-"minimize to tray" did nothing for every real user. Tier 2 now creates its own
-tray icon and reopens the window on demand, so the setting is honoured either
-way — see `_chromium_app_window` in `packaging/entrypoint.py`.
-
-That mitigation briefly made the failure visible: tier 1 creates its icon
-*before* `webview.start()`, because the closing handler needs it, and the error
-path did not take it down again — so on Windows every launch showed two tray
-icons, the first wired to a window that never opened. `_start_gui` now stops the
-tier-1 icon before falling through (`_stop_tray`), guarded by
-`TestTrayIconIsNotLeakedBetweenTiers`. This only ever reproduced where
-`webview.start()` fails, i.e. the frozen Windows build.
-
-**Options, if a native window is wanted:**
-
-1. Lay out `Python.Runtime.dll` plus a `runtimeconfig.json` by hand in the spec
-   and point `clr_loader` at it. Fiddly and version-sensitive.
-2. Drop pywebview on Windows and treat the Chromium tier as *the* supported
-   path. It already works, has the tray, and needs no .NET at all — the main
-   loss is that Edge/Chrome must be present.
-3. Replace pywebview with a WebView2-native wrapper that does not go through
-   pythonnet.
-
-Option 2 is the cheapest and closest to how the app actually behaves today.
-
 ## Favourites are per browser profile
 
 **Status:** known limitation, accepted 2026-07-28 when favourites shipped.
@@ -355,3 +313,59 @@ their tests. Worth one pass rather than script-by-script drift — and worth a
 shared helper, since 18 hand-written copies of the same `parent == Path(".")`
 check is how the inconsistency arose. Document the final rule in SPEC.md and the
 `PATH` setup itself in README.md, which currently only covers double-clicking.
+
+## pywebview cannot start in the frozen Windows app
+
+**Status:** resolved 2026-08-01 by dropping tier 1 on Windows (option 2 below).
+
+`_load_webview` returns `None` on `win32` without importing anything, and
+`scriptorium-win.spec` excludes `webview`, `clr`, `clr_loader` and `pythonnet`
+rather than bundling them. Chromium `--app` is the supported tier there — it
+already worked, already had the tray, and needs no .NET. What this removes: a
+guaranteed-failing import, a stack trace in every launch log, and the pythonnet
+stack from the bundle. What it costs: Edge or Chrome must be present, which was
+already true in practice since tier 1 never once started.
+
+Original write-up follows.
+
+---
+
+**Status:** open (2026-07-28). Worked around, not fixed.
+
+`ScriptoriumApp.exe` never gets a native window. pywebview's WinForms backend
+imports `clr`, which raises:
+
+```
+RuntimeError: Failed to initialize Python.Runtime.dll
+```
+
+so `_start_gui` silently falls through to tier 2, the Chromium `--app` window.
+Bundling `clr_loader` and `pythonnet` via `collect_all` (both *are* in the
+bundle now — verified) is **not** sufficient: pythonnet also needs its managed
+`Python.Runtime.dll` assembly and a .NET runtime config that `clr_loader` can
+resolve at runtime, and PyInstaller does not lay those out correctly on its own.
+
+**Consequence, now mitigated:** the tray only existed in the pywebview tier, so
+"minimize to tray" did nothing for every real user. Tier 2 now creates its own
+tray icon and reopens the window on demand, so the setting is honoured either
+way — see `_chromium_app_window` in `packaging/entrypoint.py`.
+
+That mitigation briefly made the failure visible: tier 1 creates its icon
+*before* `webview.start()`, because the closing handler needs it, and the error
+path did not take it down again — so on Windows every launch showed two tray
+icons, the first wired to a window that never opened. `_start_gui` now stops the
+tier-1 icon before falling through (`_stop_tray`), guarded by
+`TestTrayIconIsNotLeakedBetweenTiers`. This only ever reproduced where
+`webview.start()` fails, i.e. the frozen Windows build.
+
+**Options, if a native window is wanted:**
+
+1. Lay out `Python.Runtime.dll` plus a `runtimeconfig.json` by hand in the spec
+   and point `clr_loader` at it. Fiddly and version-sensitive.
+2. Drop pywebview on Windows and treat the Chromium tier as *the* supported
+   path. It already works, has the tray, and needs no .NET at all — the main
+   loss is that Edge/Chrome must be present.
+3. Replace pywebview with a WebView2-native wrapper that does not go through
+   pythonnet.
+
+Option 2 is the cheapest and closest to how the app actually behaves today.

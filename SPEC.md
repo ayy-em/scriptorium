@@ -368,7 +368,7 @@ bash packaging/build.sh                 # → dist/Scriptorium.app
 
 The `.app` bundle uses PyInstaller. On launch it finds a free port, starts
 uvicorn, and tries three display tiers in order:
-1. **pywebview** native window (WKWebView on macOS, EdgeChromium on Windows)
+1. **pywebview** native window (WKWebView on macOS, GTK/Qt on Linux; not attempted on Windows)
 2. **Chromium `--app` mode** — chromeless window via Chrome/Edge/Chromium
 3. **Default browser** fallback — user quits via the sidebar Quit button
 
@@ -405,20 +405,24 @@ threading model is platform-specific by necessity: pystray's macOS backend calls
 SIGTRAP if that happens off the main thread — a signal, so no `except` can
 contain it.
 
-| Tier | macOS | Windows / Linux |
-|---|---|---|
-| 1 — pywebview | `run_detached()`, serviced by the shared `NSApplication` that `webview.start()` runs | `Icon.run` on a background thread |
-| 2 — Chromium `--app` | no tray (no GUI main loop to service an `NSStatusItem`) | `Icon.run` on a background thread |
+| Tier | macOS | Linux | Windows |
+|---|---|---|---|
+| 1 — pywebview | `run_detached()`, serviced by the shared `NSApplication` that `webview.start()` runs | `Icon.run` on a background thread | **not attempted** |
+| 2 — Chromium `--app` | no tray (no GUI main loop to service an `NSStatusItem`) | `Icon.run` on a background thread | `Icon.run` on a background thread |
+
+Windows has no tier 1: `_load_webview` returns `None` on `win32` without
+importing anything, and the spec excludes `webview`, `clr`, `clr_loader` and
+`pythonnet` from the bundle. See BACKLOG.md for why that stack can never start
+in a frozen build.
 
 See BACKLOG.md for the tier-2 macOS gap.
 
 Two rules keep the tiers from each showing an icon at once:
 
 - **Tier 1 settles whether it can run before it creates anything.**
-  `_pywebview_backend_ready` calls `webview.guilib.initialize()` up front.
-  `webview.start()` would do that itself, but only after a window and a tray
-  icon exist — and on Windows that import is where the frozen build dies, in
-  pywebview's WinForms backend on `import clr`.
+  `_load_webview` imports the backend via `webview.guilib.initialize()` up
+  front. `webview.start()` would do that itself, but only after a window and a
+  tray icon exist, and a failure at that point strands the icon.
 - **`_stop_tray` waits for the icon's loop before stopping it.**
   `pystray.Icon.stop()` begins `if self._running:`, and `_running` is only set
   once `Icon.run` has come up on its own thread. Stopping earlier is silently
