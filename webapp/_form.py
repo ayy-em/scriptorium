@@ -21,6 +21,8 @@ class FieldSpec:
         is_positional: True if this is a positional (not optional) argument.
         multiple: True if the field accepts multiple values (nargs='+' or nargs='*').
         flag: The longest option string (e.g. "--outputs") for optional args, or None.
+        advanced: Whether the web form should hide this behind "Advanced
+            options". Never affects the CLI.
     """
 
     dest: str
@@ -33,6 +35,7 @@ class FieldSpec:
     is_positional: bool
     multiple: bool
     flag: str | None
+    advanced: bool = False
 
 
 def fields_from_parser(parser: argparse.ArgumentParser) -> list[FieldSpec]:
@@ -83,6 +86,7 @@ def fields_from_parser(parser: argparse.ArgumentParser) -> list[FieldSpec]:
                 is_positional=is_positional,
                 multiple=multiple,
                 flag=flag,
+                advanced=bool(getattr(action, "ui_advanced", False)),
             )
         )
 

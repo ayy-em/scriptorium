@@ -124,10 +124,6 @@ client-side loop issuing N sequential requests and concatenating the streams.
 Alpine component) and `webapp/_form.py` (`batch_mode_for`). Removing the dimmed
 state means deleting the `is_disabled` branch in `_drop_chooser.html`.
 
-## Photos.Remove_bg user friendliness
-
-Args of two types: simple (just select a model by choosing "fast" or "high quality") and advanced (full args like they currently are).
-
 # Settled
 
 Closed, and kept only for the reasoning — either delivered, or considered and
@@ -391,3 +387,26 @@ is server-side and therefore shared across every tier. That means a
 `favourites: list[str]` field, a POST on each toggle, and the favourites page
 could then filter server-side instead of client-side. Roughly an hour's work;
 deliberately not done up front because localStorage needed no backend at all.
+
+## Photos.Remove_bg user friendliness
+
+**Status:** resolved 2026-08-02.
+
+`--quality {fast,balanced,best}` is the whole basic form now, alongside source
+and output. The ten expert arguments — `--model` among them, as an override —
+sit behind a collapsed "Advanced options" disclosure.
+
+The mechanism is general, not a remove_bg special case: `ui_advanced=True` on
+`ScriptoriumParser.add_argument` marks any argument as expert-level, and
+`_script_form.html` splits the grid on it. Nothing changes for the CLI.
+
+`balanced` maps to `u2net`, the previous default, so a no-argument run behaves
+exactly as before. The presets deliberately skip `birefnet-general`: at ~950MB
+it is not something a one-click preset should start downloading. Someone who
+wants it can still ask for it by name.
+
+Original note follows.
+
+---
+
+Args of two types: simple (just select a model by choosing "fast" or "high quality") and advanced (full args like they currently are).

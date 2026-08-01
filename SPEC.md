@@ -760,7 +760,30 @@ parser.add_argument("--audio", action="store_true", ui_label="Audio only")
 
 `ScriptoriumParser` from `core.argparse` is the mandatory parser for all
 scripts. It is a drop-in replacement for the stdlib `ArgumentParser` that
-adds `ui_label` support and the startup arg banner (see Runner middleware).
+adds `ui_label` and `ui_advanced` support plus the startup arg banner (see
+Runner middleware).
+
+### Advanced arguments (`ui_advanced`)
+
+A script with a dozen knobs presents a wall of fields for a job that usually
+needs one decision. `ui_advanced=True` moves an argument behind a collapsed
+"Advanced options" disclosure in the web form:
+
+```python
+parser.add_argument("--alpha-matting", action="store_true", ui_advanced=True)
+```
+
+It changes nothing about the CLI — every argument stays equally visible in
+`--help`. The fields also stay in the DOM when collapsed, so their defaults
+still submit; only visibility changes.
+
+`photo.remove_bg` is the worked example. A `--quality` preset
+(`fast`/`balanced`/`best`) maps to a model, and the ten expert arguments —
+including `--model` itself, as an override — sit behind the disclosure.
+Prefer this shape when a script has one obvious decision and a long tail:
+a preset that covers the common case, with the full controls one click away.
+`balanced` resolves to the previous default, so no-argument behaviour is
+unchanged.
 
 ### Minimal example
 

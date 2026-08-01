@@ -1,3 +1,62 @@
+{% macro field_row(spec) %}
+<div class="field {{ 'field--wide' if spans_full_row(spec) else '' }} {{ 'field--required' if spec.required else 'field--optional' }}">
+
+  {% if spec.widget == "checkbox" %}
+  {# The label keeps --fs-body rather than the caption size the other fields
+     use: it sits beside a 16px box as the control's own clickable text, not
+     above it as a caption. It carries the same required/optional marker
+     though, or it reads as a different style rather than a deliberate one. #}
+  <label class="checkbox-row" for="f_{{ spec.dest }}">
+    <input type="checkbox" id="f_{{ spec.dest }}" name="{{ spec.dest }}" value="on"
+           x-model="values['{{ spec.dest }}']">
+    <span class="field-label field-label--inline">
+      {{ spec.label }}
+      {%- if spec.required %}<span class="req" aria-hidden="true">*</span><span class="sr-only"> (required)</span>
+      {%- else %}<span class="optional-tag">optional</span>{% endif %}
+    </span>
+  </label>
+
+  {% else %}
+  <label class="field-label" for="f_{{ spec.dest }}">
+    {{ spec.label }}
+    {%- if spec.required %}<span class="req" aria-hidden="true">*</span><span class="sr-only"> (required)</span>
+    {%- else %}<span class="optional-tag">optional</span>{% endif %}
+  </label>
+
+  {% if spec.widget == "select" %}
+  <select id="f_{{ spec.dest }}" name="{{ spec.dest }}" class="input"
+          x-model="values['{{ spec.dest }}']"{% if spec.required %} required{% endif %}>
+    {% if not spec.required %}<option value="">— optional —</option>{% endif %}
+    {% for c in spec.choices %}
+    <option value="{{ c }}">{{ c }}</option>
+    {% endfor %}
+  </select>
+
+  {% elif spec.widget == "textarea" %}
+  <textarea id="f_{{ spec.dest }}" name="{{ spec.dest }}" class="input input--mono"
+            x-model="values['{{ spec.dest }}']"{% if spec.required %} required{% endif %}></textarea>
+
+  {% elif spec.widget == "number" %}
+  <input type="number" id="f_{{ spec.dest }}" name="{{ spec.dest }}" class="input" step="any"
+         x-model="values['{{ spec.dest }}']"{% if spec.required %} required{% endif %}>
+
+  {% else %}
+  <input type="text" id="f_{{ spec.dest }}" name="{{ spec.dest }}" class="input"
+         x-model="values['{{ spec.dest }}']"
+         {% if spec.default %}placeholder="{{ spec.default }}"{% endif %}
+         {% if spec.required %}required{% endif %}>
+  {% endif %}
+  {% endif %}
+
+  {% if spec.help %}
+  <p class="hint">
+    {%- if spec.widget == 'textarea' %}One {{ spec.label[:-1] | lower if spec.label.endswith('s') else spec.label | lower }} per line. {% endif -%}
+    {{ spec.help }}
+  </p>
+  {% endif %}
+</div>
+{% endmacro %}
+
 {% from "_icons.html" import icon %}
 {# Auto-generated argument form.
 
@@ -114,66 +173,40 @@
   </div>
   {% endfor %}
 
-  {% if param_specs %}
+  {% set basic_specs = param_specs | rejectattr("advanced") | list %}
+  {% set advanced_specs = param_specs | selectattr("advanced") | list %}
+
+  {% if basic_specs %}
   <div class="field-grid">
-    {% for spec in param_specs %}
-    <div class="field {{ 'field--wide' if spans_full_row(spec) else '' }} {{ 'field--required' if spec.required else 'field--optional' }}">
+    {% for spec in basic_specs %}{{ field_row(spec) }}{% endfor %}
+  </div>
+  {% endif %}
 
-      {% if spec.widget == "checkbox" %}
-      {# The label keeps --fs-body rather than the caption size the other fields
-         use: it sits beside a 16px box as the control's own clickable text, not
-         above it as a caption. It carries the same required/optional marker
-         though, or it reads as a different style rather than a deliberate one. #}
-      <label class="checkbox-row" for="f_{{ spec.dest }}">
-        <input type="checkbox" id="f_{{ spec.dest }}" name="{{ spec.dest }}" value="on"
-               x-model="values['{{ spec.dest }}']">
-        <span class="field-label field-label--inline">
-          {{ spec.label }}
-          {%- if spec.required %}<span class="req" aria-hidden="true">*</span><span class="sr-only"> (required)</span>
-          {%- else %}<span class="optional-tag">optional</span>{% endif %}
-        </span>
-      </label>
+  {# Expert arguments, collapsed by default. Hidden rather than removed: the CLI
+     still exposes every one of them, and a field left at its default here must
+     still submit that default. #}
+  {% if advanced_specs %}
+  <div class="advanced-block" x-data="{ open: false }">
+    <button type="button"
+            class="advanced-toggle"
+            @click="open = !open"
+            :aria-expanded="open ? 'true' : 'false'"
+            aria-controls="advanced-fields">
+      <svg class="theme-chevron" :class="{ 'collapsed': !open }"
+           width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+        <path d="M2.5 4.5 6 8l3.5-3.5" stroke="currentColor" stroke-width="1.5"
+              stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <span>Advanced options</span>
+      <span class="advanced-count">{{ advanced_specs | length }}</span>
+    </button>
 
-      {% else %}
-      <label class="field-label" for="f_{{ spec.dest }}">
-        {{ spec.label }}
-        {%- if spec.required %}<span class="req" aria-hidden="true">*</span><span class="sr-only"> (required)</span>
-        {%- else %}<span class="optional-tag">optional</span>{% endif %}
-      </label>
-
-      {% if spec.widget == "select" %}
-      <select id="f_{{ spec.dest }}" name="{{ spec.dest }}" class="input"
-              x-model="values['{{ spec.dest }}']"{% if spec.required %} required{% endif %}>
-        {% if not spec.required %}<option value="">— optional —</option>{% endif %}
-        {% for c in spec.choices %}
-        <option value="{{ c }}">{{ c }}</option>
-        {% endfor %}
-      </select>
-
-      {% elif spec.widget == "textarea" %}
-      <textarea id="f_{{ spec.dest }}" name="{{ spec.dest }}" class="input input--mono"
-                x-model="values['{{ spec.dest }}']"{% if spec.required %} required{% endif %}></textarea>
-
-      {% elif spec.widget == "number" %}
-      <input type="number" id="f_{{ spec.dest }}" name="{{ spec.dest }}" class="input" step="any"
-             x-model="values['{{ spec.dest }}']"{% if spec.required %} required{% endif %}>
-
-      {% else %}
-      <input type="text" id="f_{{ spec.dest }}" name="{{ spec.dest }}" class="input"
-             x-model="values['{{ spec.dest }}']"
-             {% if spec.default %}placeholder="{{ spec.default }}"{% endif %}
-             {% if spec.required %}required{% endif %}>
-      {% endif %}
-      {% endif %}
-
-      {% if spec.help %}
-      <p class="hint">
-        {%- if spec.widget == 'textarea' %}One {{ spec.label[:-1] | lower if spec.label.endswith('s') else spec.label | lower }} per line. {% endif -%}
-        {{ spec.help }}
-      </p>
-      {% endif %}
+    <div class="field-grid advanced-fields" id="advanced-fields" x-show="open" x-cloak
+         x-transition:enter="advanced-enter"
+         x-transition:enter-start="advanced-from"
+         x-transition:enter-end="advanced-to">
+      {% for spec in advanced_specs %}{{ field_row(spec) }}{% endfor %}
     </div>
-    {% endfor %}
   </div>
   {% endif %}
 

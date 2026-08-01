@@ -11,12 +11,17 @@ sys.modules["rembg"] = mock_rembg
 
 from scripts.photo import remove_bg as remove_bg_mod  # noqa: E402
 from scripts.photo.remove_bg import (  # noqa: E402
+    DEFAULT_MODEL,
+    DEFAULT_QUALITY,
     MODELS,
+    QUALITY_PRESETS,
     get_parser,
     hex_to_rgba,
+    model_for,
     remove_bg,
     remove_bg_batch,
 )
+from webapp._form import fields_from_parser  # noqa: E402
 
 
 def _mock_image():
@@ -133,7 +138,10 @@ def test_get_parser_source_is_optional():
 def test_get_parser_defaults():
     args = get_parser().parse_args(["photo.jpg"])
 
-    assert args.model == "u2net"
+    # --model is now an override with no default of its own; the effective
+    # model comes from the quality preset and must still be u2net.
+    assert args.model is None
+    assert model_for(args.quality, args.model) == "u2net"
     assert args.alpha_matting is False
     assert args.alpha_matting_foreground_threshold == 240
     assert args.alpha_matting_background_threshold == 10
@@ -325,3 +333,47 @@ def test_module_constants():
     assert remove_bg_mod.DESCRIPTION
     assert "image" in remove_bg_mod.ACCEPTS
     assert callable(remove_bg_mod.run)
+
+
+class TestQualityPresets:
+    """A preset picker for the common case; --model stays for everyone else."""
+
+    def test_balanced_is_the_previous_default(self):
+        """The no-arguments result must not change under the new front end."""
+        assert model_for("balanced", None) == DEFAULT_MODEL
+
+    def test_each_preset_names_a_real_model(self):
+        for preset, model in QUALITY_PRESETS.items():
+            assert model in MODELS, f"{preset} -> {model}"
+
+    def test_explicit_model_overrides_the_preset(self):
+        assert model_for("fast", "birefnet-portrait") == "birefnet-portrait"
+
+    def test_unknown_preset_is_rejected(self):
+        with pytest.raises(ValueError, match="unknown quality preset"):
+            model_for("turbo", None)
+
+    def test_no_preset_pulls_the_950mb_model(self):
+        """A one-click preset should not start a ~1GB download."""
+        assert "birefnet-general" not in QUALITY_PRESETS.values()
+
+
+class TestAdvancedFields:
+    def test_only_the_preset_and_paths_are_in_the_basic_form(self):
+        specs = fields_from_parser(get_parser())
+        basic = {s.dest for s in specs if not s.advanced}
+        assert basic == {"source", "output", "quality"}
+
+    def test_model_and_matting_are_advanced(self):
+        specs = {s.dest: s for s in fields_from_parser(get_parser())}
+        for dest in ("model", "alpha_matting", "bgcolor", "only_mask"):
+            assert specs[dest].advanced is True, dest
+
+    def test_defaults_are_unchanged_when_nothing_is_touched(self):
+        """Advanced fields are hidden, not removed — their defaults still apply."""
+        args = get_parser().parse_args(["pic.png"])
+        assert args.quality == DEFAULT_QUALITY
+        assert args.model is None
+        assert model_for(args.quality, args.model) == DEFAULT_MODEL
+        assert args.alpha_matting is False
+        assert args.bgcolor is None

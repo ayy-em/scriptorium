@@ -1633,6 +1633,48 @@ input[type=checkbox] {
 .field--file { margin-bottom: 1.25rem; }
 .field--wide { grid-column: 1 / -1; }
 
+/* Advanced options ---------------------------------------------------------
+   Expert arguments, collapsed by default. The fields stay in the DOM so their
+   defaults still submit; only their visibility changes. */
+.advanced-block { margin-top: 1.25rem; }
+
+.advanced-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.5rem 0;
+  font-size: var(--fs-helper);
+  font-weight: 600;
+  color: var(--text-muted);
+  border-top: 1px solid var(--border);
+  transition: color var(--dur-fast) ease;
+}
+
+.advanced-toggle:hover { color: var(--text); }
+.advanced-toggle:focus-visible { outline: none; box-shadow: var(--focus-ring); border-radius: var(--r-sm); }
+
+.advanced-count {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: var(--fs-badge);
+  color: var(--text-faint);
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.05rem 0.35rem;
+}
+
+.advanced-fields { margin-top: 0.9rem; }
+
+.advanced-enter { transition: opacity var(--dur) var(--ease-out), transform var(--dur) var(--ease-out); }
+.advanced-from  { opacity: 0; transform: translateY(-4px); }
+.advanced-to    { opacity: 1; transform: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .advanced-from { transform: none; }
+}
+
 .field-label {
   display: block;
   font-size: var(--fs-helper);

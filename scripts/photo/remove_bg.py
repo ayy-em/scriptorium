@@ -33,6 +33,39 @@ MODELS = [
 
 DEFAULT_MODEL = "u2net"
 
+#: Plain-language presets, so the common case is one choice rather than ten.
+#: ``balanced`` is DEFAULT_MODEL, which keeps the no-arguments behaviour exactly
+#: as it was. Every model downloads its weights on first use, so the presets
+#: deliberately avoid birefnet-general (~950MB) — that stays an explicit
+#: ``--model`` choice for someone who has decided to wait for it.
+QUALITY_PRESETS = {
+    "fast": "u2netp",
+    "balanced": DEFAULT_MODEL,
+    "best": "isnet-general-use",
+}
+
+DEFAULT_QUALITY = "balanced"
+
+
+def model_for(quality: str, model: str | None) -> str:
+    """Resolve the segmentation model from the preset and any explicit override.
+
+    Args:
+        quality: A key of ``QUALITY_PRESETS``.
+        model: An explicit ``--model`` value, or None to use the preset.
+
+    Returns:
+        The model name to load.
+
+    Raises:
+        ValueError: If *quality* is not a known preset.
+    """
+    if model:
+        return model
+    if quality not in QUALITY_PRESETS:
+        raise ValueError(f"unknown quality preset: {quality!r} (expected one of {', '.join(QUALITY_PRESETS)})")
+    return QUALITY_PRESETS[quality]
+
 
 def hex_to_rgba(value: str) -> tuple[int, int, int, int]:
     """Parse a hex color string into an RGBA tuple for rembg's bgcolor option.
@@ -215,6 +248,7 @@ examples:
   uv run main.py photo.remove_bg
   uv run main.py photo.remove_bg portrait.jpg
   uv run main.py photo.remove_bg photos/ -o cleaned/
+  uv run main.py photo.remove_bg portrait.jpg --quality best
   uv run main.py photo.remove_bg portrait.jpg --model birefnet-portrait --alpha-matting
   uv run main.py photo.remove_bg product.png --bgcolor "#ffffff"
 """
@@ -242,16 +276,28 @@ def get_parser() -> argparse.ArgumentParser:
         help="Output file or directory (default: outputs/photo/)",
     )
     parser.add_argument(
+        "--quality",
+        default=DEFAULT_QUALITY,
+        choices=list(QUALITY_PRESETS),
+        ui_label="Quality",
+        help=(
+            "How hard to work at it: fast (u2netp, small and quick), balanced "
+            f"({DEFAULT_MODEL}, the default), or best (isnet-general-use, slower and "
+            "sharper around edges). Ignored when --model is given."
+        ),
+    )
+    parser.add_argument(
         "--model",
-        default=DEFAULT_MODEL,
+        default=None,
         choices=MODELS,
         ui_label="AI model",
+        ui_advanced=True,
         help=(
-            "Segmentation model: u2net is the general-purpose default; u2netp/silueta are "
-            "faster and lighter; u2net_human_seg and birefnet-portrait specialize in people; "
-            "isnet-anime for illustrations; birefnet-general and bria-rmbg give the highest "
-            "quality but are slower. Every model downloads its weights to ~/.u2net/ the "
-            "first time it is used, including the default — 170MB for most, ~950MB for "
+            "Pick the segmentation model directly, overriding --quality. "
+            "u2net_human_seg and birefnet-portrait specialize in people; isnet-anime for "
+            "illustrations; silueta is light; birefnet-general and bria-rmbg give the "
+            "highest quality but are slow. Every model downloads its weights to ~/.u2net/ "
+            "the first time it is used — around 170MB for most, ~950MB for "
             "birefnet-general."
         ),
     )
@@ -263,6 +309,7 @@ def get_parser() -> argparse.ArgumentParser:
             "Refine edges with alpha matting — better results for soft boundaries like hair, "
             "fur or foliage, at the cost of slower processing."
         ),
+        ui_advanced=True,
     )
     parser.add_argument(
         "--alpha-matting-foreground-threshold",
@@ -274,6 +321,7 @@ def get_parser() -> argparse.ArgumentParser:
             "Only used with alpha matting. Confidence (0-255) above which a pixel is kept as "
             "solid foreground; lower values keep more of the edge region."
         ),
+        ui_advanced=True,
     )
     parser.add_argument(
         "--alpha-matting-background-threshold",
@@ -285,6 +333,7 @@ def get_parser() -> argparse.ArgumentParser:
             "Only used with alpha matting. Confidence (0-255) below which a pixel is fully "
             "removed as background; higher values remove more of the edge region."
         ),
+        ui_advanced=True,
     )
     parser.add_argument(
         "--alpha-matting-erode-size",
@@ -296,6 +345,7 @@ def get_parser() -> argparse.ArgumentParser:
             "Only used with alpha matting. Width in pixels of the uncertain band around edges "
             "that gets smoothly blended; larger values give softer transitions."
         ),
+        ui_advanced=True,
     )
     parser.add_argument(
         "--only-mask",
@@ -305,12 +355,14 @@ def get_parser() -> argparse.ArgumentParser:
             "Output the black-and-white segmentation mask (white = kept subject, "
             "black = removed background) instead of the cutout image."
         ),
+        ui_advanced=True,
     )
     parser.add_argument(
         "--post-process-mask",
         action="store_true",
         ui_label="Post-process mask",
         help="Clean up the segmentation mask, reducing noise and jagged or fuzzy edges.",
+        ui_advanced=True,
     )
     parser.add_argument(
         "--bgcolor",
@@ -322,6 +374,7 @@ def get_parser() -> argparse.ArgumentParser:
             "Fill the removed background with a solid color instead of transparency, "
             "e.g. #ffffff for white. Accepts #rgb, #rrggbb or #rrggbbaa."
         ),
+        ui_advanced=True,
     )
     return parser
 
@@ -331,7 +384,7 @@ def run() -> None:
     args = get_parser().parse_args()
 
     removal_options = {
-        "model": args.model,
+        "model": model_for(args.quality, args.model),
         "alpha_matting": args.alpha_matting,
         "alpha_matting_foreground_threshold": args.alpha_matting_foreground_threshold,
         "alpha_matting_background_threshold": args.alpha_matting_background_threshold,
