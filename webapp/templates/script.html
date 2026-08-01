@@ -14,6 +14,7 @@
        theme: {{ theme | tojson }},
        runUrl: {{ ("/scripts/" ~ key_path ~ "/run") | tojson }},
        previewUrl: {{ ("/api/preview-command/" ~ key_path) | tojson }},
+       recentUrl: {{ ("/api/recent-outputs/" ~ key_path) | tojson }},
        fileDest: {{ (file_spec.dest if file_spec else None) | tojson }},
        fileWidget: {{ (file_spec.widget if file_spec else None) | tojson }},
        requiredDests: {{ required_dests | tojson }},
@@ -131,6 +132,12 @@
       cancelling: false,
       autoScroll: true,
       terminalOpen: true,
+
+      /* Files this run wrote, and files earlier runs of this script wrote.
+         Both come from the server, which only reports paths that still
+         exist inside the outputs tree. */
+      runOutputs: [],
+      recentOutputs: [],
       _es: null,
       _t0: 0,
       _timer: null,
@@ -151,6 +158,23 @@
         /* Keep the CLI preview and the right-hand summary in step with the
            form without a request per keystroke. */
         this.$watch('values', () => { if (this.previewOpen) this._schedulePreview(); });
+        this._loadRecentOutputs();
+      },
+
+      async _loadRecentOutputs() {
+        try {
+          var res = await fetch(this.recentUrl);
+          var data = await res.json();
+          this.recentOutputs = Array.isArray(data.outputs) ? data.outputs : [];
+        } catch (e) { this.recentOutputs = []; }
+      },
+
+      revealOutput(path) {
+        fetch('/api/reveal-output', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ path: path }),
+        }).catch(() => { /* the folder button below still works */ });
       },
 
       /* ── File input ───────────────────────────────────────────────────── */
@@ -390,8 +414,11 @@
           /* The server decides: a killed process exits non-zero but is a
              cancellation, not a failure. */
           this.state = info.status || (info.exit_code === 0 ? 'success' : 'error');
+          this.runOutputs = Array.isArray(info.outputs) ? info.outputs : [];
           this.cancelling = false;
           this._stop();
+          /* Fold this run's files into the recent list for the next visit. */
+          if (this.runOutputs.length) this._loadRecentOutputs();
         });
 
         /* Fires on network loss and on normal stream close after 'done'. */

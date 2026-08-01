@@ -24,6 +24,7 @@ from core.config import load as load_config
 from core.config import save as save_config
 from core.env import load_env
 from core.invocation import webapp_spawn_env
+from core.outputs import find_reported_outputs
 from core.paths import (
     FROZEN,
     drop_session_dir,
@@ -471,6 +472,59 @@ async def post_preferences(request: Request) -> JSONResponse:
     return JSONResponse({"ok": True, "favourites": cfg.favourites, "sort_order": cfg.sort_order})
 
 
+@app.post("/api/reveal-output")
+async def reveal_output(request: Request) -> JSONResponse:
+    """Open a produced file's folder in the OS file manager.
+
+    The path arrives from the client, so it is re-checked against the outputs
+    root here rather than trusted. Detection ran server-side and only ever
+    yields paths inside that tree, but this endpoint is reachable directly.
+
+    Returns:
+        JSON ``{"ok": true}``, or 400 for anything outside the outputs root.
+    """
+    body = await request.json()
+    raw = str(body.get("path", ""))
+    root = outputs_root().resolve()
+    try:
+        target = Path(raw).resolve()
+        target.relative_to(root)
+    except OSError, ValueError:
+        raise HTTPException(status_code=400, detail="Path is not inside the outputs folder") from None
+    if not target.is_file():
+        raise HTTPException(status_code=404, detail="File no longer exists")
+    _open_in_file_manager(target.parent)
+    return JSONResponse({"ok": True})
+
+
+@app.get("/api/recent-outputs/{theme}/{script_name}")
+async def recent_outputs(theme: str, script_name: str, limit: int = 5) -> JSONResponse:
+    """List files recent runs of one script produced and that still exist.
+
+    Args:
+        theme: Script theme slug.
+        script_name: Script module name.
+        limit: Most files to return.
+
+    Returns:
+        JSON ``{"outputs": [{path, name, when}]}``, newest first.
+    """
+    key = f"{theme}.{script_name}"
+    seen: dict[str, dict] = {}
+    for record in history.load():
+        if record.key != key:
+            continue
+        for path in record.outputs:
+            if path in seen:
+                continue
+            if not Path(path).is_file():
+                continue  # cleaned up since the run
+            seen[path] = {"path": path, "name": Path(path).name, "when": record.started_at}
+            if len(seen) >= limit:
+                return JSONResponse({"outputs": list(seen.values())})
+    return JSONResponse({"outputs": list(seen.values())})
+
+
 def _open_in_file_manager(folder: Path) -> None:
     """Reveal a directory in the platform's file manager.
 
@@ -812,9 +866,15 @@ async def _stream_script(handle: _runs.RunHandle):
         )
         handle.process = proc
 
+        # Collected unescaped and separately from the stream: output detection
+        # needs the raw text, and once a line has been HTML-escaped a path with
+        # an ampersand in it is no longer a path.
+        stdout_lines: list[str] = []
+
         async for line in proc.stdout:  # type: ignore[union-attr]
-            text = html.escape(line.decode(errors="replace").rstrip())
-            yield f"data: {text}\n\n".encode()
+            raw = line.decode(errors="replace").rstrip()
+            stdout_lines.append(raw)
+            yield f"data: {html.escape(raw)}\n\n".encode()
 
         async for line in proc.stderr:  # type: ignore[union-attr]
             text = html.escape(line.decode(errors="replace").rstrip())
@@ -824,6 +884,11 @@ async def _stream_script(handle: _runs.RunHandle):
         rc = proc.returncode
         elapsed = round(time.monotonic() - t0, 1)
         status = _status_for(handle, rc)
+
+        # Only a clean run is credited with outputs. A cancelled transcode
+        # leaves a truncated file behind, and offering that as a result is
+        # worse than saying nothing.
+        detected = [str(p) for p in find_reported_outputs(stdout_lines)] if status == history.SUCCESS else []
 
         if status == history.CANCELLED:
             yield b"data: <span class='exit-err'>cancelled</span>\n\n"
@@ -841,6 +906,7 @@ async def _stream_script(handle: _runs.RunHandle):
                 exit_code=rc,
                 argv=handle.argv,
                 params=handle.params,
+                outputs=detected,
             )
         )
 
@@ -851,6 +917,7 @@ async def _stream_script(handle: _runs.RunHandle):
                 "status": status,
                 "cancelled": status == history.CANCELLED,
                 "run_id": handle.run_id,
+                "outputs": [{"path": p, "name": Path(p).name} for p in detected],
             }
         )
         yield f"event: done\ndata: {done_payload}\n\n".encode()

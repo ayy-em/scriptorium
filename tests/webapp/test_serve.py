@@ -6,7 +6,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from fastapi.testclient import TestClient
 import pytest
 
-from core.paths import read_version
+from core import history
+from core.paths import outputs_root, read_version
 from core.registry import discover, discover_themes
 from webapp.app import _parse_version, _read_git_hash, _themes_meta_json, _themes_search_json, app
 
@@ -764,3 +765,66 @@ class TestPreferencesEndpoint:
         assert body["favourites"] == ["av.trim"]
         assert body["sort_order"] == "count"
         assert body["theme"] == "dark"
+
+
+class TestOutputEndpoints:
+    """Recent outputs come from history; reveal re-checks containment."""
+
+    @pytest.fixture()
+    def history_with_outputs(self, tmp_path, monkeypatch):
+        produced = outputs_root() / "formats" / "detected-fixture.webp"
+        produced.parent.mkdir(parents=True, exist_ok=True)
+        produced.write_bytes(b"x")
+        monkeypatch.setattr("core.history._HISTORY_PATH", tmp_path / "history.json")
+        history.append(
+            history.RunRecord(
+                run_id="r1",
+                key="formats.convert_image",
+                status="success",
+                started_at="2026-08-02T00:00:00",
+                elapsed=1.0,
+                exit_code=0,
+                outputs=[str(produced)],
+            )
+        )
+        yield produced
+        produced.unlink(missing_ok=True)
+
+    def test_recent_outputs_lists_files_that_still_exist(self, history_with_outputs):
+        body = client.get("/api/recent-outputs/formats/convert_image").json()
+        assert [o["name"] for o in body["outputs"]] == ["detected-fixture.webp"]
+
+    def test_recent_outputs_skips_deleted_files(self, history_with_outputs):
+        history_with_outputs.unlink()
+        assert client.get("/api/recent-outputs/formats/convert_image").json()["outputs"] == []
+
+    def test_recent_outputs_are_scoped_to_one_script(self, history_with_outputs):
+        assert client.get("/api/recent-outputs/av/trim").json()["outputs"] == []
+
+    def test_reveal_accepts_a_file_inside_the_outputs_root(self, history_with_outputs):
+        with patch("webapp.app._open_in_file_manager") as opener:
+            res = client.post("/api/reveal-output", json={"path": str(history_with_outputs)})
+        assert res.status_code == 200
+        opener.assert_called_once()
+
+    def test_reveal_rejects_a_path_outside_the_outputs_root(self, tmp_path):
+        outsider = tmp_path / "elsewhere.txt"
+        outsider.write_text("x")
+        with patch("webapp.app._open_in_file_manager") as opener:
+            res = client.post("/api/reveal-output", json={"path": str(outsider)})
+        assert res.status_code == 400
+        opener.assert_not_called()
+
+    def test_reveal_rejects_traversal_out_of_the_root(self):
+        escape = outputs_root() / ".." / ".." / "etc" / "passwd"
+        with patch("webapp.app._open_in_file_manager") as opener:
+            res = client.post("/api/reveal-output", json={"path": str(escape)})
+        assert res.status_code == 400
+        opener.assert_not_called()
+
+    def test_reveal_404s_for_a_vanished_file(self):
+        gone = outputs_root() / "formats" / "not-there-at-all.webp"
+        with patch("webapp.app._open_in_file_manager") as opener:
+            res = client.post("/api/reveal-output", json={"path": str(gone)})
+        assert res.status_code == 404
+        opener.assert_not_called()

@@ -1633,6 +1633,51 @@ input[type=checkbox] {
 .field--file { margin-bottom: 1.25rem; }
 .field--wide { grid-column: 1 / -1; }
 
+/* Detected output files ---------------------------------------------------- */
+.output-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0.6rem 0 0.9rem;
+}
+
+.output-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.45rem;
+  border-radius: var(--r-sm);
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+}
+
+.output-name {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: var(--fs-code);
+  color: var(--text);
+  /* Filenames are timestamped, so the tail is the distinguishing part. */
+  direction: rtl;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.output-reveal {
+  display: flex;
+  flex-shrink: 0;
+  padding: 0.2rem;
+  border-radius: 4px;
+  color: var(--text-faint);
+  transition: color var(--dur-fast) ease, background-color var(--dur-fast) ease;
+}
+
+.output-reveal:hover { color: var(--accent-text); background: var(--accent-bg); }
+.output-reveal:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+
 /* Advanced options ---------------------------------------------------------
    Expert arguments, collapsed by default. The fields stay in the DOM so their
    defaults still submit; only their visibility changes. */

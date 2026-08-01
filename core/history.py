@@ -40,6 +40,10 @@ class RunRecord:
         exit_code: Process exit code, or None if it never produced one.
         started_at: ISO 8601 local timestamp of when the run began.
         elapsed: Wall-clock seconds the run took.
+        outputs: Files the run was detected to have written, as strings.
+            Best-effort — derived from what the script printed, so a script
+            that prints nothing records nothing. See
+            ``core.outputs.find_reported_outputs``.
     """
 
     run_id: str
@@ -50,6 +54,7 @@ class RunRecord:
     exit_code: int | None = None
     argv: list[str] = field(default_factory=list)
     params: dict[str, str] = field(default_factory=dict)
+    outputs: list[str] = field(default_factory=list)
 
     @property
     def theme(self) -> str:
@@ -84,6 +89,7 @@ def _from_raw(raw: dict) -> RunRecord | None:
             exit_code=None if raw.get("exit_code") is None else int(raw["exit_code"]),
             argv=[str(a) for a in raw.get("argv", [])],
             params={str(k): str(v) for k, v in (raw.get("params") or {}).items()},
+            outputs=[str(o) for o in raw.get("outputs", [])],
         )
     except KeyError, TypeError, ValueError:
         return None

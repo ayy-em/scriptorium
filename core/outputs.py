@@ -1,10 +1,11 @@
 """Standardized output path resolution for all scripts."""
 
+from collections.abc import Iterable
 from datetime import datetime
 from pathlib import Path
 
 from core.invocation import is_webapp_run
-from core.paths import outputs_dir
+from core.paths import outputs_dir, outputs_root
 
 
 def _default_output_dir(theme: str) -> Path:
@@ -54,6 +55,67 @@ def deduplicate(path: Path) -> Path:
         if not candidate.exists():
             return candidate
     raise FileExistsError(f"all 999 suffixed variants of {path.name} already exist")
+
+
+def find_reported_outputs(lines: Iterable[str], root: Path | None = None) -> list[Path]:
+    """Pick out the files a run wrote, by reading what it printed.
+
+    Scripts announce their results inconsistently — ``print(out)`` in most,
+    ``print(f"wrote {result}")`` in others, nothing at all in a few. Rather
+    than a convention every one of them has to remember forever, this reads
+    the output that already exists and keeps whatever turns out to be a real
+    file inside the outputs tree.
+
+    Two candidates are tried per line: the whole line, which covers the bare
+    ``print(path)`` case including paths containing spaces, and each
+    whitespace-separated token, which covers a path embedded in a sentence.
+    Anything outside *root* is ignored, so a script echoing its input does not
+    get mistaken for having written it.
+
+    Args:
+        lines: Raw stdout lines from the run, unescaped.
+        root: Directory results must live under; defaults to ``outputs_root()``.
+
+    Returns:
+        Existing output files, in the order they were first mentioned.
+    """
+    root = (root or outputs_root()).resolve()
+    found: dict[Path, None] = {}
+
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            continue
+        for candidate in (stripped, *stripped.split()):
+            path = _output_under(candidate, root)
+            if path is not None:
+                found.setdefault(path, None)
+                break
+
+    return list(found)
+
+
+def _output_under(candidate: str, root: Path) -> Path | None:
+    """Return *candidate* as a resolved path if it is a file inside *root*.
+
+    Args:
+        candidate: A string that may or may not be a path.
+        root: Already-resolved directory the path must be inside.
+
+    Returns:
+        The resolved path, or None if it is not a file under *root*.
+    """
+    text = candidate.strip().strip("'\"")
+    if not text:
+        return None
+    try:
+        path = Path(text).resolve()
+        path.relative_to(root)
+        if path.is_file():
+            return path
+    except OSError, ValueError:
+        return None
+    return None
 
 
 def resolve_output(

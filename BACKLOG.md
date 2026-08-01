@@ -72,25 +72,6 @@ and deciding what a drop on a detail page should even do — route back to the
 wheel on `/`, or prefill the current script's file input if the type matches
 (the more useful answer, and the one that needs `ACCEPTS` checked client-side).
 
-## Recent outputs panel
-
-**Status:** deferred (2026-07-28), during the UI prettification pass.
-
-A "last few outputs, with timestamps and an open action" panel for the script
-page's context column. Run history now exists (`core.history`), so the only
-missing half is output detection.
-
-**Output detection is the harder half.** Scripts report what they wrote
-inconsistently — `av.filmstrip` does `print(out)`, `gif.make_gif` does
-`print(f"wrote {result}")`, others say nothing. The script page currently
-sidesteps this: on success it offers "Open outputs folder" and states plainly
-that individual files are not detected. Options, cheapest first:
-
-1. Server-side heuristic — scan stdout for paths under `outputs_root()` and
-   `stat()` the ones that exist. No script changes, ~90% accurate.
-2. A convention, e.g. a final `::output::<path>` line the runner middleware
-   understands. Accurate, but touches all 27 scripts.
-
 ## Per-file batch fan-out
 
 **Status:** deferred (2026-07-27), during the Drop-to-Discover wheel revamp.
@@ -410,3 +391,52 @@ Original note follows.
 ---
 
 Args of two types: simple (just select a model by choosing "fast" or "high quality") and advanced (full args like they currently are).
+
+## Recent outputs panel
+
+**Status:** resolved 2026-08-02 with option 1, the server-side heuristic.
+
+`core.outputs.find_reported_outputs` reads a run's stdout and keeps whatever
+turns out to be a real file inside the outputs root. Two candidates per line:
+the whole line, which covers `print(path)` including paths with spaces in them,
+and each whitespace-separated token, which covers a path inside a sentence.
+Anything outside the root is dropped, so a script echoing its input is not
+credited with having written it.
+
+Results are stored on `RunRecord.outputs`, so the script page shows both what
+the run just produced and what earlier runs of the same script left behind.
+Files deleted since the run are filtered out on read.
+
+Notes for whoever picks this up next:
+
+- Only successful runs are credited. A cancelled transcode leaves a truncated
+  file, and offering that as a result is worse than showing nothing.
+- Detection reads raw stdout, collected before HTML escaping — a path with an
+  ampersand in it stops being a path once escaped.
+- `/api/reveal-output` re-checks containment against the outputs root. Detection
+  only ever produces in-tree paths, but the endpoint is reachable directly.
+
+Option 2, the `::output::` convention, was not built and is not needed: the
+heuristic covers every script that prints anything, and one that prints nothing
+simply reports nothing rather than being wrong.
+
+Original write-up follows.
+
+---
+
+**Status:** deferred (2026-07-28), during the UI prettification pass.
+
+A "last few outputs, with timestamps and an open action" panel for the script
+page's context column. Run history now exists (`core.history`), so the only
+missing half is output detection.
+
+**Output detection is the harder half.** Scripts report what they wrote
+inconsistently — `av.filmstrip` does `print(out)`, `gif.make_gif` does
+`print(f"wrote {result}")`, others say nothing. The script page currently
+sidesteps this: on success it offers "Open outputs folder" and states plainly
+that individual files are not detected. Options, cheapest first:
+
+1. Server-side heuristic — scan stdout for paths under `outputs_root()` and
+   `stat()` the ones that exist. No script changes, ~90% accurate.
+2. A convention, e.g. a final `::output::<path>` line the runner middleware
+   understands. Accurate, but touches all 27 scripts.

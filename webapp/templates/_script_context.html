@@ -61,13 +61,46 @@
   <section class="context-card" x-show="state === 'success'" x-cloak>
     <h2 class="context-title">{{ icon('check-circle', 14) }} Finished</h2>
     <p class="context-body">
-      Run completed in <span x-text="elapsedLabel()"></span>. Scriptorium does not yet
-      detect individual output files — open the outputs folder to see what was written.
+      Run completed in <span x-text="elapsedLabel()"></span>.
+      <span x-show="!runOutputs.length">
+        No output files were detected — scripts that do not print what they wrote
+        cannot be tracked, so open the folder to see what was written.
+      </span>
     </p>
+
+    <ul class="output-list" x-show="runOutputs.length" x-cloak>
+      <template x-for="f in runOutputs" :key="f.path">
+        <li class="output-row">
+          <span class="output-name" x-text="f.name" :title="f.path"></span>
+          <button type="button" class="output-reveal" @click="revealOutput(f.path)"
+                  :aria-label="'Show ' + f.name + ' in folder'">
+            {{ icon('folder-open', 13) }}
+          </button>
+        </li>
+      </template>
+    </ul>
+
     <button type="button" class="btn btn--secondary btn--full"
             @click="fetch('/api/open-outputs', { method: 'POST' })">
       {{ icon('folder-open', 14) }}
       <span>Open outputs folder</span>
     </button>
+  </section>
+
+  {# Earlier results for this script, so the page is useful before you run it.
+     Populated on load; anything since deleted is filtered out server-side. #}
+  <section class="context-card" x-show="state !== 'success' && recentOutputs.length" x-cloak>
+    <h2 class="context-title">{{ icon('clock', 14) }} Recent outputs</h2>
+    <ul class="output-list">
+      <template x-for="f in recentOutputs" :key="f.path">
+        <li class="output-row">
+          <span class="output-name" x-text="f.name" :title="f.path"></span>
+          <button type="button" class="output-reveal" @click="revealOutput(f.path)"
+                  :aria-label="'Show ' + f.name + ' in folder'">
+            {{ icon('folder-open', 13) }}
+          </button>
+        </li>
+      </template>
+    </ul>
   </section>
 </aside>
