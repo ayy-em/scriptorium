@@ -49,37 +49,12 @@ Three things to decide together rather than one at a time:
    stderr and is not shown until the run ends). Options: ship the default model,
    pre-fetch on first launch with visible progress, or confirm before download.
 
-Also fix while here: `remove_bg.py:253` claims "Non-default models download
-weights on first use". The default `u2net` downloads too — nothing pre-seeds the
-cache. And README.md's build table says macOS prerequisites are "None (tools are
-auto-installed)", which is true of the *build* (`build.sh` installs uv, Homebrew,
-ffmpeg) but not of the shipped `.app` on someone else's Mac; SPEC.md lists build
-prerequisites only. Runtime prerequisites are documented nowhere.
-
-## Favourites are per browser profile
-
-**Status:** known limitation, accepted 2026-07-28 when favourites shipped.
-
-Favourites and sort order live in `localStorage`, so they belong to whichever
-browser profile is running the UI. The packaged app has three launch tiers and
-they do not share storage:
-
-| Tier | Storage |
-|---|---|
-| pywebview (WebView2 / WebKit) | its own profile |
-| Chromium `--app` | `~/scriptorium/.browser-profile` |
-| default-browser fallback | the user's normal browser profile |
-
-So a user who normally opens the desktop app but occasionally hits
-`localhost:8000` in Chrome will see two different sets of favourites. Clearing
-browser data also wipes them.
-
-**The fix if this becomes annoying:** move them into `UserConfig`
-(`core/config.py`) alongside `theme`, `outputs_dir` and `close_behavior`, which
-is server-side and therefore shared across every tier. That means a
-`favourites: list[str]` field, a POST on each toggle, and the favourites page
-could then filter server-side instead of client-side. Roughly an hour's work;
-deliberately not done up front because localStorage needed no backend at all.
+**Done 2026-08-01, ahead of the design pass:** the two documentation lies are
+fixed. `remove_bg`'s `--model` help said only non-default models download
+weights; every model does, including `u2net`. And README.md's build table was
+headed "Prerequisites" without saying *to build* — it now has a "What the built
+app needs to run" table covering all four rows above. That is honest docs, not
+the uniform detection mechanism, which is still the open part of this entry.
 
 ## Global drop overlay on script detail pages
 
@@ -369,3 +344,50 @@ tier-1 icon before falling through (`_stop_tray`), guarded by
    pythonnet.
 
 Option 2 is the cheapest and closest to how the app actually behaves today.
+
+## Favourites are per browser profile
+
+**Status:** resolved 2026-08-01. Favourites and sort order moved into
+`UserConfig`, so all three launch tiers share one set.
+
+`base.html` seeds `window.__PREFS__` from a per-render Jinja global rather than
+fetching, so the first paint already has the right stars, and each toggle POSTs
+to `/api/preferences`. Anything a previous version left in `localStorage` is
+lifted once on load and then removed — only when the server has nothing yet, so
+it cannot resurrect favourites the user has since unstarred.
+
+Two things worth knowing for the next person in this file. `post_settings`
+rebuilds `UserConfig` from the request body, so it now explicitly carries
+favourites and sort order over; without that, saving the settings modal wiped
+them (`test_saving_settings_does_not_wipe_favourites`). And `config.json` is
+user-editable, so `clean_favourites`/`clean_sort_order` validate on the way in.
+
+`theme` still also lives in `localStorage` — the inline anti-flash script runs
+before Alpine and cannot wait for a fetch. That duplication is deliberate.
+
+Original write-up follows.
+
+---
+
+**Status:** known limitation, accepted 2026-07-28 when favourites shipped.
+
+Favourites and sort order live in `localStorage`, so they belong to whichever
+browser profile is running the UI. The packaged app has three launch tiers and
+they do not share storage:
+
+| Tier | Storage |
+|---|---|
+| pywebview (WebView2 / WebKit) | its own profile |
+| Chromium `--app` | `~/scriptorium/.browser-profile` |
+| default-browser fallback | the user's normal browser profile |
+
+So a user who normally opens the desktop app but occasionally hits
+`localhost:8000` in Chrome will see two different sets of favourites. Clearing
+browser data also wipes them.
+
+**The fix if this becomes annoying:** move them into `UserConfig`
+(`core/config.py`) alongside `theme`, `outputs_dir` and `close_behavior`, which
+is server-side and therefore shared across every tier. That means a
+`favourites: list[str]` field, a POST on each toggle, and the favourites page
+could then filter server-side instead of client-side. Roughly an hour's work;
+deliberately not done up front because localStorage needed no backend at all.

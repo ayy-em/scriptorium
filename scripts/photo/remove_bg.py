@@ -250,7 +250,9 @@ def get_parser() -> argparse.ArgumentParser:
             "Segmentation model: u2net is the general-purpose default; u2netp/silueta are "
             "faster and lighter; u2net_human_seg and birefnet-portrait specialize in people; "
             "isnet-anime for illustrations; birefnet-general and bria-rmbg give the highest "
-            "quality but are slower. Non-default models download weights on first use."
+            "quality but are slower. Every model downloads its weights to ~/.u2net/ the "
+            "first time it is used, including the default — 170MB for most, ~950MB for "
+            "birefnet-general."
         ),
     )
     parser.add_argument(

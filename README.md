@@ -109,11 +109,29 @@ build
 The script auto-detects your OS, installs missing tools (uv, Homebrew, ffmpeg),
 and runs the full build pipeline. No manual setup required.
 
-| Platform | Output | Prerequisites |
+| Platform | Output | Prerequisites to *build* |
 |----------|--------|---------------|
 | macOS | `dist/Scriptorium.app` | None (tools are auto-installed) |
 | Windows | `dist/ScriptoriumSetup.exe` | Git Bash, [Inno Setup 6+](https://jrsoftware.org/issetup.php) on PATH |
 | Linux | `dist/scriptorium-linux-x86_64.tar.gz` | None (tools are auto-installed) |
+
+### What the built app needs to run
+
+The table above covers building. A packaged app on someone *else's* machine is
+a different question — the bundle carries its Python dependencies but not the
+heavy native ones, and every script still works without them except the ones
+listed here.
+
+| Needed for | Requirement | Without it |
+|---|---|---|
+| `av.*`, `gif.*`, `formats.convert_{audio,video}` | **ffmpeg** on `PATH` | Detected: a banner appears in the sidebar with install instructions |
+| `photo.remove_bg` | ~170MB of model weights (~950MB for `birefnet-general`) | Downloaded to `~/.u2net/` on first use of each model, with no progress shown until the run ends |
+| `formats.convert_docs`, Telegram PDF reports | **pango, cairo, glib** — Homebrew on macOS | PDF output fails; everything else is unaffected |
+| `speech.transcribe` | `OPENAI_API_KEY` in a `.env` file | The script errors out |
+
+Windows additionally needs **Edge or Chrome** for the desktop window; the
+installer will not check for it. See BACKLOG.md for the plan to make all of
+this detected uniformly rather than four separate failure modes.
 
 ### macOS app
 

@@ -19,7 +19,7 @@ from fastapi.templating import Jinja2Templates
 
 from core import history
 from core.categories import CATEGORY_EXTS, categorize
-from core.config import UserConfig
+from core.config import UserConfig, clean_favourites, clean_sort_order
 from core.config import load as load_config
 from core.config import save as save_config
 from core.env import load_env
@@ -68,6 +68,13 @@ templates = Jinja2Templates(directory=str(templates_dir()))
 templates.env.globals["is_frozen"] = FROZEN
 templates.env.globals["has_ffmpeg"] = has_ffmpeg()
 templates.env.globals["accepts_directory"] = accepts_directory
+
+# A callable, not a value: the globals below are evaluated once at import, but
+# favourites change on every click. base.html calls this per render so the
+# starred state is correct in the first paint rather than after a fetch.
+templates.env.globals["user_preferences_json"] = lambda: json.dumps(
+    {"favourites": (_c := load_config()).favourites, "sort_order": _c.sort_order}
+)
 templates.env.globals["ffmpeg_install_hint"] = (
     "Install via Homebrew: brew install ffmpeg"
     if sys.platform == "darwin"
@@ -170,8 +177,8 @@ def _browser_context(favourites_only: bool) -> dict:
     """Build the template context for the script browser.
 
     Shared by ``/`` and ``/favourites``: both render the same list, and which
-    rows are shown is decided client-side, since favourites live in the
-    browser's own storage and the server never sees them.
+    rows are shown is decided client-side from the starred set that base.html
+    seeds out of ``UserConfig``.
 
     Args:
         favourites_only: Whether the page should start filtered to favourites.
@@ -366,6 +373,8 @@ async def get_settings(request: Request) -> JSONResponse:
             "theme": cfg.theme,
             "outputs_dir": cfg.outputs_dir,
             "close_behavior": cfg.close_behavior,
+            "favourites": cfg.favourites,
+            "sort_order": cfg.sort_order,
             "browse_supported": _webview_window(request) is not None,
         }
     )
@@ -424,15 +433,40 @@ async def open_logs() -> JSONResponse:
 
 @app.post("/api/settings")
 async def post_settings(request: Request) -> JSONResponse:
-    """Persist user settings to config.json."""
+    """Persist the settings-modal fields to config.json.
+
+    Favourites and sort order share the same file but are not in this form, so
+    they are carried over from what is already stored — rebuilding UserConfig
+    from the body alone would silently clear them every time the modal saves.
+    """
     body = await request.json()
+    existing = load_config()
     cfg = UserConfig(
         theme=body.get("theme", "light"),
         outputs_dir=body.get("outputs_dir", ""),
         close_behavior=body.get("close_behavior", "close"),
+        favourites=existing.favourites,
+        sort_order=existing.sort_order,
     )
     save_config(cfg)
     return JSONResponse({"ok": True})
+
+
+@app.post("/api/preferences")
+async def post_preferences(request: Request) -> JSONResponse:
+    """Persist favourites and sort order.
+
+    Separate from ``/api/settings`` because these change on a single click
+    rather than a modal save, and each field is sent only when it changed.
+    """
+    body = await request.json()
+    cfg = load_config()
+    if "favourites" in body:
+        cfg.favourites = clean_favourites(body["favourites"])
+    if "sort_order" in body:
+        cfg.sort_order = clean_sort_order(body["sort_order"])
+    save_config(cfg)
+    return JSONResponse({"ok": True, "favourites": cfg.favourites, "sort_order": cfg.sort_order})
 
 
 def _open_in_file_manager(folder: Path) -> None:

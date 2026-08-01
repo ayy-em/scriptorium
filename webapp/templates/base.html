@@ -20,6 +20,11 @@
     }
   </script>
   <script>
+    /* Favourites and sort order, rendered server-side out of UserConfig so the
+       first paint already has the right stars. */
+    window.__PREFS__ = {{ user_preferences_json() | safe }};
+  </script>
+  <script>
     /* Sort orders, in cycle order. Declared outside the store so the store's
        own initialiser can validate a stored value against them. */
     var SORT_ORDERS = [
@@ -47,20 +52,55 @@
         onboardingOpen: false,
         onboardingStep: 0,
 
-        /* Favourites and sort order live in localStorage, so they are per
-           browser profile. The three launch tiers (pywebview, Chromium --app,
-           browser fallback) each keep their own — see BACKLOG.md. */
-        favourites: [],
-        sortOrder: 'az',
+        /* Server-side, in UserConfig. localStorage would tie these to one
+           browser profile, and the packaged app has three launch tiers that do
+           not share storage — so the same user saw different favourites
+           depending on how they opened the app. */
+        favourites: (window.__PREFS__ && window.__PREFS__.favourites) || [],
+        sortOrder: (window.__PREFS__ && window.__PREFS__.sort_order) || 'az',
 
         initPreferences() {
+          this._migrateLocalPreferences();
+        },
+
+        /* One-time lift of anything a previous version left in localStorage.
+           Only runs when the server has nothing yet, so it cannot resurrect
+           favourites the user has since removed. */
+        _migrateLocalPreferences() {
+          var legacy;
           try {
-            var stored = JSON.parse(localStorage.getItem('favourites') || '[]');
-            if (Array.isArray(stored)) this.favourites = stored.filter((k) => typeof k === 'string');
-          } catch (e) { this.favourites = []; }
+            legacy = JSON.parse(localStorage.getItem('favourites') || '[]');
+          } catch (e) { legacy = []; }
+          if (!Array.isArray(legacy)) legacy = [];
+          legacy = legacy.filter((k) => typeof k === 'string' && k);
 
           var order = localStorage.getItem('sort_order');
-          if (SORT_ORDERS.some((o) => o.id === order)) this.sortOrder = order;
+          var haveOrder = SORT_ORDERS.some((o) => o.id === order);
+          if (!legacy.length && !haveOrder) return;
+
+          var payload = {};
+          if (legacy.length && !this.favourites.length) {
+            this.favourites = legacy;
+            payload.favourites = legacy;
+          }
+          if (haveOrder && this.sortOrder === 'az' && order !== 'az') {
+            this.sortOrder = order;
+            payload.sort_order = order;
+          }
+          if (Object.keys(payload).length) this._savePreferences(payload);
+
+          try {
+            localStorage.removeItem('favourites');
+            localStorage.removeItem('sort_order');
+          } catch (e) { /* nothing else to try */ }
+        },
+
+        _savePreferences(payload) {
+          fetch('/api/preferences', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          }).catch(() => { /* stays correct for this session either way */ });
         },
 
         isFavourite(key) {
@@ -72,9 +112,7 @@
             ? this.favourites.filter((k) => k !== key)
             : [...this.favourites, key];
           this.favourites = next;
-          try {
-            localStorage.setItem('favourites', JSON.stringify(next));
-          } catch (e) { /* private mode — favourites last for this session only */ }
+          this._savePreferences({ favourites: next });
         },
 
         get favouriteCount() {
@@ -84,9 +122,7 @@
         cycleSort() {
           var i = SORT_ORDERS.findIndex((o) => o.id === this.sortOrder);
           this.sortOrder = SORT_ORDERS[(i + 1) % SORT_ORDERS.length].id;
-          try {
-            localStorage.setItem('sort_order', this.sortOrder);
-          } catch (e) { /* not worth surfacing */ }
+          this._savePreferences({ sort_order: this.sortOrder });
         },
 
         get sortLabel() {

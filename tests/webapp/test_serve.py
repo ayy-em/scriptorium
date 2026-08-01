@@ -4,6 +4,7 @@ import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from fastapi.testclient import TestClient
+import pytest
 
 from core.paths import read_version
 from core.registry import discover, discover_themes
@@ -719,3 +720,47 @@ class TestSortControl:
         response = client.get("/")
         assert "toggleFavourite(" in response.text
         assert "coming soon" not in response.text.lower()
+
+
+class TestPreferencesEndpoint:
+    """Favourites live in UserConfig so every launch tier sees the same set."""
+
+    @pytest.fixture()
+    def config_file(self, tmp_path, monkeypatch):
+        path = tmp_path / "config.json"
+        monkeypatch.setattr("core.config._CONFIG_PATH", path)
+        return path
+
+    def test_saved_favourites_come_back(self, config_file):
+        client.post("/api/preferences", json={"favourites": ["av.trim"]})
+        assert client.get("/api/settings").json()["favourites"] == ["av.trim"]
+
+    def test_sort_order_persists(self, config_file):
+        client.post("/api/preferences", json={"sort_order": "count"})
+        assert client.get("/api/settings").json()["sort_order"] == "count"
+
+    def test_omitted_fields_are_left_alone(self, config_file):
+        client.post("/api/preferences", json={"favourites": ["av.trim"]})
+        client.post("/api/preferences", json={"sort_order": "za"})
+        body = client.get("/api/settings").json()
+        assert body["favourites"] == ["av.trim"]
+        assert body["sort_order"] == "za"
+
+    def test_junk_is_rejected_rather_than_stored(self, config_file):
+        client.post("/api/preferences", json={"favourites": [1, "", "av.trim"], "sort_order": "?"})
+        body = client.get("/api/settings").json()
+        assert body["favourites"] == ["av.trim"]
+        assert body["sort_order"] == "az"
+
+    def test_saving_settings_does_not_wipe_favourites(self, config_file):
+        """The settings modal has no favourites field and must not clear them.
+
+        post_settings rebuilds UserConfig from the request body, so anything it
+        does not carry over is silently lost.
+        """
+        client.post("/api/preferences", json={"favourites": ["av.trim"], "sort_order": "count"})
+        client.post("/api/settings", json={"theme": "dark", "close_behavior": "tray"})
+        body = client.get("/api/settings").json()
+        assert body["favourites"] == ["av.trim"]
+        assert body["sort_order"] == "count"
+        assert body["theme"] == "dark"
