@@ -1633,6 +1633,14 @@ input[type=checkbox] {
 .field--file { margin-bottom: 1.25rem; }
 .field--wide { grid-column: 1 / -1; }
 
+/* Per-file fan-out progress ------------------------------------------------ */
+.batch-progress {
+  margin-top: 0.6rem;
+  font-family: var(--font-mono);
+  font-size: var(--fs-badge);
+  color: var(--text-muted);
+}
+
 /* Detected output files ---------------------------------------------------- */
 .output-list {
   list-style: none;

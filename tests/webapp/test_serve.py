@@ -828,3 +828,55 @@ class TestOutputEndpoints:
             res = client.post("/api/reveal-output", json={"path": str(gone)})
         assert res.status_code == 404
         opener.assert_not_called()
+
+
+class TestBatchFanOut:
+    """A per-file script is run once per dropped file, sequentially.
+
+    The loop itself is client-side; what the server owes it is a batch id that
+    groups the resulting records without leaking into the script's arguments.
+    """
+
+    def _fake_run(self, params):
+        async def _stdout():
+            yield b"ok\n"
+
+        async def _stderr():
+            return
+            yield
+
+        proc = MagicMock()
+        proc.stdout = _stdout()
+        proc.stderr = _stderr()
+        proc.returncode = 0
+        proc.wait = AsyncMock(return_value=0)
+
+        async def fake_create(*args, **kwargs):
+            return proc
+
+        with patch("asyncio.create_subprocess_exec", new=fake_create):
+            return client.get("/scripts/lora/validate/run", params=params)
+
+    def test_batch_id_reaches_the_history_record(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("core.history._HISTORY_PATH", tmp_path / "history.json")
+        self._fake_run({"inputs": "/tmp/fake", "_batch_id": "b123"})
+        records = history.load()
+        assert records[0].batch_id == "b123"
+
+    def test_batch_id_never_becomes_a_script_argument(self, tmp_path, monkeypatch):
+        """build_argv only reads declared specs, but the param is popped too.
+
+        Left in place it would show up in the record's params and then in a
+        re-run's prefilled form.
+        """
+        monkeypatch.setattr("core.history._HISTORY_PATH", tmp_path / "history.json")
+        self._fake_run({"inputs": "/tmp/fake", "_batch_id": "b123"})
+        record = history.load()[0]
+        assert "_batch_id" not in record.params
+        assert "_batch_id" not in " ".join(record.argv)
+        assert "b123" not in " ".join(record.argv)
+
+    def test_an_ordinary_run_has_no_batch_id(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("core.history._HISTORY_PATH", tmp_path / "history.json")
+        self._fake_run({"inputs": "/tmp/fake"})
+        assert history.load()[0].batch_id == ""

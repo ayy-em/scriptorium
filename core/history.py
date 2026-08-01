@@ -40,6 +40,9 @@ class RunRecord:
         exit_code: Process exit code, or None if it never produced one.
         started_at: ISO 8601 local timestamp of when the run began.
         elapsed: Wall-clock seconds the run took.
+        batch_id: Groups the runs of one per-file fan-out. Empty for an
+            ordinary single invocation. A batch is N invocations over a file
+            set, so it needs no record type of its own — just a shared id.
         outputs: Files the run was detected to have written, as strings.
             Best-effort — derived from what the script printed, so a script
             that prints nothing records nothing. See
@@ -55,6 +58,7 @@ class RunRecord:
     argv: list[str] = field(default_factory=list)
     params: dict[str, str] = field(default_factory=dict)
     outputs: list[str] = field(default_factory=list)
+    batch_id: str = ""
 
     @property
     def theme(self) -> str:
@@ -90,6 +94,7 @@ def _from_raw(raw: dict) -> RunRecord | None:
             argv=[str(a) for a in raw.get("argv", [])],
             params={str(k): str(v) for k, v in (raw.get("params") or {}).items()},
             outputs=[str(o) for o in raw.get("outputs", [])],
+            batch_id=str(raw.get("batch_id", "")),
         )
     except KeyError, TypeError, ValueError:
         return None

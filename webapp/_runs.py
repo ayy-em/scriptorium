@@ -41,6 +41,8 @@ class RunHandle:
         cancelled: True once cancellation has been requested. The stream reader
             uses this to report ``cancelled`` rather than a spurious failure,
             since a killed process still exits non-zero.
+        batch_id: Shared by every run of one per-file fan-out, empty otherwise.
+            Carried through to the history record so a batch can be grouped.
     """
 
     run_id: str
@@ -50,23 +52,31 @@ class RunHandle:
     started_at: datetime = field(default_factory=datetime.now)
     process: object | None = None
     cancelled: bool = False
+    batch_id: str = ""
 
 
 _ACTIVE: dict[str, RunHandle] = {}
 
 
-def new_handle(key: str, argv: list[str], params: dict[str, str]) -> RunHandle:
+def new_handle(key: str, argv: list[str], params: dict[str, str], *, batch_id: str = "") -> RunHandle:
     """Create and register a handle for a run about to start.
 
     Args:
         key: Dotted script key.
         argv: CLI arguments after the key.
         params: Original form values.
+        batch_id: Groups this run with the rest of its fan-out, if any.
 
     Returns:
         The registered handle.
     """
-    handle = RunHandle(run_id=uuid.uuid4().hex[:12], key=key, argv=list(argv), params=dict(params))
+    handle = RunHandle(
+        run_id=uuid.uuid4().hex[:12],
+        key=key,
+        argv=list(argv),
+        params=dict(params),
+        batch_id=batch_id,
+    )
     _ACTIVE[handle.run_id] = handle
     return handle
 

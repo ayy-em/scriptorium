@@ -97,12 +97,25 @@
           </div>
         </template>
 
-        <button type="submit" class="run-btn" :disabled="running">
-          <svg class="run-btn-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-            <path d="M4 2.5v11l9-5.5z" fill="currentColor"/>
-          </svg>
-          <span x-text="running ? 'Running…' : 'Run'"></span>
-        </button>
+        <div class="run-controls">
+          <button type="submit" class="run-btn" :disabled="running">
+            <svg class="run-btn-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path d="M4 2.5v11l9-5.5z" fill="currentColor"/>
+            </svg>
+            <span x-text="runLabel()"></span>
+          </button>
+
+          {# Stops between files rather than mid-file, so nothing is left
+             half-written. Only meaningful for a fan-out. #}
+          <button type="button" class="btn btn--secondary"
+                  x-show="running && batchTotal > 1" x-cloak
+                  @click="stopBatch()" :disabled="batchStopping"
+                  x-text="batchStopping ? 'Finishing current file…' : 'Stop after this file'"></button>
+        </div>
+
+        <p class="batch-progress" x-show="running && batchTotal > 1" x-cloak
+           x-text="'File ' + batchIndex + ' of ' + batchTotal
+                   + (batchFailed ? '  ·  ' + batchFailed + ' failed so far' : '')"></p>
       </form>
 
       <div class="runner-output" x-show="runLines.length || running">

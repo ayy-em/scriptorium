@@ -72,39 +72,6 @@ and deciding what a drop on a detail page should even do — route back to the
 wheel on `/`, or prefill the current script's file input if the type matches
 (the more useful answer, and the one that needs `ACCEPTS` checked client-side).
 
-## Per-file batch fan-out
-
-**Status:** deferred (2026-07-27), during the Drop-to-Discover wheel revamp.
-
-When a batch of files is dropped on the main screen, only *directory-native*
-scripts can act on it today. Scripts that take a single file are shown on the
-wheel but dimmed, with a "single file only" hint.
-
-The two classes are derived at runtime by `webapp._form.batch_mode_for()`:
-
-| Class | Detection | Batch behaviour | Scripts |
-|---|---|---|---|
-| `directory` | file input has widget `file-multi`, or `dest == "inputs"` | one invocation against the drop session directory | `av.join`, `formats.convert_{audio,video,image,docs,tabular}`, `photo.remove_bg` |
-| `per_file` | file input has widget `file` | **not yet implemented** | `av.{trim,volume,split,tag,dump_frames,filmstrip,to_anim,video_crop}`, `gif.make_gif`, `speech.transcribe` |
-
-**What to build:** run the script once per file in the batch, sequentially,
-reporting combined progress. The client already talks to the SSE endpoint at
-`GET /scripts/{theme}/{script_name}/run`, so the cheapest version is a
-client-side loop issuing N sequential requests and concatenating the streams.
-
-**Decisions still open:**
-
-- Should a mid-batch failure abort the remaining files or continue and report a
-  summary? (Leaning: continue, then report `N succeeded / M failed`.)
-- Where do outputs land — one directory per batch, or the normal per-theme
-  outputs directory with deduplicated names? Note commit `ef580a7` already
-  addressed output contamination for multi-file uploads; reuse that approach.
-- Should the UI expose a cancel control that stops after the in-flight file?
-
-**Where to start:** `webapp/templates/index.html` (the `runScript` path in the
-Alpine component) and `webapp/_form.py` (`batch_mode_for`). Removing the dimmed
-state means deleting the `is_disabled` branch in `_drop_chooser.html`.
-
 # Settled
 
 Closed, and kept only for the reasoning — either delivered, or considered and
@@ -180,6 +147,14 @@ make several queued features much cheaper:
 set*. The cheapest bridge is an optional `batch_id` on `RunRecord`, letting
 per-file fan-out group its runs without a second type — worth deciding when
 fan-out is actually built rather than speculatively now.
+
+**Decided 2026-08-02, when fan-out landed:** `batch_id` was the whole of it. No
+`BatchPlan` type was needed. The fan-out loop is a dozen lines of client-side
+sequencing over a list of paths, and a value type describing "which script,
+which inputs, what output" would have had nothing to generalise over that the
+existing `RunRecord` plus a shared id does not already cover. Revisit only if a
+job queue or `--dry-run` is actually wanted; both still want a plan object, and
+neither exists.
 
 Deliberately not built yet: with only one batch class actually wired up, the
 abstraction would have a single implementation and nothing to generalise over.
@@ -440,3 +415,63 @@ that individual files are not detected. Options, cheapest first:
    `stat()` the ones that exist. No script changes, ~90% accurate.
 2. A convention, e.g. a final `::output::<path>` line the runner middleware
    understands. Accurate, but touches all 27 scripts.
+
+## Per-file batch fan-out
+
+**Status:** resolved 2026-08-02.
+
+Every script now accepts a batch. Directory-native ones still take the whole
+drop session in one invocation; single-file ones are run once per file,
+sequentially, by a loop in `scriptBrowser.startRun()`. The dimmed "Single file
+only" card is gone — a card now says how many times it will run instead.
+
+The three open decisions, settled:
+
+- **A mid-batch failure does not stop the rest.** All files are attempted and
+  the result reads "3 of 4 succeeded, 1 failed". One corrupt file should not
+  cost you the other seven.
+- **Outputs go to the normal theme directory**, relying on the existing
+  `_001`..`_999` collision avoidance rather than a per-batch subdirectory.
+  Consistent with a single run, and the Recent outputs panel lists them all.
+- **Cancel stops between files, not mid-file.** The in-flight invocation is
+  allowed to finish and write its output; the rest are skipped. Nothing is left
+  half-written, which killing the process mid-transcode would guarantee.
+
+`RunRecord.batch_id` groups the records of one fan-out. It is passed as a
+`_batch_id` query param, which the run endpoint pops before `build_argv` — left
+in place it would reach the record's params and then a re-run's prefilled form.
+
+Original write-up follows.
+
+---
+
+**Status:** deferred (2026-07-27), during the Drop-to-Discover wheel revamp.
+
+When a batch of files is dropped on the main screen, only *directory-native*
+scripts can act on it today. Scripts that take a single file are shown on the
+wheel but dimmed, with a "single file only" hint.
+
+The two classes are derived at runtime by `webapp._form.batch_mode_for()`:
+
+| Class | Detection | Batch behaviour | Scripts |
+|---|---|---|---|
+| `directory` | file input has widget `file-multi`, or `dest == "inputs"` | one invocation against the drop session directory | `av.join`, `formats.convert_{audio,video,image,docs,tabular}`, `photo.remove_bg` |
+| `per_file` | file input has widget `file` | **not yet implemented** | `av.{trim,volume,split,tag,dump_frames,filmstrip,to_anim,video_crop}`, `gif.make_gif`, `speech.transcribe` |
+
+**What to build:** run the script once per file in the batch, sequentially,
+reporting combined progress. The client already talks to the SSE endpoint at
+`GET /scripts/{theme}/{script_name}/run`, so the cheapest version is a
+client-side loop issuing N sequential requests and concatenating the streams.
+
+**Decisions still open:**
+
+- Should a mid-batch failure abort the remaining files or continue and report a
+  summary? (Leaning: continue, then report `N succeeded / M failed`.)
+- Where do outputs land — one directory per batch, or the normal per-theme
+  outputs directory with deduplicated names? Note commit `ef580a7` already
+  addressed output contamination for multi-file uploads; reuse that approach.
+- Should the UI expose a cancel control that stops after the in-flight file?
+
+**Where to start:** `webapp/templates/index.html` (the `runScript` path in the
+Alpine component) and `webapp/_form.py` (`batch_mode_for`). Removing the dimmed
+state means deleting the `is_disabled` branch in `_drop_chooser.html`.

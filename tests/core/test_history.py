@@ -147,3 +147,55 @@ class TestStatuses:
 
 def test_history_path_points_at_the_configured_file(temp_history):
     assert history.history_path() == temp_history
+
+
+class TestBatchId:
+    """Groups the records of one per-file fan-out without a second record type."""
+
+    def test_roundtrips(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("core.history._HISTORY_PATH", tmp_path / "history.json")
+        for i in range(3):
+            history.append(
+                RunRecord(
+                    run_id=f"r{i}",
+                    key="av.trim",
+                    status="success",
+                    started_at="2026-08-02T00:00:00",
+                    elapsed=1.0,
+                    batch_id="b1",
+                )
+            )
+        assert {r.batch_id for r in history.load()} == {"b1"}
+
+    def test_defaults_to_empty_for_a_single_run(self):
+        assert (
+            RunRecord(
+                run_id="r",
+                key="av.trim",
+                status="success",
+                started_at="2026-08-02T00:00:00",
+                elapsed=1.0,
+            ).batch_id
+            == ""
+        )
+
+    def test_records_written_before_the_field_existed_still_load(self, tmp_path, monkeypatch):
+        path = tmp_path / "history.json"
+        path.write_text(
+            json.dumps(
+                [
+                    {
+                        "run_id": "old",
+                        "key": "av.trim",
+                        "status": "success",
+                        "started_at": "2026-07-01T00:00:00",
+                        "elapsed": 2.0,
+                    }
+                ]
+            ),
+            encoding="utf-8",
+        )
+        monkeypatch.setattr("core.history._HISTORY_PATH", path)
+        record = history.load()[0]
+        assert record.batch_id == ""
+        assert record.outputs == []

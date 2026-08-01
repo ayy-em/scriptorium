@@ -176,8 +176,8 @@ def batch_mode_for(specs: list[FieldSpec]) -> str:
 
     Returns:
         ``"directory"`` when the script can process a whole directory in one
-        invocation, otherwise ``"per_file"``. Per-file batching is not yet
-        implemented — see BACKLOG.md.
+        invocation, otherwise ``"per_file"`` — the client runs those once per
+        file, sequentially.
     """
     return "directory" if accepts_directory(file_input_for(specs)) else "per_file"
 

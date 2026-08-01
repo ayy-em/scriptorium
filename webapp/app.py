@@ -294,8 +294,12 @@ async def run_script(theme: str, script_name: str, request: Request) -> Streamin
     field_specs = fields_from_parser(parser) if parser else []
 
     form_data = dict(request.query_params)
+    # Underscore-prefixed params are for the runner, not the script. build_argv
+    # only reads declared field specs, so this never reaches argv — popping it
+    # keeps it out of the history record's params too.
+    batch_id = form_data.pop("_batch_id", "")
     argv = build_argv(form_data, field_specs)
-    handle = _runs.new_handle(key, argv, form_data)
+    handle = _runs.new_handle(key, argv, form_data, batch_id=batch_id)
 
     return StreamingResponse(
         _stream_script(handle),
@@ -907,6 +911,7 @@ async def _stream_script(handle: _runs.RunHandle):
                 argv=handle.argv,
                 params=handle.params,
                 outputs=detected,
+                batch_id=handle.batch_id,
             )
         )
 

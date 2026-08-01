@@ -410,3 +410,25 @@ class TestEveryOutputFieldIsFullWidth:
                 if looks_like_a_path and not spans_full_row(spec):
                     offenders.append(f"{key}:{spec.dest}")
         assert offenders == [], f"half-width path fields: {offenders}"
+
+
+class TestBatchMode:
+    """Which scripts fan out per file, and which take a directory in one go."""
+
+    def test_directory_native_scripts_take_the_whole_drop(self):
+        for key in ("av.join", "formats.convert_image", "photo.remove_bg"):
+            specs = fields_from_parser(discover()[key].get_parser())
+            assert batch_mode_for(specs) == "directory", key
+
+    def test_single_file_scripts_fan_out(self):
+        for key in ("av.trim", "av.volume", "gif.make_gif"):
+            specs = fields_from_parser(discover()[key].get_parser())
+            assert batch_mode_for(specs) == "per_file", key
+
+    def test_every_script_is_classified(self):
+        """Both modes are now implemented, so no script should be left out."""
+        for key, mod in discover().items():
+            if not hasattr(mod, "get_parser"):
+                continue
+            mode = batch_mode_for(fields_from_parser(mod.get_parser()))
+            assert mode in ("directory", "per_file"), key

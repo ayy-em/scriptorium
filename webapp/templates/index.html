@@ -177,6 +177,13 @@
     return cut.replace(/[\s,;:.\-]+$/, '') + '…';
   }
 
+  /* Last path segment, for labelling each file in a fan-out. */
+  function _basename(path) {
+    if (!path) return '';
+    var parts = String(path).split(/[\\/]/);
+    return parts[parts.length - 1] || String(path);
+  }
+
   /* Decode one SSE payload into console text plus an optional CSS class. */
   function _parseRunLine(payload) {
     var doc = new DOMParser().parseFromString(payload, 'text/html');
@@ -239,6 +246,16 @@
       runResult: '',
       runOk: false,
       _es: null,
+
+      /* Per-file fan-out. A script that takes one file at a time is run once
+         per dropped file, sequentially — see the batch_mode split in
+         webapp/_form.py. batchTotal stays 0 for an ordinary single run. */
+      batchIndex: 0,
+      batchTotal: 0,
+      batchFailed: 0,
+      batchStopping: false,
+      lastElapsed: 0,
+      _batchId: '',
 
       /* ── Chrome ─────────────────────────────────────────────────────── */
       howtoOpen: false,
@@ -557,11 +574,6 @@
       /* ── Cards ──────────────────────────────────────────────────────── */
       truncate(text, limit) { return _truncate(text, limit); },
 
-      /* Per-file batching is not implemented yet — see BACKLOG.md. */
-      cardEnabled(s) {
-        return this.batchCount <= 1 || s.batch_mode === 'directory';
-      },
-
       selectScript(s, i) {
         this.expandingIndex = i;
         var delay = _reducedMotion() ? 0 : 500;
@@ -627,47 +639,131 @@
       },
 
       /* ── Running ────────────────────────────────────────────────────── */
-      startRun() {
+
+      /* What each invocation should receive as its file argument.
+
+         A directory-native script gets the whole drop session in one go. A
+         per-file script gets one path at a time, which is the fan-out. A
+         single file is just a fan-out of one, so it needs no separate path. */
+      _runTargets() {
+        var s = this.selectedScript;
+        if (!s || !s.file_dest) return [null];
+        if (this.batchCount > 1 && s.batch_mode === 'directory') return [this.sessionDir];
+        return this.filePaths.slice();
+      },
+
+      async startRun() {
         var s = this.selectedScript;
         if (!s || this.running) return;
 
-        var params = new URLSearchParams();
-        if (s.file_dest) {
-          params.set(s.file_dest, this.batchCount > 1 ? this.sessionDir : this.filePaths[0]);
+        var targets = this._runTargets();
+
+        this._stopRun();
+        this.runLines = [];
+        this.runResult = '';
+        this.running = true;
+        this.batchStopping = false;
+        this.batchFailed = 0;
+        this.batchTotal = targets.length > 1 ? targets.length : 0;
+        this._batchId = this.batchTotal ? 'b' + Date.now().toString(36) : '';
+
+        for (var i = 0; i < targets.length; i++) {
+          this.batchIndex = i + 1;
+          if (this.batchTotal) {
+            this.runLines.push(_parseRunLine(
+              '── ' + this.batchIndex + '/' + this.batchTotal + '  ' + _basename(targets[i]) + ' ──'
+            ));
+          }
+
+          var ok = await this._runOne(targets[i]);
+          if (!ok) this.batchFailed++;
+
+          /* Cancellation is honoured between files, so the one in flight is
+             allowed to finish and write its output rather than being left
+             half-way through. */
+          if (this.batchStopping) break;
         }
+
+        this._finishRun(targets.length);
+      },
+
+      /* Run one invocation. Resolves true on a clean exit. */
+      _runOne(target) {
+        var s = this.selectedScript;
+        var params = new URLSearchParams();
+        if (s.file_dest && target !== null) params.set(s.file_dest, target);
+        if (this._batchId) params.set('_batch_id', this._batchId);
         for (var f of this.runnerFields) {
           var v = this.fieldValues[f.dest];
           if (f.widget === 'checkbox') { if (v) params.set(f.dest, 'on'); }
           else if (v !== undefined && v !== null && v !== '') { params.set(f.dest, v); }
         }
 
-        this._stopRun();
-        this.runLines = [];
-        this.runResult = '';
-        this.running = true;
+        return new Promise((resolve) => {
+          var settled = false;
+          var finish = (ok) => {
+            if (settled) return;
+            settled = true;
+            if (this._es) { this._es.close(); this._es = null; }
+            resolve(ok);
+          };
 
-        var url = '/scripts/' + s.theme + '/' + s.name + '/run?' + params.toString();
-        this._es = new EventSource(url);
+          var url = '/scripts/' + s.theme + '/' + s.name + '/run?' + params.toString();
+          this._es = new EventSource(url);
 
-        this._es.onmessage = (e) => {
-          this.runLines.push(_parseRunLine(e.data));
-          this.$nextTick(() => {
-            var c = this.$refs.console;
-            if (c) c.scrollTop = c.scrollHeight;
+          this._es.onmessage = (e) => {
+            this.runLines.push(_parseRunLine(e.data));
+            this.$nextTick(() => {
+              var c = this.$refs.console;
+              if (c) c.scrollTop = c.scrollHeight;
+            });
+          };
+
+          this._es.addEventListener('done', (e) => {
+            var info = {};
+            try { info = JSON.parse(e.data); } catch (err) { /* keep defaults */ }
+            this.lastElapsed = info.elapsed;
+            finish(info.exit_code === 0);
           });
-        };
 
-        this._es.addEventListener('done', (e) => {
-          var info = {};
-          try { info = JSON.parse(e.data); } catch (err) { /* keep defaults */ }
-          this.runOk = info.exit_code === 0;
-          this.runResult = this.runOk
-            ? 'Completed successfully in ' + info.elapsed + 's'
-            : 'Run failed (exit code ' + info.exit_code + ')';
-          this._stopRun();
+          /* Fires on network loss and on normal stream close after 'done'. */
+          this._es.onerror = () => { finish(false); };
         });
+      },
 
-        this._es.onerror = () => { this._stopRun(); };
+      _finishRun(attempted) {
+        var done = this.batchIndex;
+        if (this.batchTotal) {
+          var succeeded = done - this.batchFailed;
+          this.runOk = this.batchFailed === 0 && !this.batchStopping;
+          this.runResult = this.batchStopping
+            ? 'Stopped after ' + done + ' of ' + attempted + ' — ' + succeeded + ' succeeded, ' + this.batchFailed + ' failed'
+            : succeeded + ' of ' + attempted + ' succeeded'
+              + (this.batchFailed ? ', ' + this.batchFailed + ' failed' : '');
+        } else {
+          this.runOk = this.batchFailed === 0;
+          this.runResult = this.runOk
+            ? 'Completed successfully in ' + this.lastElapsed + 's'
+            : 'Run failed';
+        }
+        this.running = false;
+        this.batchStopping = false;
+      },
+
+      runLabel() {
+        if (!this.running) {
+          var targets = this._runTargets();
+          return targets.length > 1 ? 'Run on ' + targets.length + ' files' : 'Run';
+        }
+        return this.batchTotal > 1
+          ? 'Running ' + this.batchIndex + '/' + this.batchTotal + '…'
+          : 'Running…';
+      },
+
+      /* Let the in-flight file finish, then skip the rest. */
+      stopBatch() {
+        if (!this.running || !this.batchTotal) return;
+        this.batchStopping = true;
       },
 
       _stopRun() {
