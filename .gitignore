@@ -11,8 +11,11 @@ wheels/
 .pytest_cache/
 
 # LLMs
-.claude
-CLAUDE.md
+# CLAUDE.md and the skills and commands it imports are part of how this repo is
+# worked on, so they are tracked — a clone without them loses the release
+# procedure, the terminal rules and the code style. Only the machine-local
+# permission grants stay out. (.claude/launch.json is covered by *.json below.)
+.claude/settings.local.json
 
 # IDEs
 .cursor/
