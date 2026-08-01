@@ -50,7 +50,9 @@
         <template x-if="!(batchCount === 1 && dropPreviewUrl)">
           <div class="file-chip-icon">
             <template x-if="categoryIcon">
-              <img :src="categoryIcon" alt="" class="file-chip-icon-img">
+              <svg class="file-chip-icon-img" aria-hidden="true" focusable="false">
+                <use :href="'#i-' + categoryIcon"></use>
+              </svg>
             </template>
             <template x-if="!categoryIcon">
               {% include "_icon_placeholder.html" %}
@@ -110,7 +112,9 @@
                 @focus="bringIntoView(i)">
           <span class="wheel-card-icon">
             <template x-if="s.icon">
-              <img :src="s.icon" alt="" class="wheel-card-icon-img">
+              <svg class="wheel-card-icon-img" aria-hidden="true" focusable="false">
+                <use :href="'#i-' + s.icon"></use>
+              </svg>
             </template>
             <template x-if="!s.icon">
               {% include "_icon_placeholder.html" %}

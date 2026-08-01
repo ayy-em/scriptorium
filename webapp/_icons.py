@@ -1,68 +1,64 @@
 """Icon lookup for scripts and file categories in the Drop-to-Discover chooser.
 
-Icons live in ``webapp/static/icons`` as PNGs. Entries absent from these maps
-resolve to ``None``, which templates render as a neutral placeholder glyph, so
-an unmapped script degrades visibly rather than showing a broken image.
+Values are glyph *names* from ``webapp/templates/_icons.html``, not URLs. The
+browser renders them from the inline sprite that ``base.html`` emits, so an
+icon costs no request and tints with ``currentColor``.
 
-See MISSING_ICONS for the artwork still to be supplied.
+Entries absent from these maps resolve to ``None``, which templates render as a
+neutral placeholder glyph, so an unmapped script degrades visibly rather than
+showing nothing at all.
 """
 
-ICON_URL_PREFIX = "/static/icons"
-
 SCRIPT_ICONS: dict[str, str] = {
-    "formats.convert_audio": "icon-audio.png",
-    "formats.convert_docs": "icon-doc.png",
-    "formats.convert_image": "icon-image.png",
-    "formats.convert_tabular": "icon-spreadsheet.png",
-    "photo.remove_bg": "icon-camera.png",
-    "speech.transcribe": "icon-speech.png",
+    "av.dump_frames": "frames",
+    "av.filmstrip": "film",
+    "av.join": "merge",
+    "av.split": "split",
+    "av.tag": "tag",
+    "av.to_anim": "gif",
+    "av.trim": "scissors",
+    "av.video_crop": "crop",
+    "av.volume": "volume",
+    "formats.convert_audio": "file-audio",
+    "formats.convert_docs": "file-text",
+    "formats.convert_image": "image",
+    "formats.convert_tabular": "table",
+    "formats.convert_video": "file-video",
+    "gif.make_gif": "gif",
+    "photo.remove_bg": "camera",
+    "speech.transcribe": "mic",
 }
 
 CATEGORY_ICONS: dict[str, str] = {
-    "audio": "icon-audio.png",
-    "document": "icon-doc.png",
-    "image": "icon-image.png",
-    "tabular": "icon-spreadsheet.png",
-}
-
-# Artwork not yet supplied; these render the placeholder glyph until added.
-MISSING_ICONS: dict[str, str] = {
-    "av.dump_frames": "icon-frames.png",
-    "av.filmstrip": "icon-filmstrip.png",
-    "av.join": "icon-join.png",
-    "av.split": "icon-split.png",
-    "av.tag": "icon-tag.png",
-    "av.to_anim": "icon-gif.png",
-    "av.trim": "icon-trim.png",
-    "av.video_crop": "icon-crop.png",
-    "av.volume": "icon-volume.png",
-    "formats.convert_video": "icon-convert.png",
-    "gif.make_gif": "icon-gif.png",
-    "video": "icon-video.png",
+    "audio": "file-audio",
+    "document": "file-text",
+    "image": "image",
+    "tabular": "table",
+    "video": "file-video",
 }
 
 
 def icon_for_script(key: str) -> str | None:
-    """Return the icon URL for a script key.
+    """Return the icon name for a script key.
 
     Args:
         key: Dotted script key such as ``"photo.remove_bg"``.
 
     Returns:
-        Absolute URL under /static, or None when no artwork exists yet.
+        A glyph name defined in ``_icons.html``, or None when the script has
+        no icon assigned.
     """
-    name = SCRIPT_ICONS.get(key)
-    return f"{ICON_URL_PREFIX}/{name}" if name else None
+    return SCRIPT_ICONS.get(key)
 
 
 def icon_for_category(category: str | None) -> str | None:
-    """Return the icon URL for a file category.
+    """Return the icon name for a file category.
 
     Args:
         category: Category name such as ``"audio"``, or None.
 
     Returns:
-        Absolute URL under /static, or None when no artwork exists yet.
+        A glyph name defined in ``_icons.html``, or None when the category is
+        unknown.
     """
-    name = CATEGORY_ICONS.get(category or "")
-    return f"{ICON_URL_PREFIX}/{name}" if name else None
+    return CATEGORY_ICONS.get(category or "")

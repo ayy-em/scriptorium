@@ -28,7 +28,9 @@
       <div class="runner-head">
         <span class="runner-icon">
           <template x-if="selectedScript.icon">
-            <img :src="selectedScript.icon" alt="" class="runner-icon-img">
+            <svg class="runner-icon-img" aria-hidden="true" focusable="false">
+              <use :href="'#i-' + selectedScript.icon"></use>
+            </svg>
           </template>
           <template x-if="!selectedScript.icon">
             {% include "_icon_placeholder.html" %}

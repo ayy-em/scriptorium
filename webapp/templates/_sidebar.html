@@ -1,4 +1,5 @@
 {% from "_macros.html" import theme_icon %}
+{% from "_icons.html" import icon %}
 <aside class="sidebar">
   <nav class="sidebar-nav">
     <a href="/"
@@ -79,7 +80,7 @@
 
   <div class="sidebar-cli sidebar-github">
     <div class="sidebar-cli-header">
-      <img src="/static/img/github.png" width="13" height="13" alt="" aria-hidden="true" class="sidebar-github-logo">
+      {{ icon('github', 13, 'sidebar-github-logo') }}
       <span class="sidebar-cli-title">Contribute</span>
     </div>
     <p class="sidebar-info-text">Have a feature request? Found a bug? Feel like contributing?</p>

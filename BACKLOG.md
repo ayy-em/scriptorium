@@ -179,39 +179,6 @@ way — see `_chromium_app_window` in `packaging/entrypoint.py`.
 
 Option 2 is the cheapest and closest to how the app actually behaves today.
 
-## PNG icon sweep
-
-**Status:** deferred (2026-07-28), scoped out of the UI prettification pass to
-keep that change reviewable.
-
-The UI runs two icon systems side by side:
-
-| System | Where | Count | Weight |
-|---|---|---|---|
-| Inline SVG (`webapp/templates/_icons.html`) | settings modal, terminal, run controls, status strip, empty states | ~40 | negligible |
-| PNG (`webapp/static/icons/`) | theme icons in `_macros.html`, sidebar categories, top bar, drop chooser | 20 | ~2.4MB |
-
-The PNGs are the problem: several exceed 250KB each, they cannot take
-`currentColor` so hover and active states can't tint them, and dark mode fakes
-it with `filter: invert(1)` (see `html.dark .sidebar-github-logo` and
-`html.dark .settings-link-icon`). The sidebar's "category icons go purple when
-active" rule is written and works — but only for the themes already on inline
-SVG.
-
-**What to do:** extend `_icons.html` to cover the theme and category glyphs,
-replace the `<img>` branches in `_macros.html`, convert `webapp/_icons.py` to
-return icon *names* rather than `/static/...` URLs, and delete
-`webapp/static/icons/*.png` plus `webapp/static/img/github.png`.
-
-**Watch out for:**
-
-- `webapp/_icons.py` feeds `/api/drop-upload`'s JSON (`icon`, `category_icon`).
-  Changing it to names is an API shape change — `tests/webapp/test_drop.py`
-  asserts on it.
-- `packaging/entrypoint.py::_load_tray_icon()` loads `icon-night.png` and needs
-  a raster. Repoint it at a logo PNG before deleting the icons directory.
-- Icon licensing is unresolved — see HUMAN_TODO.md, which must be settled first.
-
 ## Favourites are per browser profile
 
 **Status:** known limitation, accepted 2026-07-28 when favourites shipped.

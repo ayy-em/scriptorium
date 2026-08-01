@@ -36,14 +36,13 @@ scriptorium/
 │   ├── app.py               # FastAPI server
 │   ├── _badges.py           # ACCEPTS-derived compatibility badges
 │   ├── _form.py             # argparse introspection for auto-generated forms
-│   ├── _icons.py            # PNG icon lookup for scripts and file categories
+│   ├── _icons.py            # glyph-name lookup for scripts and file categories
 │   ├── _runs.py             # live run registry + process-tree termination
 │   ├── static/
 │   │   ├── style.css        # the entire stylesheet, sectioned (see below)
 │   │   ├── fonts/           # self-hosted Inter + JetBrains Mono (OFL 1.1)
 │   │   ├── js/              # vendored Alpine.js + focus plugin
-│   │   ├── icons/           # legacy PNG icons (see BACKLOG.md)
-│   │   └── logo.{png,webp}
+│   │   └── logo.{png,webp}  # logo.png doubles as the tray icon source
 │   └── templates/           # Jinja2 (see "Web UI layer" below)
 └── packaging/
     ├── entrypoint.py            # frozen app entry (web server + --run-script mode)
@@ -145,9 +144,9 @@ templates/
 ├── script.html            # script detail page (scriptRunner())
 ├── history.html           # past runs with re-run links
 ├── _splash.html           # boot overlay, plain JS — see below
-├── _icons.html            # icon(name, size, cls) — inline SVG UI icon set
+├── _icons.html            # glyph(), icon(name, size, cls), icon_sprite() — the icon set
 ├── _components.html       # badge(), empty_state(), soon_button()
-├── _macros.html           # theme_icon() — still partly PNG-backed
+├── _macros.html           # theme_icon() — maps a theme to a glyph name
 ├── _settings_modal.html   # settings dialog
 ├── _script_form.html      # auto-generated argument form
 ├── _script_context.html   # right-hand context column
@@ -160,6 +159,30 @@ templates/
 `webapp/static/style.css` is one file, sectioned with a table of contents at the
 top. **Design tokens are defined in pairs**: every custom property in `:root`
 has a matching entry in `html.dark`. Adding one without the other is a bug.
+
+### Icons
+
+There is one icon system: inline SVG on a 16×16 grid, stroked with
+`currentColor`, defined once in `_icons.html`. Nothing is a raster and nothing
+needs a dark-mode variant — the glyphs tint with the text colour they sit in.
+
+`glyph(name)` holds the geometry. Two macros wrap it, and which one you want
+depends on when the name is known:
+
+| Known at | Use | Example |
+|---|---|---|
+| Template render | `icon(name, size, cls)` | `{{ icon('gear', 18) }}` |
+| Runtime, from JSON | `<use :href="'#i-' + name">` | the drop chooser |
+
+The second reads from the `<symbol>` sprite that `base.html` emits once per
+page via `icon_sprite()`. Symbols deliberately carry **no** `stroke-width`, so
+each consumer's CSS class picks a weight — the same glyph is drawn at 24px in
+the wheel and 72px in the file chip, and one fixed stroke cannot serve both.
+
+Adding a glyph means adding a branch to `glyph()` **and** its name to
+`ICON_NAMES`; a name missing from the list renders standalone but is absent
+from the sprite. `tests/webapp/test_icons.py` checks that every name referenced
+by `webapp/_icons.py` and `_macros.html` actually resolves.
 
 ### Client-side state
 

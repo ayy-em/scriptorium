@@ -101,17 +101,17 @@ class TestScriptPayload:
         assert video_scripts["av.trim"]["file_dest"] == "input"
         assert video_scripts["av.join"]["file_dest"] == "inputs"
 
-    def test_icon_is_null_when_artwork_missing(self, video_scripts):
-        assert video_scripts["av.trim"]["icon"] is None
+    def test_icon_is_a_glyph_name_not_a_url(self, video_scripts):
+        assert video_scripts["av.trim"]["icon"] == "scissors"
 
     def test_icon_is_resolved_when_available(self, tmp_path, monkeypatch):
         data = _upload(["voice.mp3"], monkeypatch, tmp_path).json()
         scripts = {s["key"]: s for s in data["scripts"]}
-        assert scripts["speech.transcribe"]["icon"] == "/static/icons/icon-speech.png"
+        assert scripts["speech.transcribe"]["icon"] == "mic"
 
     def test_category_icon_present_for_audio(self, tmp_path, monkeypatch):
         data = _upload(["voice.mp3"], monkeypatch, tmp_path).json()
-        assert data["category_icon"] == "/static/icons/icon-audio.png"
+        assert data["category_icon"] == "file-audio"
 
 
 class TestPastedImage:

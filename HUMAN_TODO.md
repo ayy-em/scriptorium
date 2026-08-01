@@ -20,7 +20,7 @@ What to supply, into `webapp/static/logo/`:
 | File | Used by | Notes |
 |---|---|---|
 | `logo.svg` | splash, top bar, future favicon | The important one. Vector means the splash logo stops looking soft. |
-| `logo-64.png` | tray icon | pystray needs a raster; currently reads `icon-night.png`. |
+| `logo-64.png` | tray icon | pystray needs a raster; currently downsamples `logo.png` (512px) on every launch. |
 | `logo-128.png` | installers, docs | |
 | `logo-256.png` | Windows installer | |
 | `logo-512.png` | macOS `.icns` source | |
@@ -34,33 +34,7 @@ Once `logo.svg` exists, point these at it:
 
 ---
 
-## 2. Icon set decision
-
-**Status:** the UI currently mixes two icon systems.
-
-- **New UI chrome** (settings, terminal, run controls, status, empty states) uses
-  inline SVG from `webapp/templates/_icons.html` — ~40 glyphs, hand-drawn to one
-  spec, tint with `currentColor`.
-- **Themes, categories and the top bar** still use 20 PNGs in
-  `webapp/static/icons/` totalling ~2.4MB, several over 250KB each. They cannot
-  take a hover or active colour, and dark mode fakes it with `filter: invert(1)`.
-
-The sweep to replace them was scoped out of the prettification pass and is
-tracked in BACKLOG.md ("PNG icon sweep"). Before it can happen, decide:
-
-- [ ] Adopt a licensed set (Lucide is the closest match to the existing house
-      style — MIT, no attribution required), **or** commission/draw the
-      remaining ~20 glyphs to match `_icons.html`.
-- [ ] Confirm the licence of the current PNGs. Their provenance is not recorded
-      anywhere in the repo. If they were bought or generated under terms that
-      require attribution, that attribution is currently missing.
-
-Category icons still needed either way: A/V, Downloads, File Formats, GIF,
-LoRA, Photo, Sitemaps, Speech, Telegram.
-
----
-
-## 3. Optional illustrations
+## 2. Optional illustrations
 
 Small spot art for empty states. The shared `empty_state()` macro currently
 renders a single icon in a lavender rounded square, which is fine — this is
@@ -73,11 +47,18 @@ polish, not a gap.
 
 ---
 
-## 4. Checks that need a real desktop session
+## 3. Checks that need a real desktop session
 
-The prettification pass was verified in a headless browser pane. Three things
+The prettification pass was verified in a headless browser pane. The following
 could not be verified there and need a human with the app actually open.
 
+- [ ] **The 20 new glyphs.** The PNG sweep replaced every raster icon with
+      inline SVG drawn to the 16×16 house spec, but no renderer was available to
+      look at them. Structure is checked by `tests/webapp/test_icons.py`;
+      *appearance* is not. Worth one pass down the sidebar (all 16 themes) and
+      one file drop of each category, in both light and dark. The three sizes to
+      judge are 14px (sidebar), 24px (wheel card) and 72px (file chip) — the
+      last uses a lighter stroke and is the most likely to look wrong.
 - [ ] **Animation timing.** The verification pane runs with
       `document.hidden === true`, so `requestAnimationFrame` never fires and CSS
       transitions never advance. Every *end state* was verified; the motion
@@ -113,7 +94,7 @@ could not be verified there and need a human with the app actually open.
 
 ---
 
-## 5. Housekeeping
+## 4. Housekeeping
 
 - [ ] **Alpine is pinned at 3.15.12** in `webapp/static/js/`. It is vendored, so
       updating means re-downloading both `alpinejs.min.js` and
@@ -121,8 +102,3 @@ could not be verified there and need a human with the app actually open.
 - [ ] **Fonts are vendored** as Inter and JetBrains Mono variable woff2 (89KB
       total), both SIL OFL 1.1, licences alongside them in
       `webapp/static/fonts/`. No action needed unless you change families.
-- [x] ~~Pre-existing lint errors and test failures.~~ Resolved. All four failing
-      tests were stale assertions left behind by two earlier commits that
-      changed behaviour deliberately — `d891096` (keyframe-accurate cutting) and
-      `df5a24a` (exposing `--output` in the drop overlay). The code was right in
-      both cases; the tests were updated to match, not the other way round.

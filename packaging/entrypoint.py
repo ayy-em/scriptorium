@@ -407,7 +407,11 @@ def _browser_fallback(url: str, server_thread: threading.Thread, logger) -> None
 
 
 def _load_tray_icon():  # noqa: ANN201
-    """Load the app icon for the system tray from the static icons directory.
+    """Load the app logo for the system tray.
+
+    pystray needs a raster, so this reads the PNG logo rather than any of the
+    inline SVG glyphs. A purpose-cut 64px logo is still on the wish list — see
+    HUMAN_TODO.md.
 
     Returns:
         A PIL ``Image`` instance, or ``None`` if loading fails.
@@ -417,7 +421,7 @@ def _load_tray_icon():  # noqa: ANN201
 
         from core.paths import static_dir  # noqa: PLC0415
 
-        icon_path = static_dir() / "icons" / "icon-night.png"
+        icon_path = static_dir() / "logo.png"
         if icon_path.exists():
             img = PIL.Image.open(icon_path).convert("RGBA").resize((64, 64), PIL.Image.LANCZOS)
             return img
