@@ -203,7 +203,9 @@ class ProgressReporter:
         clamped = None if fraction is None else _clamp(fraction)
         if not self._should_emit(clamped, force=force):
             return
-        full_label = f"{self.label_prefix}{label}" if self.label_prefix else label
+        # The prefix qualifies a label rather than being one, so an update with
+        # nothing to say reports nothing — not a dangling "clip.mp4: ".
+        full_label = f"{self.label_prefix}{label}" if label else ""
         self._write(ProgressEvent(fraction=clamped, label=full_label))
         self._last_emit = time.monotonic()
         self._last_percent = None if clamped is None else int(clamped * 100)

@@ -247,6 +247,12 @@
       runOk: false,
       _es: null,
 
+      /* Progress within the current invocation, when the script reports any.
+         Null fraction means running-but-unquantified; the bar stays
+         indeterminate rather than sitting at zero. */
+      progress: null,
+      progressLabel: '',
+
       /* Per-file fan-out. A script that takes one file at a time is run once
          per dropped file, sequentially — see the batch_mode split in
          webapp/_form.py. batchTotal stays 0 for an ordinary single run. */
@@ -666,6 +672,8 @@
         this.batchFailed = 0;
         this.batchTotal = targets.length > 1 ? targets.length : 0;
         this._batchId = this.batchTotal ? 'b' + Date.now().toString(36) : '';
+        this.progress = null;
+        this.progressLabel = '';
 
         for (var i = 0; i < targets.length; i++) {
           this.batchIndex = i + 1;
@@ -718,6 +726,18 @@
               if (c) c.scrollTop = c.scrollHeight;
             });
           };
+
+          /* Per-file progress. Reset on each invocation so a fan-out does not
+             carry the previous file's bar into the next one. */
+          this.progress = null;
+          this.progressLabel = '';
+          this._es.addEventListener('progress', (e) => {
+            try {
+              var report = JSON.parse(e.data);
+              this.progress = typeof report.fraction === 'number' ? report.fraction : null;
+              this.progressLabel = report.label || '';
+            } catch (err) { /* the bar keeps its previous value */ }
+          });
 
           this._es.addEventListener('done', (e) => {
             var info = {};

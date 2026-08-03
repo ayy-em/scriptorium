@@ -79,6 +79,12 @@ class TestReporterForTheWebapp:
         ProgressReporter(stream=stream, to_webapp=True).finish("done")
         assert parse(stream.getvalue()) == ProgressEvent(fraction=1.0, label="done")
 
+    def test_a_labelless_update_does_not_emit_a_dangling_prefix(self):
+        """The prefix qualifies a label; on its own it reads as truncated text."""
+        stream = io.StringIO()
+        ProgressReporter(stream=stream, to_webapp=True, label_prefix="clip.mp4: ").finish()
+        assert parse(stream.getvalue()).label == ""
+
 
 class TestThrottling:
     def test_a_second_update_inside_the_interval_is_dropped(self):

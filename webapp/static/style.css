@@ -1641,6 +1641,24 @@ input[type=checkbox] {
   color: var(--text-muted);
 }
 
+/* Progress within the current file. The shared .status-progress bar is
+   absolutely positioned against the status strip it normally hugs, so here it
+   is returned to the flow and given its own height. */
+.run-progress { margin-top: 0.6rem; }
+
+.run-progress .status-progress {
+  position: static;
+  height: 3px;
+  border-radius: var(--r-pill);
+}
+
+.run-progress-label {
+  margin-top: 0.35rem;
+  font-family: var(--font-mono);
+  font-size: var(--fs-badge);
+  color: var(--text-muted);
+}
+
 /* Detected output files ---------------------------------------------------- */
 .output-list {
   list-style: none;
@@ -2053,6 +2071,18 @@ input[type=checkbox] {
 .status-strip-text  { font-size: var(--fs-body); font-weight: 600; color: var(--text); }
 .status-strip-spacer { flex: 1; }
 
+/* What the script says it is working on: a clock range, a pass name, a file
+   count. Long enough to need truncating on a narrow window. */
+.status-strip-detail {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: var(--fs-helper);
+  color: var(--text-muted);
+}
+
 .status-strip-elapsed {
   display: inline-flex;
   align-items: center;
@@ -2099,6 +2129,16 @@ input[type=checkbox] {
 
 @media (prefers-reduced-motion: reduce) {
   .status-progress span { width: 100%; opacity: 0.5; }
+}
+
+/* Once a script reports a fraction the bar stops sweeping and starts filling.
+   Width comes from an inline style; these rules only take the animation away.
+   Higher specificity than the reduced-motion rule above, so it wins there too. */
+.status-progress--determinate span {
+  width: 0;
+  opacity: 1;
+  animation: none;
+  transition: width 200ms var(--ease-out);
 }
 
 @keyframes indeterminate {

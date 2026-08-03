@@ -36,6 +36,7 @@ from core.paths import (
     static_dir,
     templates_dir,
 )
+from core.progress import parse as parse_progress
 from core.registry import (
     discover,
     discover_themes,
@@ -833,6 +834,10 @@ async def _stream_script(handle: _runs.RunHandle):
     stdout lines, then stderr lines, each HTML-escaped. A final 'done' event
     reports the exit code, elapsed time and whether the run was cancelled.
 
+    Stdout lines that turn out to be ``core.progress`` sentinels are pulled out
+    and re-emitted as 'progress' events instead, so they drive the status bar
+    rather than appearing as terminal noise.
+
     The run is recorded in history and dropped from the live registry however
     it ends, including on cancellation.
 
@@ -877,6 +882,15 @@ async def _stream_script(handle: _runs.RunHandle):
 
         async for line in proc.stdout:  # type: ignore[union-attr]
             raw = line.decode(errors="replace").rstrip()
+
+            # A progress line is a report about the run, not part of its output.
+            # It never reaches the terminal, and never reaches output detection.
+            event = parse_progress(raw)
+            if event is not None:
+                payload = json.dumps({"fraction": event.fraction, "label": event.label})
+                yield f"event: progress\ndata: {payload}\n\n".encode()
+                continue
+
             stdout_lines.append(raw)
             yield f"data: {html.escape(raw)}\n\n".encode()
 

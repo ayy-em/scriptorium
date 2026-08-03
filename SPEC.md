@@ -224,7 +224,7 @@ thing that failed. It clears when Alpine initialises and fonts are ready, with a
 | `GET /` | script browser |
 | `GET /favourites` | the same browser, client-filtered to starred scripts |
 | `GET /scripts/{theme}/{script_name}` | detail page + generated form |
-| `GET /scripts/{theme}/{script_name}/run` | run the script, stream output as SSE |
+| `GET /scripts/{theme}/{script_name}/run` | run the script, stream output as SSE (`start`, unnamed output, `progress`, `done`) |
 | `POST /api/runs/{run_id}/cancel` | kill a running script and its whole process tree |
 | `GET /history` | past runs, newest first, with re-run links |
 | `POST /api/history/clear` | delete every stored run record |
@@ -253,15 +253,61 @@ absolute directory path, so on the other two launch tiers the endpoint returns
 
 `_stream_script` yields stdout lines, then stderr lines wrapped in
 `<span class='stderr'>`, then an exit line and a `done` event carrying
-`{exit_code, elapsed}`. The client maps these to console severities.
+`{exit_code, elapsed, status, outputs}`. The client maps these to console
+severities.
 
 One special case: `core/runner.py` writes its own run banner
 (`[av.filmstrip] done in 1.2s`) to **stderr** as routine progress. Without
 handling, every successful run would render as a wall of warnings, so the client
 demotes lines matching `^\[<key>\] ` to info — unless they say `failed`.
 
-There is no output-artifact detection; the UI states as much rather than
-implying otherwise. Tracked in BACKLOG.md.
+Output artifacts are detected server-side from what the script printed; see
+`core.outputs.find_reported_outputs` and the "Recent outputs panel" entry in
+BACKLOG.md for what that heuristic does and does not cover.
+
+### Progress reporting
+
+A script is a subprocess, so its only channel to the UI is its own output. A
+stdout line prefixed `::progress::` followed by JSON
+(`{"fraction": 0.42, "label": "0:12 / 0:30"}`) is a progress report rather than
+output. `_stream_script` pulls those lines out and re-emits them as
+`event: progress`, so they never reach the terminal and never reach output
+detection — a label that happens to look like a path is not credited as a
+written file. A malformed sentinel line is left alone and shown as ordinary
+output, on the grounds that a stray visible line beats a swallowed one.
+
+`fraction` may be `null`, meaning the script is working but cannot say how far
+along it is; the client's bar stays indeterminate for that rather than sitting
+at zero.
+
+Scripts do not write the sentinel by hand — `core/progress.py` owns it:
+
+| Producer | Used by | Axis |
+|---|---|---|
+| `scripts.av._utils.run_ffmpeg_with_progress` | one long ffmpeg pass — `av.{trim,volume,video_crop,dump_frames,to_anim}`, `formats.convert_{audio,video}` | position within the output, from ffmpeg's `-progress pipe:1` |
+| `core.progress.ProgressReporter` directly | many short ffmpeg calls — `av.{split,filmstrip,join}` | calls completed |
+
+The split matters. Where a script makes N short calls, ffmpeg's own progress
+reports against a different total each time, so the bar would reset on every
+file boundary; calls-completed is the axis the user is actually waiting on. The
+two are never mixed within one script.
+
+Two further rules, both enforced in `core/progress.py`:
+
+- **Throttling is the producer's job.** ffmpeg reports about twice a second and
+  a run can last an hour. `ProgressReporter` drops updates arriving inside
+  `MIN_INTERVAL_SECONDS` (0.4) and repeats of the same whole percent.
+- **A human at a terminal never sees a sentinel.** For a CLI run the reporter
+  writes a carriage-returned percentage to stderr instead, and stays silent
+  when stderr is not a tty — so piping a script's output somewhere does not
+  fill it with progress noise. The caller is distinguished by
+  `core.invocation.is_webapp_run()`.
+
+`run_ffmpeg_with_progress` reports against the **output** duration, which is not
+the source duration whenever a script trims or changes speed — `av.trim`,
+`av.dump_frames` and `av.to_anim` each compute their own. It drains stderr on a
+thread; reading stdout to exhaustion first would deadlock on any file verbose
+enough to fill the stderr pipe.
 
 ---
 

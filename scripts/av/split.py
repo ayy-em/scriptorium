@@ -62,6 +62,7 @@ def split(input: Path, timestamps: list[str], outputs_dir: Path, stem: str | Non
         run_ffmpeg(args)
         reporter.update((i + 1) / total_segments, f"segment {i + 1} of {total_segments}")
 
+    reporter.finish()
     return segments
 
 

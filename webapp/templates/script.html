@@ -133,6 +133,11 @@
       autoScroll: true,
       terminalOpen: true,
 
+      /* Progress, when the script reports any. Null fraction means it is
+         running but cannot say how far along — the bar stays indeterminate. */
+      progress: null,
+      progressLabel: '',
+
       /* Files this run wrote, and files earlier runs of this script wrote.
          Both come from the server, which only reports paths that still
          exist inside the outputs tree. */
@@ -360,7 +365,11 @@
       /* ── Running ──────────────────────────────────────────────────────── */
       statusLabel() {
         if (this.state === 'starting') return 'Starting script…';
-        if (this.state === 'running') return 'Running…';
+        if (this.state === 'running') {
+          return this.progress === null
+            ? 'Running…'
+            : 'Running… ' + Math.round(this.progress * 100) + '%';
+        }
         if (this.state === 'success') return 'Done in ' + _formatSeconds(this.elapsed);
         if (this.state === 'error') return 'Script failed (exit ' + this.exitCode + ')';
         if (this.state === 'cancelled') return 'Run cancelled';
@@ -385,6 +394,8 @@
         this.cancelling = false;
         this.autoScroll = true;
         this.terminalOpen = true;
+        this.progress = null;
+        this.progressLabel = '';
         this.state = 'starting';
 
         this._t0 = performance.now();
@@ -405,6 +416,17 @@
           if (this.state === 'starting') this.state = 'running';
           this._push(_decodeLine(e.data));
         };
+
+        /* Structured progress, not output — the server has already kept these
+           out of the terminal stream. */
+        this._es.addEventListener('progress', (e) => {
+          if (this.state === 'starting') this.state = 'running';
+          try {
+            var info = JSON.parse(e.data);
+            this.progress = typeof info.fraction === 'number' ? info.fraction : null;
+            this.progressLabel = info.label || '';
+          } catch (err) { /* the bar keeps its previous value */ }
+        });
 
         this._es.addEventListener('done', (e) => {
           var info = {};

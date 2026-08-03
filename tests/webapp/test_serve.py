@@ -8,6 +8,7 @@ import pytest
 
 from core import history
 from core.paths import outputs_root, read_version
+from core.progress import SENTINEL, ProgressEvent, encode
 from core.registry import discover, discover_themes
 from webapp.app import _parse_version, _read_git_hash, _themes_meta_json, _themes_search_json, app
 
@@ -149,6 +150,62 @@ class TestRunEndpoint:
             response = client.get("/scripts/lora/validate/run")
 
         assert b"exit 0" in response.content
+
+
+class TestProgressEvents:
+    """A progress line is a report about the run, not a line of its output."""
+
+    def _run(self, stdout_lines: list[bytes]):
+        async def _stdout():
+            for line in stdout_lines:
+                yield line
+
+        async def _stderr():
+            return
+            yield  # make it an async generator
+
+        mock_proc = MagicMock()
+        mock_proc.stdout = _stdout()
+        mock_proc.stderr = _stderr()
+        mock_proc.returncode = 0
+        mock_proc.wait = AsyncMock(return_value=0)
+
+        async def fake_create(*args, **kwargs):
+            return mock_proc
+
+        with patch("asyncio.create_subprocess_exec", new=fake_create):
+            return client.get("/scripts/lora/validate/run")
+
+    def test_a_sentinel_line_becomes_its_own_event(self):
+        content = self._run([encode(ProgressEvent(fraction=0.5, label="0:05 / 0:10")).encode() + b"\n"]).content
+        assert b"event: progress" in content
+        assert b'"fraction": 0.5' in content
+
+    def test_a_sentinel_line_never_reaches_the_terminal(self):
+        content = self._run([encode(ProgressEvent(fraction=0.5)).encode() + b"\n"]).content
+        assert SENTINEL.encode() not in content
+
+    def test_ordinary_output_still_streams_alongside_progress(self):
+        content = self._run(
+            [
+                encode(ProgressEvent(fraction=0.5)).encode() + b"\n",
+                b"/outputs/av/clip.mp4\n",
+            ]
+        ).content
+        assert b"event: progress" in content
+        assert b"data: /outputs/av/clip.mp4" in content
+
+    def test_progress_is_kept_out_of_output_detection(self):
+        """A label that happens to look like a path must not be credited as an output."""
+        line = encode(ProgressEvent(fraction=0.5, label="/outputs/av/clip.mp4")).encode() + b"\n"
+        with patch("webapp.app.find_reported_outputs", return_value=[]) as mock_detect:
+            self._run([line])
+        assert mock_detect.call_args[0][0] == []
+
+    def test_a_malformed_sentinel_stays_visible_as_output(self):
+        """Better a stray line in the terminal than a silently swallowed one."""
+        content = self._run([SENTINEL.encode() + b"{not json\n"]).content
+        assert b"not json" in content
 
 
 class TestSettingsAPI:

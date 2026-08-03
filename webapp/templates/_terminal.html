@@ -19,6 +19,11 @@
 
   <span class="status-strip-text" x-text="statusLabel()"></span>
 
+  {# What the script says it is working on. Only ffmpeg-backed scripts report
+     this, so most runs show nothing here. #}
+  <span class="status-strip-detail" x-show="isBusy && progressLabel" x-cloak
+        x-text="progressLabel"></span>
+
   <span class="status-strip-spacer"></span>
 
   <span class="status-strip-elapsed" x-show="elapsedLabel()" x-cloak>
@@ -44,7 +49,15 @@
     </button>
   </template>
 
-  <div class="status-progress" x-show="isBusy" aria-hidden="true"><span></span></div>
+  {# Determinate only once a script has reported a fraction; the animated
+     indeterminate sweep is the fallback, not a zero-width bar. #}
+  <div class="status-progress" x-show="isBusy"
+       :class="progress !== null ? 'status-progress--determinate' : ''"
+       role="progressbar" aria-label="Run progress"
+       :aria-valuenow="progress !== null ? Math.round(progress * 100) : null"
+       aria-valuemin="0" aria-valuemax="100">
+    <span :style="progress !== null ? 'width: ' + (progress * 100) + '%' : ''"></span>
+  </div>
 </div>
 
 <section class="terminal" x-show="lines.length || state !== 'idle'" x-cloak aria-label="Script output">

@@ -213,6 +213,8 @@ def filmstrip(
             draw.text((label_x, cell_y + layout.frame_h + 4), label, fill=(130, 130, 138), font=label_font)
             reporter.update((idx + 1) / num_strips, f"frame {idx + 1} of {num_strips}")
 
+        reporter.finish()
+
     if out_path.suffix.lower() == ".pdf":
         canvas.save(str(out_path), "PDF", resolution=150)
     else:

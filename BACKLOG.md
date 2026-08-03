@@ -5,17 +5,6 @@ Deferred work with enough context to pick up cold.
 Everything above the **Settled** heading is open work. Below it are closed
 entries, kept because the reasoning is worth not having to reconstruct.
 
-## Remaining run-lifecycle work
-
-**Status:** partially delivered (2026-07-28). Cancellation, the `RunHandle`
-value type, persisted history and re-run all shipped. One item of real work is
-left; the rest moved to **Settled** below.
-
-- **Progress reporting.** The status strip's bar is indeterminate because no
-  script emits progress. A `RunRecord` is somewhere to put structured progress
-  events if scripts ever grow them; ffmpeg's `-progress` output is the obvious
-  first source.
-
 ## Runtime dependencies need one coherent story
 
 **Status:** open (2026-07-30). Rough note — needs a proper design pass, not
@@ -76,6 +65,45 @@ wheel on `/`, or prefill the current script's file input if the type matches
 
 Closed, and kept only for the reasoning — either delivered, or considered and
 deliberately not built. Nothing here is queued work.
+
+## Remaining run-lifecycle work
+
+**Status:** resolved 2026-08-03. Cancellation, the `RunHandle` value type,
+persisted history and re-run shipped 2026-07-28; progress reporting was the last
+open item and is now delivered. See SPEC.md "Progress reporting" for the
+contract as built.
+
+The original note guessed that `RunRecord` was "somewhere to put structured
+progress events". It was the wrong home. A `RunRecord` is written **once, when a
+run ends** — it is the historical record of a finished invocation, and history is
+deliberately free of live process state. Progress is the opposite: many events
+during a run, interesting only while it is in flight, worthless afterwards.
+Nothing persists it, and nothing should.
+
+What it needed instead was a channel, and the only channel a subprocess has is
+its own stdout — so a `::progress::` sentinel line, pulled out of the stream by
+`_stream_script` and re-emitted as `event: progress`.
+
+Three things worth knowing for whoever touches this next:
+
+- **A sentinel convention was rejected for output detection** (see "Recent
+  outputs panel" below) because a stdout heuristic covered every script without
+  touching any. That reasoning does not transfer. There is nothing to infer
+  progress *from* — a script that does not say how far along it is simply is not
+  observable — so here the convention is the mechanism.
+- **Two axes, never mixed.** For one long ffmpeg pass, position within the
+  output. For many short calls (`av.split`, `av.filmstrip`, `av.join`), calls
+  completed. Using ffmpeg's own progress for the second kind sends the bar
+  backwards at every file boundary, because each call reports against a
+  different total.
+- **Throttling belongs to the producer.** ffmpeg reports ~2/second; an
+  hour-long run would otherwise put thousands of messages on the stream to say
+  what a half-second-stale bar already says.
+
+Deliberately not built: nothing consumes progress except the live UI. No
+per-run progress history, no ETA extrapolation from observed rate, no
+aggregate bar across a fan-out beyond the "File 3 of 8" counter that already
+existed. Each wants a design decision that nothing currently demands.
 
 ## Cancel does not clean up partial output
 

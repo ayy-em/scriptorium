@@ -116,6 +116,19 @@
         <p class="batch-progress" x-show="running && batchTotal > 1" x-cloak
            x-text="'File ' + batchIndex + ' of ' + batchTotal
                    + (batchFailed ? '  ·  ' + batchFailed + ' failed so far' : '')"></p>
+
+        {# Progress within the current file, for the scripts that report it.
+           Sits under the batch counter, which tracks the other axis. #}
+        <div class="run-progress" x-show="running" x-cloak>
+          <div class="status-progress"
+               :class="progress !== null ? 'status-progress--determinate' : ''"
+               role="progressbar" aria-label="Run progress"
+               :aria-valuenow="progress !== null ? Math.round(progress * 100) : null"
+               aria-valuemin="0" aria-valuemax="100">
+            <span :style="progress !== null ? 'width: ' + (progress * 100) + '%' : ''"></span>
+          </div>
+          <p class="run-progress-label" x-show="progressLabel" x-cloak x-text="progressLabel"></p>
+        </div>
       </form>
 
       <div class="runner-output" x-show="runLines.length || running">
