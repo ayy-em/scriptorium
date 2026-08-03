@@ -5,50 +5,149 @@ Deferred work with enough context to pick up cold.
 Everything above the **Settled** heading is open work. Below it are closed
 entries, kept because the reasoning is worth not having to reconstruct.
 
-## Runtime dependencies need one coherent story
+## Runtime dependencies: bundle ffmpeg
 
-**Status:** open (2026-07-30). Rough note — needs a proper design pass, not
-piecemeal fixes.
+**Status:** open (2026-08-04), decision made, not yet built. The detection half
+of the original entry is delivered — see "Runtime dependencies needed one
+coherent story" under Settled for the reasoning and the corrected dependency
+table.
 
-The `.app` bundles its Python dependencies but not the heavy native ones, and
-each missing piece currently fails in its own unrelated way. Nothing states, in
-one place, what a clean Mac actually needs. Verified against
-`/Applications/Scriptorium.app` (0.5.2):
+**Decided:** bundle a **GPL** ffmpeg build and comply, rather than LGPL.
 
-| Dependency | Bundled? | Needed by | Behaviour when absent |
-|---|---|---|---|
-| ffmpeg / ffprobe | no | ~15 scripts (`av.*`, `gif.*`, `formats.convert_{audio,video}`) | detected; sidebar banner with an install hint |
-| pango / cairo / glib | no | `formats.convert_docs`, `telegram.*` PDF output | Homebrew-only; `scripts/telegram/_runtime.py` patches `cffi.FFI.dlopen` to search `/opt/homebrew/lib` and `/usr/local/lib`. No Homebrew, no PDF |
-| rembg model weights | no | `photo.remove_bg` | silent 167–170MB download per model on first use, into `~/.u2net/` |
-| `OPENAI_API_KEY` | n/a | `speech.transcribe` | needs `.env`; no equivalent of the ffmpeg banner |
+The usual way to avoid GPL obligations is an LGPL build, and it does not work
+here: LGPL ffmpeg ships without libx264/libx265, and `formats.convert_video`
+encodes H.264 by default — `--quality max` is documented as "CRF 0, lossless
+H.264". An LGPL build cannot do that. openh264 is not a clean swap either; it is
+a different encoder with different quality behaviour.
 
-Three things to decide together rather than one at a time:
+So the obligations are real, because releases are published on GitHub:
 
-1. **Bundle or require?** Bundling ffmpeg and the pango/cairo/glib stack makes
-   the `.app` genuinely self-contained and removes the Homebrew assumption,
-   at a large size cost and real relocation/signing work. Requiring them is
-   the status quo and needs honest first-run docs instead.
-2. **Uniform detection.** `core.paths.has_ffmpeg()` is the only capability check
-   that exists, it is evaluated once at import (`webapp/app.py:68`, so installing
-   ffmpeg mid-session does not clear the banner until restart), and nothing
-   equivalent covers pango, model weights, or API keys. One mechanism, surfaced
-   the same way for every dependency, beats four bespoke failure modes.
-3. **First-run cost should be visible.** A 167MB download with no progress and
-   no warning is the worst case (see the streaming issue: the tqdm bar goes to
-   stderr and is not shown until the run ends). Options: ship the default model,
-   pre-fetch on first launch with visible progress, or confirm before download.
+- Ship ffmpeg's licence text inside the bundle.
+- Provide a source offer for the exact build shipped.
+- See HUMAN_TODO.md — this needs a human decision, not an agent's.
 
-**Done 2026-08-01, ahead of the design pass:** the two documentation lies are
-fixed. `remove_bg`'s `--model` help said only non-default models download
-weights; every model does, including `u2net`. And README.md's build table was
-headed "Prerequisites" without saying *to build* — it now has a "What the built
-app needs to run" table covering all four rows above. That is honest docs, not
-the uniform detection mechanism, which is still the open part of this entry.
+**What to build:**
+
+1. Fetch a **shared** GPL build per platform at build time, not a static one.
+   The static Windows pair measured **370MB** (185MB each, everything embedded
+   twice) against a current `dist/` of 657MB. Shared builds put the codecs in
+   DLLs both executables share. The saving is expected but **unverified** —
+   measure before committing to it.
+2. Add the binaries to `binaries=` in all three specs.
+3. Resolve them at runtime. Every invocation goes through
+   `scripts/av/_utils.py` (`run_ffmpeg`, `run_ffmpeg_with_progress`,
+   `run_ffmpeg_stderr`, `run_ffprobe`), which currently spawns the bare name
+   `"ffmpeg"` and relies on PATH. That is the one chokepoint to change —
+   prefer the bundled binary, fall back to PATH.
+4. `core.capabilities`' `ffmpeg` probe must then check the bundled location
+   too, or the banner will claim ffmpeg is missing inside a bundle that
+   contains it.
+
+**Note:** `gif.make_gif` is *not* affected. It assembles frames with Pillow; the
+original entry listing `gif.*` as an ffmpeg consumer was wrong.
+
+## Visible first-run cost for rembg model weights
+
+**Status:** open (2026-08-04), decided and designed, not built.
+
+**Decided:** do *not* bundle model weights — they are per-option, and
+`birefnet-general` alone is ~950MB. Instead tell the user before the download
+starts and show progress while it runs.
+
+The groundwork is done: `core.capabilities.model_weights_present(model)` answers
+"will selecting this model trigger a download" without importing rembg, so a
+form can warn *before* the run rather than after.
+
+**How the progress part works** — verified against the installed sources, not
+assumed:
+
+- rembg fetches weights with `pooch.retrieve(..., progressbar=True)` in each
+  session class's `download_models()`.
+- pooch accepts a **custom** progressbar object instead of `True`: anything with
+  `.total` (settable), `.update(n)`, `.reset()` and `.close()`
+  (`pooch/downloaders.py`, the `elif self.progressbar:` branch). tqdm's default
+  writes to stderr, which is why the existing bar is invisible until the run
+  ends.
+- So a ~15-line adapter over `core.progress.ProgressReporter` makes the download
+  drive the same status bar transcodes already use.
+- rembg hardcodes `progressbar=True`, so this needs a contained wrap of
+  `pooch.retrieve`. Precedent: `core/native_libs.py` patches `cffi.FFI.dlopen`.
+
+**One open question:** where the size in the warning comes from. A `HEAD` request
+to the model's release URL is accurate and self-maintaining but means the form
+page makes an outbound request; a hardcoded table is offline but goes stale.
+Leaning `HEAD`, cached, with no number shown on failure.
+
+## Bundle the pango/cairo/glib stack
+
+**Status:** open (2026-08-04). Deliberately deferred in favour of detection.
+
+Detection shipped instead: a missing pango stack is now named in the sidebar with
+a per-platform install command, and only the two Telegram scripts that render
+PDFs are affected. That is enough that PDF output no longer fails with a raw
+`OSError` from inside cffi.
+
+Bundling it properly would make PDF output work on a machine with neither
+Homebrew nor MSYS2. It is the most painful of the native dependencies:
+
+- Three separate stacks to lay out — Homebrew dylibs, MSYS2/UCRT DLLs, Linux
+  shared objects — each with its own transitive graph (pango → harfbuzz →
+  freetype → fontconfig → glib → cairo → pixman …).
+- macOS dylibs need relocating and re-signing after being moved into the bundle,
+  or Gatekeeper rejects them.
+- `core/native_libs.py` already has the runtime half: it prepends
+  `sys._MEIPASS/lib` to the cffi dlopen fallback search path, so bundled libs
+  are found first. The missing part is purely build-time layout.
+
+Worth doing if the app is ever handed to someone who will not install anything.
+Not worth it while the audience is one person with Homebrew and MSYS2 already
+installed.
 
 # Settled
 
 Closed, and kept only for the reasoning — either delivered, or considered and
 deliberately not built. Nothing here is queued work.
+
+## Runtime dependencies needed one coherent story
+
+**Status:** the detection half resolved 2026-08-04. Bundling and the model
+download UX are the two open entries above; this covers what was learned and what
+the original table got wrong.
+
+`core/capabilities.py` replaces the bespoke checks with one value type — see
+SPEC.md "`core.capabilities`". The old `core.paths.has_ffmpeg()` is gone.
+
+**The original table was wrong in four ways**, all found by probing rather than
+reading:
+
+| Claim | Reality |
+|---|---|
+| four dependencies | **seven**. `pandoc` is a hard requirement of `formats.convert_docs` and was not listed at all; `gifsicle` and the weasyprint CLI are optional ones nothing tracked |
+| `gif.*` needs ffmpeg | it does not — `make_gif` assembles frames with Pillow and shells out to nothing |
+| `pango` is needed by `formats.convert_docs` | `convert_docs` needs **pandoc**, and uses the weasyprint *CLI* only to improve PDFs. The pango *library* is needed by `telegram.{chat,group}_analysis`, which import weasyprint in-process |
+| Homebrew-only, "no Homebrew, no PDF" | `core/native_libs.py` already handled Windows/MSYS2 as well as Homebrew. A bare `import weasyprint` fails on Windows, but the patched import the app actually performs succeeds |
+
+That last one is worth dwelling on: **testing a dependency the way the app does
+not use it produced a confident, wrong answer.** The pango probe imports
+weasyprint for real, after applying the dlopen patch, precisely because
+guessing at library filenames or checking an unpatched import both lie.
+
+**Two bugs the pass surfaced**, neither of them the stated task:
+
+- The `openai-key` probe reported a false negative unless `core.env.load_env()`
+  had already run. The webapp does it at import; a CLI caller does not. The probe
+  now loads `.env` itself — a probe whose answer depends on who called first is
+  worse than no probe.
+- Binding `capabilities.missing` straight into `templates.env.globals` captures
+  the function object at import. That is the *same* early-binding mistake that
+  made the old ffmpeg banner need a restart, hidden one level down, and it
+  silently defeated the fix — the tests only caught it because patching the
+  module attribute had no effect. The globals are named wrappers now.
+
+**Deliberately not merged:** `webapp/_badges.py` keeps its own tool map. It
+answers "what does this script drive" — including yt-dlp, which ships in the
+bundle and is therefore never missing. Forcing an always-present tool into a
+"might be absent" registry would be worse than two three-line maps.
 
 ## Global drop overlay on script detail pages
 

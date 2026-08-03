@@ -122,16 +122,27 @@ a different question — the bundle carries its Python dependencies but not the
 heavy native ones, and every script still works without them except the ones
 listed here.
 
+Each of these is **detected**, and any that is missing is named in the sidebar
+with an install command for your platform. The check re-runs as you use the app,
+so installing something and reloading the page clears it without a restart.
+
 | Needed for | Requirement | Without it |
 |---|---|---|
-| `av.*`, `gif.*`, `formats.convert_{audio,video}` | **ffmpeg** on `PATH` | Detected: a banner appears in the sidebar with install instructions |
-| `photo.remove_bg` | ~170MB of model weights (~950MB for `birefnet-general`) | Downloaded to `~/.u2net/` on first use of each model, with no progress shown until the run ends |
-| `formats.convert_docs`, Telegram PDF reports | **pango, cairo, glib** — Homebrew on macOS | PDF output fails; everything else is unaffected |
+| `av.*`, `formats.convert_{audio,video}` | **ffmpeg** and **ffprobe** on `PATH` | Those scripts fail; everything else is unaffected |
+| `formats.convert_docs` | **pandoc** on `PATH` | Document conversion fails |
+| Telegram PDF reports | **pango, cairo, glib** — Homebrew on macOS, MSYS2 or the GTK3 runtime on Windows | PDF output fails; the other Telegram scripts are unaffected |
 | `speech.transcribe` | `OPENAI_API_KEY` in a `.env` file | The script errors out |
+| `photo.remove_bg` | Model weights, ~170MB per model (~950MB for `birefnet-general`) | Downloaded to `~/.u2net/` on first use of each model |
+
+Two more are optional — reported, but nothing breaks without them: **gifsicle**
+makes `av.to_anim --optimize` more effective, and the **weasyprint** CLI gives
+`formats.convert_docs` nicer PDFs than pandoc's own engine.
 
 Windows additionally needs **Edge or Chrome** for the desktop window; the
-installer will not check for it. See BACKLOG.md for the plan to make all of
-this detected uniformly rather than four separate failure modes.
+installer will not check for it.
+
+`gif.make_gif` needs nothing external despite sitting next to the A/V scripts —
+it assembles frames with Pillow.
 
 ### macOS app
 

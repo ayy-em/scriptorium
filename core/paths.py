@@ -190,11 +190,6 @@ def outputs_dir(theme: str) -> Path:
     return d
 
 
-def has_ffmpeg() -> bool:
-    """Return True if ffmpeg is available on PATH."""
-    return shutil.which("ffmpeg") is not None
-
-
 def read_version() -> str:
     """Read the project version, with frozen-mode fallback."""
     try:

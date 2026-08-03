@@ -2141,6 +2141,12 @@ input[type=checkbox] {
   transition: width 200ms var(--ease-out);
 }
 
+@media (prefers-reduced-motion: reduce) {
+  /* The bar still fills — that is information, not decoration — but it jumps
+     to each reported value instead of sliding there. */
+  .status-progress--determinate span { transition: none; }
+}
+
 @keyframes indeterminate {
   0%   { transform: translateX(-100%); }
   100% { transform: translateX(295%); }

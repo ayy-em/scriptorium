@@ -20,11 +20,15 @@ scriptorium/
 ├── outputs/                 # per-theme outputs land here as <theme>/<file>
 ├── core/
 │   ├── argparse.py          # ScriptoriumParser with ui_label support
+│   ├── capabilities.py      # external dependencies: one probe, one value type
 │   ├── config.py            # user settings persistence (UserConfig, load, save)
 │   ├── history.py           # run history persistence (RunRecord, load, append)
 │   ├── env.py               # centralized .env loading
+│   ├── invocation.py        # who started this run — webapp or a human
+│   ├── native_libs.py       # cffi dlopen fallback for pango/cairo/glib
 │   ├── outputs.py           # standardized output path resolution
 │   ├── paths.py             # centralized path resolution (frozen vs dev)
+│   ├── progress.py          # the ::progress:: reporting contract
 │   ├── registry.py          # auto-discovers scripts and themes
 │   └── runner.py            # dispatch + middleware (run, run_fn)
 ├── scripts/
@@ -682,8 +686,59 @@ def av_inputs_dir() -> Path:
     return inputs_dir("av")
 ```
 
-`core.paths` also provides `templates_dir()`, `static_dir()`, `has_ffmpeg()`,
-`read_version()`, and the `FROZEN` boolean.
+`core.paths` also provides `templates_dir()`, `static_dir()`, `read_version()`,
+and the `FROZEN` boolean. It used to carry `has_ffmpeg()`; that moved into
+`core.capabilities` below, which answers the same question for every dependency
+rather than one.
+
+### `core.capabilities` — what this machine can actually do
+
+Scriptorium depends on things Python cannot install: ffmpeg, pandoc, the
+pango/cairo/glib stack, an OpenAI key, rembg model weights fetched on first use.
+Each used to fail its own way — a bespoke sidebar banner for ffmpeg, a raw
+`CalledProcessError` for pandoc, an `OSError` from inside cffi for pango.
+
+`core.capabilities` makes them one shape. A `Capability` carries `present`,
+`needed_for` (what stops working), `hint` (already resolved for this platform),
+`remedy` and `required`:
+
+| Capability | Probe | Needed by | Required |
+|---|---|---|---|
+| `ffmpeg` | `ffmpeg` **and** `ffprobe` on PATH | `av.*`, `formats.convert_{audio,video}` | yes |
+| `pandoc` | on PATH | `formats.convert_docs` | yes |
+| `pango` | real `import weasyprint`, after `core.native_libs` | `telegram.{chat,group}_analysis` | yes |
+| `weasyprint-cli` | on PATH | nicer `convert_docs` PDFs | no |
+| `gifsicle` | on PATH | `av.to_anim --optimize` | no |
+| `openai-key` | `OPENAI_API_KEY` after `load_env()` | `speech.transcribe` | yes |
+
+`required=False` exists so an optional dependency is reported without being
+alarming: a missing gifsicle costs a larger GIF, not a script.
+
+Four rules worth not rediscovering:
+
+- **Probe results expire** (`CACHE_SECONDS`). The old `has_ffmpeg()` was
+  evaluated once at import into a Jinja global, so installing ffmpeg and
+  reloading still showed the banner until the app was restarted. The Jinja
+  globals are named wrapper functions, not the bound `capabilities.missing` —
+  binding the function object directly reintroduces the same early binding in a
+  less visible place.
+- **A probe never fails a render.** One that raises counts as absent.
+- **`pango` is probed by importing weasyprint for real**, not by guessing at
+  library filenames. The failure mode *is* that the libraries exist but cannot
+  be resolved, so only an actual load settles it — and
+  `core.native_libs.ensure_native_lib_resolution()` has to run first, or a
+  working Homebrew/MSYS2 install reads as missing.
+- **`photo.remove_bg` is not in the registry.** Its dependency is a *per-model*
+  weights file, so it goes through `model_weights_present(model)` instead.
+
+The script→capability map lives here, keyed by dotted key first and theme
+second. It is deliberately *not* merged with `webapp/_badges.py`'s tool map,
+which answers a different question — "what does this script drive", including
+yt-dlp, which ships in the bundle and so is never missing.
+
+Two entries the earlier BACKLOG.md notes got wrong: `gif.make_gif` needs no
+ffmpeg (it assembles frames with Pillow), and the pango dependency belongs to
+the two Telegram scripts that render PDFs, not the whole theme.
 
 ### `core.outputs` — standardized output path resolution
 

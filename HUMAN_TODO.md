@@ -5,11 +5,41 @@ confirm, and checks that need a real desktop session. Ordered roughly by how
 much they affect what people see.
 
 Everything here is **optional** — the app ships and looks coherent without any
-of it. Nothing below is a blocker.
+of it — **except item 1**, which blocks one specific future release.
 
 ---
 
-## 1. Optional illustrations
+## 1. ffmpeg licensing, before any release that bundles it
+
+**This one is a blocker**, and only for a release that ships ffmpeg inside the
+bundle. Nothing about the app today is affected: ffmpeg is still required on
+`PATH`, and requiring a binary carries no obligation.
+
+The decision on record (see BACKLOG.md, "Runtime dependencies: bundle ffmpeg") is
+to bundle a **GPL** build. That is not a preference — LGPL builds ship without
+libx264/libx265, and `formats.convert_video` encodes H.264 by default, so an
+LGPL build cannot do what the script advertises.
+
+Distributing a GPL binary in a public GitHub release brings obligations. What
+needs a human:
+
+- [ ] **Confirm you are comfortable distributing under GPL terms.** The practical
+      reading is that invoking ffmpeg as a separate process is aggregation rather
+      than linking, so it does not make Scriptorium's own code GPL — but you are
+      still redistributing a GPL binary and that part is unambiguous.
+- [ ] **Decide which build to ship** and record its exact version and source URL.
+      A named, reproducible build makes the source offer answerable.
+- [ ] **Write the source offer** for the release notes — where the corresponding
+      source for that exact build can be obtained.
+- [ ] **Confirm the licence text placement.** `COPYING.GPLv3` plus the build's
+      own configuration/credits belongs inside the bundle next to the binaries.
+
+If any of that is unwelcome, the fallback is to keep requiring ffmpeg on `PATH`,
+which is what the app does now and needs no licence work at all.
+
+---
+
+## 2. Optional illustrations
 
 Small spot art for empty states. The shared `empty_state()` macro currently
 renders a single icon in a lavender rounded square, which is fine — this is
@@ -22,7 +52,7 @@ polish, not a gap.
 
 ---
 
-## 2. Checks that need a real desktop session
+## 3. Checks that need a real desktop session
 
 The prettification pass was verified in a headless browser pane. The following
 could not be verified there and need a human with the app actually open.
@@ -76,7 +106,7 @@ could not be verified there and need a human with the app actually open.
 
 ---
 
-## 3. Housekeeping
+## 4. Housekeeping
 
 - [ ] **Alpine is pinned at 3.15.12** in `webapp/static/js/`. It is vendored, so
       updating means re-downloading both `alpinejs.min.js` and
