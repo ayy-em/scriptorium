@@ -7,7 +7,7 @@ import sys
 from core.argparse import ScriptoriumParser
 from core.outputs import resolve_output
 from core.paths import resolve_input
-from scripts.av._utils import probe_streams, run_ffmpeg, run_ffprobe
+from scripts.av._utils import probe_duration_or_none, probe_streams, run_ffmpeg_with_progress, run_ffprobe
 
 TITLE = "Adjust audio volume, normalize, or apply fade-in/out"
 DESCRIPTION = "Apply composable volume operations in a single ffmpeg pass: amplify -> normalize -> fade-in -> fade-out."
@@ -63,7 +63,10 @@ def adjust_volume(  # noqa: PLR0913
         filters.append(f"afade=t=out:st={start:.3f}:d={fade_out}")
 
     af_chain = ",".join(filters)
-    run_ffmpeg(["-i", str(input), "-af", af_chain, str(output)])
+    run_ffmpeg_with_progress(
+        ["-i", str(input), "-af", af_chain, str(output)],
+        total_seconds=probe_duration_or_none(input),
+    )
 
     if normalize:
         print(
@@ -76,6 +79,9 @@ def _get_duration(file: Path) -> float:
     """Return the duration in seconds of the audio content in a media file.
 
     Falls back to format-level duration if no audio stream duration is found.
+    Deliberately not ``_utils.probe_duration``, which answers a different
+    question: this positions a fade within the *audio*, and on a file whose
+    video outruns its audio the container duration would place it too late.
 
     Args:
         file: Media file to probe.

@@ -10,7 +10,12 @@ import tempfile
 from core.argparse import ScriptoriumParser
 from core.outputs import resolve_output
 from core.paths import resolve_input
-from scripts.av._utils import probe_streams, run_ffmpeg
+from scripts.av._utils import (
+    parse_time,
+    probe_duration_or_none,
+    probe_streams,
+    run_ffmpeg_with_progress,
+)
 
 _CREATION_FLAGS = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
 
@@ -117,6 +122,32 @@ def _sd_scale_filter(src_w: int, src_h: int) -> str | None:
     return f"scale={target_w}:-2:flags=lanczos"
 
 
+def _output_seconds(source: Path, start: str | None, end: str | None, speed: float) -> float | None:
+    """Return how long the finished animation will be, for progress reporting.
+
+    ffmpeg reports its position in *output* time, so a speed change has to be
+    divided out — at ``--speed 2.0`` a ten-second clip reports up to five.
+
+    Args:
+        source: Source video file.
+        start: Start timestamp, or None for the beginning.
+        end: End timestamp, or None for the end of the video.
+        speed: Playback speed multiplier.
+
+    Returns:
+        Output duration in seconds, or None when the source duration is not
+        knowable and no end timestamp was given.
+    """
+    try:
+        begin = parse_time(start) if start is not None else 0.0
+        finish = parse_time(end) if end is not None else probe_duration_or_none(source)
+    except ValueError:
+        return None
+    if finish is None:
+        return None
+    return max(0.0, finish - begin) / speed
+
+
 def to_anim(  # noqa: PLR0912, PLR0913
     source: Path,
     output: Path,
@@ -204,10 +235,12 @@ def to_anim(  # noqa: PLR0912, PLR0913
 
     vf_base = ",".join(filters)
 
+    total_seconds = _output_seconds(source, start, end, speed)
+
     if fmt == "gif":
-        _make_gif(source, time_args, output, vf_base, loop, optimize=optimize_gif)
+        _make_gif(source, time_args, output, vf_base, loop, optimize=optimize_gif, total_seconds=total_seconds)
     else:
-        _make_webp(source, time_args, output, vf_base, loop)
+        _make_webp(source, time_args, output, vf_base, loop, total_seconds=total_seconds)
 
     return output
 
@@ -220,6 +253,7 @@ def _make_gif(
     loop: int,
     *,
     optimize: bool = False,
+    total_seconds: float | None = None,
 ) -> None:
     """Generate a GIF via two-pass palette encoding.
 
@@ -238,6 +272,9 @@ def _make_gif(
         vf_base: Base video filter (speed + fps + optional scale).
         loop: Number of times to loop; 0 = infinite.
         optimize: Aggressively optimize for file size.
+        total_seconds: Expected output duration, for progress reporting. Each
+            pass covers the whole range, so the bar fills twice — the labels
+            say which pass is moving.
     """
     palettegen = "palettegen=stats_mode=diff"
     paletteuse = "paletteuse"
@@ -250,8 +287,12 @@ def _make_gif(
 
     palette_vf = f"{vf_base},format=rgb24,{palettegen}"
     try:
-        run_ffmpeg(["-v", "error", *time_args, "-i", str(source), "-vf", palette_vf, "-update", "1", str(palette)])
-        run_ffmpeg(
+        run_ffmpeg_with_progress(
+            ["-v", "error", *time_args, "-i", str(source), "-vf", palette_vf, "-update", "1", str(palette)],
+            total_seconds=total_seconds,
+            label_prefix="palette pass: ",
+        )
+        run_ffmpeg_with_progress(
             [
                 *time_args,
                 "-i",
@@ -263,7 +304,9 @@ def _make_gif(
                 "-loop",
                 str(loop),
                 str(output),
-            ]
+            ],
+            total_seconds=total_seconds,
+            label_prefix="encode pass: ",
         )
     finally:
         palette.unlink(missing_ok=True)
@@ -285,7 +328,15 @@ def _gifsicle_optimize(path: Path) -> None:
     )
 
 
-def _make_webp(source: Path, time_args: list[str], output: Path, vf_base: str, loop: int) -> None:
+def _make_webp(
+    source: Path,
+    time_args: list[str],
+    output: Path,
+    vf_base: str,
+    loop: int,
+    *,
+    total_seconds: float | None = None,
+) -> None:
     """Generate an animated WebP.
 
     Uses quality=80 and compression_level=6 for a good size/quality balance.
@@ -298,8 +349,9 @@ def _make_webp(source: Path, time_args: list[str], output: Path, vf_base: str, l
         output: Destination WebP path.
         vf_base: Base video filter (speed + fps + optional scale).
         loop: Number of times to loop; 0 = infinite.
+        total_seconds: Expected output duration, for progress reporting.
     """
-    run_ffmpeg(
+    run_ffmpeg_with_progress(
         [
             *time_args,
             "-i",
@@ -315,7 +367,8 @@ def _make_webp(source: Path, time_args: list[str], output: Path, vf_base: str, l
             "-loop",
             str(loop),
             str(output),
-        ]
+        ],
+        total_seconds=total_seconds,
     )
 
 

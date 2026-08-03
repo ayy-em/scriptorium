@@ -14,7 +14,8 @@ from typing import TYPE_CHECKING
 from core.argparse import ScriptoriumParser
 from core.outputs import resolve_output
 from core.paths import resolve_input
-from scripts.av._utils import run_ffmpeg, run_ffprobe
+from core.progress import ProgressReporter
+from scripts.av._utils import probe_duration, run_ffmpeg
 
 if TYPE_CHECKING:
     from PIL import ImageDraw as _ImageDrawModule
@@ -160,7 +161,7 @@ def filmstrip(
     rows, cols = _parse_grid(grid)
     num_strips = rows * cols
 
-    duration = _probe_duration(source)
+    duration = probe_duration(source)
     effective = duration - offset
     if effective <= 0:
         raise ValueError(f"offset ({offset}s) >= video duration ({duration:.1f}s)")
@@ -187,6 +188,10 @@ def filmstrip(
 
         _draw_header(draw, layout.canvas_w, source.name, duration, pad_x=layout.pad_x)
 
+        # Each frame is its own near-instant ffmpeg call, so ffmpeg's own
+        # progress says nothing useful. Tiles completed is the real axis.
+        reporter = ProgressReporter()
+
         for idx, seek in enumerate(positions):
             frame_path = tmp_dir / f"frame_{idx:03d}.jpg"
             if idx > 0:
@@ -206,6 +211,7 @@ def filmstrip(
             label_w = draw.textlength(label, font=label_font)
             label_x = cell_x + layout.frame_w // 2 - label_w / 2
             draw.text((label_x, cell_y + layout.frame_h + 4), label, fill=(130, 130, 138), font=label_font)
+            reporter.update((idx + 1) / num_strips, f"frame {idx + 1} of {num_strips}")
 
     if out_path.suffix.lower() == ".pdf":
         canvas.save(str(out_path), "PDF", resolution=150)
@@ -243,15 +249,6 @@ def _draw_header(
 
     right_w = draw.textlength(right, font=font_sm)
     draw.text((canvas_w - pad_x - right_w, (_HEADER_H - 13) // 2), right, fill=(110, 110, 118), font=font_sm)
-
-
-def _probe_duration(file: Path) -> float:
-    """Return the duration in seconds for a video file."""
-    data = run_ffprobe(["-show_format", str(file)])
-    duration = data.get("format", {}).get("duration")
-    if duration is None:
-        raise ValueError(f"Cannot determine duration of {file}")
-    return float(duration)
 
 
 def _extract_frame(source: Path, seek: float, dest: Path) -> None:

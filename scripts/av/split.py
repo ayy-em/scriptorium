@@ -7,6 +7,7 @@ import sys
 from core.argparse import ScriptoriumParser
 from core.outputs import default_stem, resolve_output_dir
 from core.paths import resolve_input
+from core.progress import ProgressReporter
 from scripts.av._utils import format_time, parse_time, run_ffmpeg
 
 TITLE = "Split media file in multiple segments"
@@ -37,7 +38,12 @@ def split(input: Path, timestamps: list[str], outputs_dir: Path, stem: str | Non
     breakpoints: list[str | None] = [None, *timestamps, None]
     segments: list[Path] = []
 
-    for i in range(len(breakpoints) - 1):
+    # Segments are stream copies, each fast on its own; how many are done is
+    # what the user is waiting on, not how far into any one of them ffmpeg is.
+    total_segments = len(breakpoints) - 1
+    reporter = ProgressReporter()
+
+    for i in range(total_segments):
         start = breakpoints[i]
         end = breakpoints[i + 1]
         output = outputs_dir / f"{stem}_{i + 1:03d}{input.suffix}"
@@ -54,6 +60,7 @@ def split(input: Path, timestamps: list[str], outputs_dir: Path, stem: str | Non
         args += ["-c", "copy", "-avoid_negative_ts", "make_zero", str(output)]
 
         run_ffmpeg(args)
+        reporter.update((i + 1) / total_segments, f"segment {i + 1} of {total_segments}")
 
     return segments
 

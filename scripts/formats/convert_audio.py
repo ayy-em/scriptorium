@@ -6,7 +6,7 @@ import sys
 
 from core.argparse import ScriptoriumParser
 from core.outputs import resolve_output_dir, resolve_single_output
-from scripts.av._utils import run_ffmpeg
+from scripts.av._utils import probe_duration_or_none, run_ffmpeg_with_progress
 from scripts.formats._utils import (
     AUDIO_EXTS,
     QUALITY_PRESETS,
@@ -38,7 +38,11 @@ def _transcode(input_path: Path, output: Path, quality: str) -> None:
         args = ["-i", str(input_path), str(output)]
     else:
         args = ["-i", str(input_path), "-b:a", preset["audio_bitrate"], str(output)]
-    run_ffmpeg(args)
+    run_ffmpeg_with_progress(
+        args,
+        total_seconds=probe_duration_or_none(input_path),
+        label_prefix=f"{input_path.name}: ",
+    )
 
 
 def convert(

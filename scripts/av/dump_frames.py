@@ -8,7 +8,7 @@ import sys
 from core.argparse import ScriptoriumParser
 from core.outputs import resolve_output_dir
 from core.paths import resolve_input
-from scripts.av._utils import run_ffmpeg
+from scripts.av._utils import parse_time, probe_duration_or_none, run_ffmpeg_with_progress
 
 TITLE = "Dump all frames from a video clip"
 DESCRIPTION = "Extract every frame between two timestamps to JPEG files."
@@ -28,6 +28,28 @@ def _normalize_timestamp(ts: str) -> str:
 
 
 SUPPORTED_FORMATS = ("jpg", "png")
+
+
+def _extracted_seconds(video: Path, start: str | None, end: str | None) -> float | None:
+    """Return how much media the extraction will cover, for progress reporting.
+
+    Args:
+        video: Source video.
+        start: Start timestamp, or None for the beginning.
+        end: End timestamp, or None for the end of the video.
+
+    Returns:
+        Length of the extracted range in seconds, or None when it cannot be
+        determined and the bar should stay indeterminate.
+    """
+    try:
+        begin = parse_time(_normalize_timestamp(start)) if start is not None else 0.0
+        if end is not None:
+            return max(0.0, parse_time(_normalize_timestamp(end)) - begin)
+    except ValueError:
+        return None
+    duration = probe_duration_or_none(video)
+    return None if duration is None else max(0.0, duration - begin)
 
 
 def dump_frames(
@@ -76,7 +98,10 @@ def dump_frames(
 
     pattern = str(frame_dir / f"frame_%05d.{fmt}")
     quality_args = ["-q:v", "2"] if fmt == "jpg" else []
-    run_ffmpeg(["-i", str(video), *seek_args, "-vsync", "0", *quality_args, pattern])
+    run_ffmpeg_with_progress(
+        ["-i", str(video), *seek_args, "-vsync", "0", *quality_args, pattern],
+        total_seconds=_extracted_seconds(video, start, end),
+    )
 
     return sorted(frame_dir.glob(f"*.{fmt}"))
 

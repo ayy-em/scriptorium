@@ -7,7 +7,7 @@ import sys
 from core.argparse import ScriptoriumParser
 from core.outputs import resolve_output
 from core.paths import resolve_input
-from scripts.av._utils import probe_streams, run_ffmpeg
+from scripts.av._utils import probe_duration_or_none, probe_streams, run_ffmpeg_with_progress
 
 TITLE = "Crop a video by trimming its edges"
 DESCRIPTION = "Remove pixels from the top, right, bottom, and/or left edges of a video file."
@@ -64,7 +64,10 @@ def crop(  # noqa: PLR0913
         raise ValueError(f"Vertical crop ({top} + {bottom} = {top + bottom}) exceeds source height ({src_h})")
 
     crop_filter = f"crop={out_w}:{out_h}:{left}:{top}"
-    run_ffmpeg(["-i", str(source), "-vf", crop_filter, str(output)])
+    run_ffmpeg_with_progress(
+        ["-i", str(source), "-vf", crop_filter, str(output)],
+        total_seconds=probe_duration_or_none(source),
+    )
 
 
 _EXAMPLES = """

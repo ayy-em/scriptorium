@@ -10,6 +10,7 @@ import tempfile
 
 from core.argparse import ScriptoriumParser
 from core.outputs import resolve_output
+from core.progress import ProgressReporter
 from scripts.av._utils import (
     av_inputs_dir,
     find_media_files,
@@ -66,14 +67,23 @@ def join(inputs_dir: Path, output: Path, order: str = "filename") -> Path:
     with tempfile.TemporaryDirectory() as _tmp:
         work_dir = Path(_tmp)
 
-        preprocessed = [_preprocess_file(f, work_dir, i) for i, f in enumerate(files)]
+        # Files preprocessed is the only honest axis here. Per-file ffmpeg
+        # progress would report against a different total for each file and
+        # send the bar backwards every time one finished.
+        reporter = ProgressReporter()
+        preprocessed = []
+        for i, f in enumerate(files):
+            reporter.update(i / (len(files) + 1), f"preparing {f.name} ({i + 1} of {len(files)})")
+            preprocessed.append(_preprocess_file(f, work_dir, i))
 
         concat_list = work_dir / "concat.txt"
         with open(concat_list, "w", encoding="utf-8") as cf:
             for f in preprocessed:
                 cf.write(f"file '{f.resolve()}'\n")
 
+        reporter.update(len(files) / (len(files) + 1), "joining", force=True)
         run_ffmpeg(["-f", "concat", "-safe", "0", "-i", str(concat_list), "-c", "copy", str(output)])
+        reporter.finish()
 
     processed_dir = inputs_dir / "processed"
     processed_dir.mkdir(exist_ok=True)

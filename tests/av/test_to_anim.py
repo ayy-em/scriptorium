@@ -7,6 +7,14 @@ import pytest
 
 from scripts.av.to_anim import _cap_scale_filter, to_anim
 
+
+@pytest.fixture(autouse=True)
+def _stub_duration_probe():
+    """Keep progress reporting from probing media files that do not exist."""
+    with patch("scripts.av.to_anim.probe_duration_or_none", return_value=None):
+        yield
+
+
 # ---------------------------------------------------------------------------
 # _cap_scale_filter unit tests (pure logic, no I/O)
 # ---------------------------------------------------------------------------
@@ -51,7 +59,7 @@ def test_cap_scale_filter_output_width_is_even():
 
 
 # ---------------------------------------------------------------------------
-# to_anim integration tests (run_ffmpeg mocked; probe_streams mocked for scale)
+# to_anim integration tests (run_ffmpeg_with_progress mocked; probe_streams mocked for scale)
 # ---------------------------------------------------------------------------
 
 
@@ -67,18 +75,18 @@ def _out(tmp_path: Path, ext: str = ".webp") -> Path:
     return tmp_path / f"out{ext}"
 
 
-def test_gif_calls_run_ffmpeg_twice(tmp_path):
+def test_gif_calls_run_ffmpeg_with_progress_twice(tmp_path):
     src = tmp_path / "clip.mp4"
     src.touch()
-    with patch("scripts.av.to_anim.run_ffmpeg") as mock_ff:
+    with patch("scripts.av.to_anim.run_ffmpeg_with_progress") as mock_ff:
         to_anim(src, _out(tmp_path, ".gif"), "0", "5")
     assert mock_ff.call_count == 2
 
 
-def test_webp_calls_run_ffmpeg_once(tmp_path):
+def test_webp_calls_run_ffmpeg_with_progress_once(tmp_path):
     src = tmp_path / "clip.mp4"
     src.touch()
-    with patch("scripts.av.to_anim.run_ffmpeg") as mock_ff:
+    with patch("scripts.av.to_anim.run_ffmpeg_with_progress") as mock_ff:
         to_anim(src, _out(tmp_path, ".webp"), "0", "5")
     assert mock_ff.call_count == 1
 
@@ -86,7 +94,7 @@ def test_webp_calls_run_ffmpeg_once(tmp_path):
 def test_gif_first_pass_uses_palettegen_stats_mode_diff(tmp_path):
     src = tmp_path / "clip.mp4"
     src.touch()
-    with patch("scripts.av.to_anim.run_ffmpeg") as mock_ff:
+    with patch("scripts.av.to_anim.run_ffmpeg_with_progress") as mock_ff:
         to_anim(src, _out(tmp_path, ".gif"), "0", "5")
     first_call_args = mock_ff.call_args_list[0][0][0]
     vf_value = first_call_args[first_call_args.index("-vf") + 1]
@@ -96,7 +104,7 @@ def test_gif_first_pass_uses_palettegen_stats_mode_diff(tmp_path):
 def test_gif_second_pass_uses_paletteuse(tmp_path):
     src = tmp_path / "clip.mp4"
     src.touch()
-    with patch("scripts.av.to_anim.run_ffmpeg") as mock_ff:
+    with patch("scripts.av.to_anim.run_ffmpeg_with_progress") as mock_ff:
         to_anim(src, _out(tmp_path, ".gif"), "0", "5")
     second_call_args = mock_ff.call_args_list[1][0][0]
     fc_value = second_call_args[second_call_args.index("-filter_complex") + 1]
@@ -106,7 +114,7 @@ def test_gif_second_pass_uses_paletteuse(tmp_path):
 def test_webp_uses_libwebp_codec(tmp_path):
     src = tmp_path / "clip.mp4"
     src.touch()
-    with patch("scripts.av.to_anim.run_ffmpeg") as mock_ff:
+    with patch("scripts.av.to_anim.run_ffmpeg_with_progress") as mock_ff:
         to_anim(src, _out(tmp_path, ".webp"), "0", "5")
     args = mock_ff.call_args[0][0]
     assert args[args.index("-vcodec") + 1] == "libwebp"
@@ -115,7 +123,7 @@ def test_webp_uses_libwebp_codec(tmp_path):
 def test_webp_has_quality_and_compression_settings(tmp_path):
     src = tmp_path / "clip.mp4"
     src.touch()
-    with patch("scripts.av.to_anim.run_ffmpeg") as mock_ff:
+    with patch("scripts.av.to_anim.run_ffmpeg_with_progress") as mock_ff:
         to_anim(src, _out(tmp_path, ".webp"), "0", "5")
     args = mock_ff.call_args[0][0]
     assert "-quality" in args
@@ -125,7 +133,7 @@ def test_webp_has_quality_and_compression_settings(tmp_path):
 def test_fps_appears_in_filter(tmp_path):
     src = tmp_path / "clip.mp4"
     src.touch()
-    with patch("scripts.av.to_anim.run_ffmpeg") as mock_ff:
+    with patch("scripts.av.to_anim.run_ffmpeg_with_progress") as mock_ff:
         to_anim(src, _out(tmp_path), "0", "5", fps=10)
     first_call_args = mock_ff.call_args_list[0][0][0]
     vf_value = first_call_args[first_call_args.index("-vf") + 1]
@@ -135,7 +143,7 @@ def test_fps_appears_in_filter(tmp_path):
 def test_width_adds_scale_filter(tmp_path):
     src = tmp_path / "clip.mp4"
     src.touch()
-    with patch("scripts.av.to_anim.run_ffmpeg") as mock_ff:
+    with patch("scripts.av.to_anim.run_ffmpeg_with_progress") as mock_ff:
         to_anim(src, _out(tmp_path), "0", "5", width=480)
     first_call_args = mock_ff.call_args_list[0][0][0]
     vf_value = first_call_args[first_call_args.index("-vf") + 1]
@@ -145,7 +153,7 @@ def test_width_adds_scale_filter(tmp_path):
 def test_oversized_source_is_scaled_down(tmp_path):
     src = tmp_path / "clip.mp4"
     src.touch()
-    with _patch_probe(3840, 2160), patch("scripts.av.to_anim.run_ffmpeg") as mock_ff:
+    with _patch_probe(3840, 2160), patch("scripts.av.to_anim.run_ffmpeg_with_progress") as mock_ff:
         to_anim(src, _out(tmp_path), "0", "5")
     first_call_args = mock_ff.call_args_list[0][0][0]
     vf_value = first_call_args[first_call_args.index("-vf") + 1]
@@ -155,7 +163,7 @@ def test_oversized_source_is_scaled_down(tmp_path):
 def test_within_cap_source_has_no_scale_filter(tmp_path):
     src = tmp_path / "clip.mp4"
     src.touch()
-    with _patch_probe(1280, 720), patch("scripts.av.to_anim.run_ffmpeg") as mock_ff:
+    with _patch_probe(1280, 720), patch("scripts.av.to_anim.run_ffmpeg_with_progress") as mock_ff:
         to_anim(src, _out(tmp_path), "0", "5")
     first_call_args = mock_ff.call_args_list[0][0][0]
     vf_value = first_call_args[first_call_args.index("-vf") + 1]
@@ -166,7 +174,7 @@ def test_no_width_and_probe_fails_omits_scale(tmp_path):
     src = tmp_path / "clip.mp4"
     src.touch()
     with patch("scripts.av.to_anim.probe_streams", side_effect=Exception("ffprobe unavailable")):
-        with patch("scripts.av.to_anim.run_ffmpeg") as mock_ff:
+        with patch("scripts.av.to_anim.run_ffmpeg_with_progress") as mock_ff:
             to_anim(src, _out(tmp_path), "0", "5")
     first_call_args = mock_ff.call_args_list[0][0][0]
     vf_value = first_call_args[first_call_args.index("-vf") + 1]
@@ -177,7 +185,7 @@ def test_returns_webp_path_by_default(tmp_path):
     src = tmp_path / "clip.mp4"
     src.touch()
     out = _out(tmp_path, ".webp")
-    with patch("scripts.av.to_anim.run_ffmpeg"):
+    with patch("scripts.av.to_anim.run_ffmpeg_with_progress"):
         result = to_anim(src, out, "0", "5")
     assert result.suffix == ".webp"
 
@@ -186,7 +194,7 @@ def test_returns_gif_path_for_gif_output(tmp_path):
     src = tmp_path / "clip.mp4"
     src.touch()
     out = _out(tmp_path, ".gif")
-    with patch("scripts.av.to_anim.run_ffmpeg"):
+    with patch("scripts.av.to_anim.run_ffmpeg_with_progress"):
         result = to_anim(src, out, "0", "5")
     assert result.suffix == ".gif"
 
@@ -195,7 +203,7 @@ def test_output_path_is_returned_as_is(tmp_path):
     src = tmp_path / "clip.mp4"
     src.touch()
     out = tmp_path / "custom_name.webp"
-    with patch("scripts.av.to_anim.run_ffmpeg"):
+    with patch("scripts.av.to_anim.run_ffmpeg_with_progress"):
         result = to_anim(src, out, "0", "5")
     assert result.stem == "custom_name"
 
@@ -210,7 +218,7 @@ def test_raises_on_unknown_format(tmp_path):
 def test_timestamps_passed_to_ffmpeg(tmp_path):
     src = tmp_path / "clip.mp4"
     src.touch()
-    with patch("scripts.av.to_anim.run_ffmpeg") as mock_ff:
+    with patch("scripts.av.to_anim.run_ffmpeg_with_progress") as mock_ff:
         to_anim(src, _out(tmp_path), "00:00:10", "00:00:20")
     first_call_args = mock_ff.call_args_list[0][0][0]
     assert "00:00:10" in first_call_args
@@ -220,7 +228,7 @@ def test_timestamps_passed_to_ffmpeg(tmp_path):
 def test_speed_adds_setpts_filter(tmp_path):
     src = tmp_path / "clip.mp4"
     src.touch()
-    with patch("scripts.av.to_anim.run_ffmpeg") as mock_ff:
+    with patch("scripts.av.to_anim.run_ffmpeg_with_progress") as mock_ff:
         to_anim(src, _out(tmp_path), "0", "5", speed=2.0)
     first_call_args = mock_ff.call_args_list[0][0][0]
     vf_value = first_call_args[first_call_args.index("-vf") + 1]
@@ -230,7 +238,7 @@ def test_speed_adds_setpts_filter(tmp_path):
 def test_speed_setpts_comes_before_fps(tmp_path):
     src = tmp_path / "clip.mp4"
     src.touch()
-    with patch("scripts.av.to_anim.run_ffmpeg") as mock_ff:
+    with patch("scripts.av.to_anim.run_ffmpeg_with_progress") as mock_ff:
         to_anim(src, _out(tmp_path), "0", "5", speed=2.0)
     first_call_args = mock_ff.call_args_list[0][0][0]
     vf_value = first_call_args[first_call_args.index("-vf") + 1]
@@ -240,7 +248,7 @@ def test_speed_setpts_comes_before_fps(tmp_path):
 def test_default_speed_omits_setpts(tmp_path):
     src = tmp_path / "clip.mp4"
     src.touch()
-    with patch("scripts.av.to_anim.run_ffmpeg") as mock_ff:
+    with patch("scripts.av.to_anim.run_ffmpeg_with_progress") as mock_ff:
         to_anim(src, _out(tmp_path), "0", "5")
     first_call_args = mock_ff.call_args_list[0][0][0]
     vf_value = first_call_args[first_call_args.index("-vf") + 1]
@@ -257,7 +265,7 @@ def test_invalid_speed_raises(tmp_path):
 def test_gif_passes_loop_to_ffmpeg(tmp_path):
     src = tmp_path / "clip.mp4"
     src.touch()
-    with patch("scripts.av.to_anim.run_ffmpeg") as mock_ff:
+    with patch("scripts.av.to_anim.run_ffmpeg_with_progress") as mock_ff:
         to_anim(src, _out(tmp_path, ".gif"), "0", "5", loop=3)
     second_call_args = mock_ff.call_args_list[1][0][0]
     assert second_call_args[second_call_args.index("-loop") + 1] == "3"
@@ -266,7 +274,7 @@ def test_gif_passes_loop_to_ffmpeg(tmp_path):
 def test_webp_passes_loop_to_ffmpeg(tmp_path):
     src = tmp_path / "clip.mp4"
     src.touch()
-    with patch("scripts.av.to_anim.run_ffmpeg") as mock_ff:
+    with patch("scripts.av.to_anim.run_ffmpeg_with_progress") as mock_ff:
         to_anim(src, _out(tmp_path, ".webp"), "0", "5", loop=2)
     args = mock_ff.call_args[0][0]
     assert args[args.index("-loop") + 1] == "2"
@@ -275,7 +283,7 @@ def test_webp_passes_loop_to_ffmpeg(tmp_path):
 def test_default_loop_is_zero(tmp_path):
     src = tmp_path / "clip.mp4"
     src.touch()
-    with patch("scripts.av.to_anim.run_ffmpeg") as mock_ff:
+    with patch("scripts.av.to_anim.run_ffmpeg_with_progress") as mock_ff:
         to_anim(src, _out(tmp_path, ".gif"), "0", "5")
     second_call_args = mock_ff.call_args_list[1][0][0]
     assert second_call_args[second_call_args.index("-loop") + 1] == "0"

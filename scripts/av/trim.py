@@ -7,7 +7,12 @@ import sys
 from core.argparse import ScriptoriumParser
 from core.outputs import resolve_output
 from core.paths import resolve_input
-from scripts.av._utils import format_time, parse_time, run_ffmpeg
+from scripts.av._utils import (
+    format_time,
+    parse_time,
+    probe_duration_or_none,
+    run_ffmpeg_with_progress,
+)
 
 TITLE = "Trim the media file that's just too damn long"
 DESCRIPTION = "Cut a video or audio file by skipping ahead to a start point, optionally stopping at an end point."
@@ -32,8 +37,13 @@ def trim(input: Path, output: Path, start: str, end: str | None = None) -> None:
     if end is not None:
         duration = parse_time(end) - parse_time(start)
         args += ["-t", format_time(duration)]
+    else:
+        source_duration = probe_duration_or_none(input)
+        duration = None if source_duration is None else max(0.0, source_duration - parse_time(start))
     args += ["-c", "copy", "-avoid_negative_ts", "make_zero", str(output)]
-    run_ffmpeg(args)
+    # ffmpeg reports its position within the output, which for a trim is the
+    # length of the kept range rather than of the source.
+    run_ffmpeg_with_progress(args, total_seconds=duration)
 
 
 _EXAMPLES = """

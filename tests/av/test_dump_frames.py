@@ -8,8 +8,15 @@ import pytest
 from scripts.av.dump_frames import dump_frames
 
 
+@pytest.fixture(autouse=True)
+def _stub_duration_probe():
+    """Keep progress reporting from probing media files that do not exist."""
+    with patch("scripts.av.dump_frames.probe_duration_or_none", return_value=None):
+        yield
+
+
 def test_dump_frames_passes_correct_ffmpeg_args(tmp_path):
-    with patch("scripts.av.dump_frames.run_ffmpeg") as mock_ff:
+    with patch("scripts.av.dump_frames.run_ffmpeg_with_progress") as mock_ff:
         dump_frames(Path("clip.mp4"), tmp_path, start="0m30s", end="1m0s")
 
     args = mock_ff.call_args[0][0]
@@ -21,7 +28,7 @@ def test_dump_frames_passes_correct_ffmpeg_args(tmp_path):
 
 
 def test_dump_frames_accepts_colon_timestamps(tmp_path):
-    with patch("scripts.av.dump_frames.run_ffmpeg") as mock_ff:
+    with patch("scripts.av.dump_frames.run_ffmpeg_with_progress") as mock_ff:
         dump_frames(Path("clip.mp4"), tmp_path, start="01:30", end="02:00")
 
     args = mock_ff.call_args[0][0]
@@ -30,7 +37,7 @@ def test_dump_frames_accepts_colon_timestamps(tmp_path):
 
 
 def test_dump_frames_accepts_bare_seconds(tmp_path):
-    with patch("scripts.av.dump_frames.run_ffmpeg") as mock_ff:
+    with patch("scripts.av.dump_frames.run_ffmpeg_with_progress") as mock_ff:
         dump_frames(Path("clip.mp4"), tmp_path, start="90", end="120")
 
     args = mock_ff.call_args[0][0]
@@ -39,7 +46,7 @@ def test_dump_frames_accepts_bare_seconds(tmp_path):
 
 
 def test_dump_frames_output_dir_uses_frames_stem_label(tmp_path):
-    with patch("scripts.av.dump_frames.run_ffmpeg"):
+    with patch("scripts.av.dump_frames.run_ffmpeg_with_progress"):
         dump_frames(Path("myclip.mp4"), tmp_path, start="0m10s", end="0m20s")
 
     expected_dir = tmp_path / "frames" / "myclip" / "0m10s-0m20s"
@@ -47,7 +54,7 @@ def test_dump_frames_output_dir_uses_frames_stem_label(tmp_path):
 
 
 def test_dump_frames_colon_label_replaces_colons_with_dots(tmp_path):
-    with patch("scripts.av.dump_frames.run_ffmpeg"):
+    with patch("scripts.av.dump_frames.run_ffmpeg_with_progress"):
         dump_frames(Path("v.mp4"), tmp_path, start="01:30", end="02:00")
 
     expected_dir = tmp_path / "frames" / "v" / "01.30-02.00"
@@ -55,7 +62,7 @@ def test_dump_frames_colon_label_replaces_colons_with_dots(tmp_path):
 
 
 def test_dump_frames_pattern_uses_frame_05d(tmp_path):
-    with patch("scripts.av.dump_frames.run_ffmpeg") as mock_ff:
+    with patch("scripts.av.dump_frames.run_ffmpeg_with_progress") as mock_ff:
         dump_frames(Path("v.mp4"), tmp_path, start="0m0s", end="0m5s")
 
     args = mock_ff.call_args[0][0]
@@ -70,21 +77,21 @@ def test_dump_frames_returns_sorted_jpg_paths(tmp_path):
     for name in frame_names:
         (frame_dir / name).touch()
 
-    with patch("scripts.av.dump_frames.run_ffmpeg"):
+    with patch("scripts.av.dump_frames.run_ffmpeg_with_progress"):
         result = dump_frames(Path("video.mp4"), tmp_path, start="0m0s", end="0m5s")
 
     assert [p.name for p in result] == sorted(frame_names)
 
 
 def test_dump_frames_returns_empty_list_when_no_frames_written(tmp_path):
-    with patch("scripts.av.dump_frames.run_ffmpeg"):
+    with patch("scripts.av.dump_frames.run_ffmpeg_with_progress"):
         result = dump_frames(Path("video.mp4"), tmp_path, start="0m0s", end="0m5s")
 
     assert result == []
 
 
 def test_dump_frames_jpg_includes_quality_arg(tmp_path):
-    with patch("scripts.av.dump_frames.run_ffmpeg") as mock_ff:
+    with patch("scripts.av.dump_frames.run_ffmpeg_with_progress") as mock_ff:
         dump_frames(Path("v.mp4"), tmp_path, start="0m0s", end="0m5s", fmt="jpg")
 
     args = mock_ff.call_args[0][0]
@@ -93,7 +100,7 @@ def test_dump_frames_jpg_includes_quality_arg(tmp_path):
 
 
 def test_dump_frames_png_has_no_quality_arg(tmp_path):
-    with patch("scripts.av.dump_frames.run_ffmpeg") as mock_ff:
+    with patch("scripts.av.dump_frames.run_ffmpeg_with_progress") as mock_ff:
         dump_frames(Path("v.mp4"), tmp_path, start="0m0s", end="0m5s", fmt="png")
 
     args = mock_ff.call_args[0][0]
@@ -107,7 +114,7 @@ def test_dump_frames_png_returns_png_paths(tmp_path):
     for name in ["frame_00001.png", "frame_00002.png"]:
         (frame_dir / name).touch()
 
-    with patch("scripts.av.dump_frames.run_ffmpeg"):
+    with patch("scripts.av.dump_frames.run_ffmpeg_with_progress"):
         result = dump_frames(Path("video.mp4"), tmp_path, start="0m0s", end="0m5s", fmt="png")
 
     assert all(p.suffix == ".png" for p in result)
@@ -120,7 +127,7 @@ def test_dump_frames_unsupported_format_raises(tmp_path):
 
 
 def test_dump_frames_no_start_omits_ss(tmp_path):
-    with patch("scripts.av.dump_frames.run_ffmpeg") as mock_ff:
+    with patch("scripts.av.dump_frames.run_ffmpeg_with_progress") as mock_ff:
         dump_frames(Path("v.mp4"), tmp_path, end="0m5s")
 
     args = mock_ff.call_args[0][0]
@@ -129,7 +136,7 @@ def test_dump_frames_no_start_omits_ss(tmp_path):
 
 
 def test_dump_frames_no_end_omits_to(tmp_path):
-    with patch("scripts.av.dump_frames.run_ffmpeg") as mock_ff:
+    with patch("scripts.av.dump_frames.run_ffmpeg_with_progress") as mock_ff:
         dump_frames(Path("v.mp4"), tmp_path, start="0m10s")
 
     args = mock_ff.call_args[0][0]
@@ -138,7 +145,7 @@ def test_dump_frames_no_end_omits_to(tmp_path):
 
 
 def test_dump_frames_no_start_no_end_dumps_entire_video(tmp_path):
-    with patch("scripts.av.dump_frames.run_ffmpeg") as mock_ff:
+    with patch("scripts.av.dump_frames.run_ffmpeg_with_progress") as mock_ff:
         dump_frames(Path("v.mp4"), tmp_path)
 
     args = mock_ff.call_args[0][0]
@@ -147,7 +154,7 @@ def test_dump_frames_no_start_no_end_dumps_entire_video(tmp_path):
 
 
 def test_dump_frames_no_timestamps_label(tmp_path):
-    with patch("scripts.av.dump_frames.run_ffmpeg"):
+    with patch("scripts.av.dump_frames.run_ffmpeg_with_progress"):
         dump_frames(Path("clip.mp4"), tmp_path)
 
     expected_dir = tmp_path / "frames" / "clip" / "0-end"
@@ -155,7 +162,7 @@ def test_dump_frames_no_timestamps_label(tmp_path):
 
 
 def test_dump_frames_start_only_label(tmp_path):
-    with patch("scripts.av.dump_frames.run_ffmpeg"):
+    with patch("scripts.av.dump_frames.run_ffmpeg_with_progress"):
         dump_frames(Path("clip.mp4"), tmp_path, start="01:30")
 
     expected_dir = tmp_path / "frames" / "clip" / "01.30-end"
@@ -163,7 +170,7 @@ def test_dump_frames_start_only_label(tmp_path):
 
 
 def test_dump_frames_end_only_label(tmp_path):
-    with patch("scripts.av.dump_frames.run_ffmpeg"):
+    with patch("scripts.av.dump_frames.run_ffmpeg_with_progress"):
         dump_frames(Path("clip.mp4"), tmp_path, end="02:00")
 
     expected_dir = tmp_path / "frames" / "clip" / "0-02.00"

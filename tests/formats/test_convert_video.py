@@ -9,11 +9,18 @@ from scripts.formats._utils import QUALITY_PRESETS, BatchConvertError
 from scripts.formats.convert_video import convert
 
 
+@pytest.fixture(autouse=True)
+def _stub_duration_probe():
+    """Keep progress reporting from probing the empty stand-in files these tests touch."""
+    with patch("scripts.formats.convert_video.probe_duration_or_none", return_value=None):
+        yield
+
+
 def test_convert_single_file(tmp_path):
     src = tmp_path / "clip.avi"
     src.touch()
     out_dir = tmp_path / "out"
-    with patch("scripts.formats.convert_video.run_ffmpeg"):
+    with patch("scripts.formats.convert_video.run_ffmpeg_with_progress"):
         result = convert(src, "mp4", out_dir)
     assert len(result) == 1
     assert result[0].suffix == ".mp4"
@@ -23,7 +30,7 @@ def test_convert_creates_output_directory(tmp_path):
     src = tmp_path / "clip.avi"
     src.touch()
     out_dir = tmp_path / "out" / "nested"
-    with patch("scripts.formats.convert_video.run_ffmpeg"):
+    with patch("scripts.formats.convert_video.run_ffmpeg_with_progress"):
         convert(src, "mp4", out_dir)
     assert out_dir.is_dir()
 
@@ -32,7 +39,7 @@ def test_convert_uses_crf(tmp_path):
     src = tmp_path / "clip.avi"
     src.touch()
     out_dir = tmp_path / "out"
-    with patch("scripts.formats.convert_video.run_ffmpeg") as mock_ff:
+    with patch("scripts.formats.convert_video.run_ffmpeg_with_progress") as mock_ff:
         convert(src, "mp4", out_dir, quality="high")
     args = mock_ff.call_args[0][0]
     assert "-crf" in args
@@ -43,7 +50,7 @@ def test_convert_quality_max_uses_crf_zero(tmp_path):
     src = tmp_path / "clip.avi"
     src.touch()
     out_dir = tmp_path / "out"
-    with patch("scripts.formats.convert_video.run_ffmpeg") as mock_ff:
+    with patch("scripts.formats.convert_video.run_ffmpeg_with_progress") as mock_ff:
         convert(src, "mp4", out_dir, quality="max")
     args = mock_ff.call_args[0][0]
     assert args[args.index("-crf") + 1] == "0"
@@ -53,7 +60,7 @@ def test_convert_no_audio_adds_an_flag(tmp_path):
     src = tmp_path / "clip.mp4"
     src.touch()
     out_dir = tmp_path / "out"
-    with patch("scripts.formats.convert_video.run_ffmpeg") as mock_ff:
+    with patch("scripts.formats.convert_video.run_ffmpeg_with_progress") as mock_ff:
         convert(src, "mkv", out_dir, no_audio=True)
     args = mock_ff.call_args[0][0]
     assert "-an" in args
@@ -72,7 +79,7 @@ def test_convert_batch_processes_all_files(tmp_path):
     for name in ["a.mp4", "b.mp4", "c.avi"]:
         (src_dir / name).touch()
     out_dir = tmp_path / "out"
-    with patch("scripts.formats.convert_video.run_ffmpeg"):
+    with patch("scripts.formats.convert_video.run_ffmpeg_with_progress"):
         result = convert(src_dir, "mp4", out_dir)
     assert len(result) == 3
 
@@ -86,13 +93,13 @@ def test_convert_batch_continues_on_per_file_error(tmp_path):
 
     call_count = 0
 
-    def fake_ffmpeg(args):
+    def fake_ffmpeg(args, **_kwargs):
         nonlocal call_count
         call_count += 1
         if "b.mp4" in args[args.index("-i") + 1]:
             raise subprocess.CalledProcessError(1, "ffmpeg")
 
-    with patch("scripts.formats.convert_video.run_ffmpeg", side_effect=fake_ffmpeg):
+    with patch("scripts.formats.convert_video.run_ffmpeg_with_progress", side_effect=fake_ffmpeg):
         with pytest.raises(BatchConvertError) as exc_info:
             convert(src_dir, "mp4", out_dir)
 
