@@ -5,7 +5,7 @@ Renders a 7-page A4 report from a Jinja2 HTML+CSS template. The public
 mirrors the 1:1 chat ``render_pdf`` so the orchestrator stays clean.
 """
 
-from scripts.telegram._runtime import ensure_native_lib_resolution
+from core.native_libs import ensure_native_lib_resolution
 
 ensure_native_lib_resolution()
 

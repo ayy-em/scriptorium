@@ -17,7 +17,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from core import history
+from core import capabilities, history
 from core.categories import CATEGORY_EXTS, categorize
 from core.config import UserConfig, clean_favourites, clean_sort_order
 from core.config import load as load_config
@@ -28,7 +28,6 @@ from core.outputs import find_reported_outputs
 from core.paths import (
     FROZEN,
     drop_session_dir,
-    has_ffmpeg,
     inputs_dir,
     logs_dir,
     outputs_root,
@@ -69,20 +68,50 @@ app = FastAPI(title="Scriptorium")
 app.mount("/static", StaticFiles(directory=str(static_dir())), name="static")
 templates = Jinja2Templates(directory=str(templates_dir()))
 templates.env.globals["is_frozen"] = FROZEN
-templates.env.globals["has_ffmpeg"] = has_ffmpeg()
 templates.env.globals["accepts_directory"] = accepts_directory
 templates.env.globals["spans_full_row"] = spans_full_row
+
+
+def _missing_capabilities(*, required_only: bool = True) -> tuple[capabilities.Capability, ...]:
+    """Return absent dependencies for the sidebar banner.
+
+    Indirection on purpose. Binding ``capabilities.missing`` into the Jinja
+    globals directly captures the function object at import, which is the same
+    early-binding mistake that made the old ffmpeg banner need a restart —
+    just less visible, since the result would still look live.
+
+    Args:
+        required_only: Omit capabilities whose absence only costs an option.
+
+    Returns:
+        Absent capabilities.
+    """
+    return capabilities.missing(required_only=required_only)
+
+
+def _capability_for_script(key: str) -> capabilities.Capability | None:
+    """Return the dependency a script needs, probed now rather than at import.
+
+    Args:
+        key: Dotted script key.
+
+    Returns:
+        The capability, or None when the script needs nothing external.
+    """
+    return capabilities.for_script(key)
+
+
+# Probing at import meant installing ffmpeg and reloading still showed the "not
+# found" banner until the app was restarted. core.capabilities caches for a few
+# seconds, so a render costs one probe at most.
+templates.env.globals["missing_capabilities"] = _missing_capabilities
+templates.env.globals["capability_for_script"] = _capability_for_script
 
 # A callable, not a value: the globals below are evaluated once at import, but
 # favourites change on every click. base.html calls this per render so the
 # starred state is correct in the first paint rather than after a fetch.
 templates.env.globals["user_preferences_json"] = lambda: json.dumps(
     {"favourites": (_c := load_config()).favourites, "sort_order": _c.sort_order}
-)
-templates.env.globals["ffmpeg_install_hint"] = (
-    "Install via Homebrew: brew install ffmpeg"
-    if sys.platform == "darwin"
-    else "Download ffmpeg from gyan.dev/ffmpeg/builds and add it to your PATH."
 )
 
 

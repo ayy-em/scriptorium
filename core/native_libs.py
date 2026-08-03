@@ -14,6 +14,11 @@ default lookup already finds system libs).
 
 When running from a frozen PyInstaller bundle, the bundled lib directory
 (``sys._MEIPASS``) is also added to the fallback search list.
+
+Lives in ``core`` rather than under ``scripts/telegram`` — where it started —
+because nothing about it is telegram-specific and two other callers need it:
+``core.capabilities``, to probe whether PDF output can work at all, and
+``formats.convert_docs``, whose PDF path goes through the same stack.
 """
 
 import os
@@ -44,7 +49,7 @@ def ensure_native_lib_resolution() -> None:
     if not search_paths:
         return
 
-    import cffi  # noqa: PLC0415 — local import so non-telegram callers don't pay for it
+    import cffi  # noqa: PLC0415 — local import so callers with no PDF work do not pay for it
 
     _original_dlopen = cffi.FFI.dlopen
 

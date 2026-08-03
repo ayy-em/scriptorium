@@ -11,7 +11,7 @@ is unchanged so ``chat_analysis.py`` is untouched.
 """
 
 # The cffi monkey-patch MUST run before WeasyPrint is imported.
-from scripts.telegram._runtime import ensure_native_lib_resolution
+from core.native_libs import ensure_native_lib_resolution
 
 ensure_native_lib_resolution()
 

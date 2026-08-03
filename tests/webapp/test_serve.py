@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from fastapi.testclient import TestClient
 import pytest
 
-from core import history
+from core import capabilities, history
 from core.paths import outputs_root, read_version
 from core.progress import SENTINEL, ProgressEvent, encode
 from core.registry import discover, discover_themes
@@ -156,6 +156,48 @@ class TestRunEndpoint:
             response = client.get("/scripts/lora/validate/run")
 
         assert b"exit 0" in response.content
+
+
+class TestDependencyBanner:
+    """The banner is rendered from a live probe, not a value frozen at import."""
+
+    def _absent(self, name="pandoc"):
+        return (
+            capabilities.Capability(
+                name=name,
+                label=name,
+                present=False,
+                remedy=capabilities.REMEDY_INSTALL,
+                required=True,
+                needed_for="Converting documents",
+                hint="brew install pandoc",
+            ),
+        )
+
+    def test_a_missing_dependency_is_named_with_its_hint(self):
+        with patch.object(capabilities, "missing", return_value=self._absent()):
+            body = client.get("/").text
+        assert "1 dependency missing" in body
+        assert "brew install pandoc" in body
+        assert "Converting documents" in body
+
+    def test_nothing_missing_renders_no_banner(self):
+        with patch.object(capabilities, "missing", return_value=()):
+            body = client.get("/").text
+        assert "dependency-banner" not in body
+
+    def test_the_count_is_pluralised(self):
+        two = self._absent("pandoc") + self._absent("ffmpeg")
+        with patch.object(capabilities, "missing", return_value=two):
+            body = client.get("/").text
+        assert "2 dependencies missing" in body
+
+    def test_installing_a_dependency_needs_no_restart(self):
+        """The old has_ffmpeg() was a Jinja global evaluated once, at import."""
+        with patch.object(capabilities, "missing", return_value=self._absent()):
+            assert "1 dependency missing" in client.get("/").text
+        with patch.object(capabilities, "missing", return_value=()):
+            assert "dependency-banner" not in client.get("/").text
 
 
 class TestWindowLevelDrop:

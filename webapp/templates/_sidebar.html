@@ -52,15 +52,29 @@
 
   <div class="sidebar-spacer"></div>
 
-  {% if not is_frozen and not has_ffmpeg %}
-  <div class="ffmpeg-banner">
-    <div class="ffmpeg-banner-title">ffmpeg not found</div>
-    <p>A/V scripts need ffmpeg on your PATH.<br><code>{{ ffmpeg_install_hint }}</code></p>
-  </div>
-  {% elif is_frozen and not has_ffmpeg %}
-  <div class="ffmpeg-banner">
-    <div class="ffmpeg-banner-title">ffmpeg not found</div>
-    <p>A/V scripts need ffmpeg installed.<br><code>{{ ffmpeg_install_hint }}</code></p>
+  {# Missing dependencies, from core.capabilities — which probes on each render
+     rather than once at import, so installing something and reloading clears it
+     without restarting the app. Optional capabilities are excluded: a missing
+     gifsicle costs a smaller GIF, which is not worth a warning.
+
+     One box rather than one per dependency. A clean machine is missing four of
+     these, and four stacked banners would push the rest of the sidebar off a
+     short window. #}
+  {% set absent = missing_capabilities() %}
+  {% if absent %}
+  <div class="dependency-banner">
+    <div class="dependency-banner-title">
+      {% if absent | length == 1 %}1 dependency missing{% else %}{{ absent | length }} dependencies missing{% endif %}
+    </div>
+    <ul class="dependency-list">
+      {% for capability in absent %}
+      <li>
+        <span class="dependency-name">{{ capability.label }}</span>
+        <span class="dependency-need">{{ capability.needed_for }}</span>
+        {% if capability.hint %}<code>{{ capability.hint }}</code>{% endif %}
+      </li>
+      {% endfor %}
+    </ul>
   </div>
   {% endif %}
 
