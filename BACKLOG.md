@@ -45,26 +45,58 @@ headed "Prerequisites" without saying *to build* — it now has a "What the buil
 app needs to run" table covering all four rows above. That is honest docs, not
 the uniform detection mechanism, which is still the open part of this entry.
 
-## Global drop overlay on script detail pages
-
-**Status:** deferred (2026-07-28), during the UI prettification pass.
-
-Drop-to-Discover works on the main screen only. Dragging a file onto a script
-detail page does nothing at the window level — the page's own dropzone works,
-but there is no app-wide overlay.
-
-The blocker is structural, not cosmetic: the drag handlers, upload staging,
-category matching and the radial chooser all live inside the single
-`scriptBrowser()` Alpine component that wraps `index.html`. Making the overlay
-app-wide means lifting that state into an Alpine store shared with `base.html`,
-and deciding what a drop on a detail page should even do — route back to the
-wheel on `/`, or prefill the current script's file input if the type matches
-(the more useful answer, and the one that needs `ACCEPTS` checked client-side).
-
 # Settled
 
 Closed, and kept only for the reasoning — either delivered, or considered and
 deliberately not built. Nothing here is queued work.
+
+## Global drop overlay on script detail pages
+
+**Status:** resolved 2026-08-03. A drop anywhere on a detail page now prefills
+that script's file input. See SPEC.md "Drop targets".
+
+**The stated blocker turned out not to be one.** The original note assumed the
+overlay needed `scriptBrowser`'s state — drag handlers, upload staging, category
+matching, the radial chooser — lifted into an Alpine store shared with
+`base.html`. That is true only for the *other* option, routing a detail-page drop
+back to the wheel on `/`. Once the chosen behaviour is "prefill this script's
+input", the target script is already known, and every one of those pieces exists
+to answer a question that is no longer being asked. What was actually needed:
+window-level drag handlers on `scriptRunner`, an extension check, and a call into
+the `_send()` the form's own dropzone already used. No store, no lifting.
+
+Worth remembering as a pattern: the blocker was real for the design in the note,
+and evaporated when the product decision changed. Re-derive the blocker after
+settling behaviour, not before.
+
+What the shared `_drop_hint.html` macros do and do not cover: the hint overlay
+and the rejection toast are genuinely identical between the two pages, so they
+are macros taking an Alpine expression. The upload spinner stayed in
+`_drop_overlay.html` — the detail page's dropzone reports upload state inline,
+and a full-screen spinner over it would be a regression.
+
+Two things deliberately left:
+
+- **`scripts/av/trim.html` has no window-level drop.** It overrides the template
+  with its own `trimApp` component, so it shares none of `scriptRunner`. Fixing
+  it means porting that component, which is the "Unify the trim.html console"
+  entry below — not worth a second copy of this logic in the meantime.
+- **The client-side decision logic has no committed test.** The repo is
+  pytest-only and a JS harness is a dependency decision, not a drive-by. The
+  server-rendered seams are covered in `TestWindowLevelDrop`
+  (`tests/webapp/test_serve.py`): handlers present, accept list correct per
+  script, `.stop` on the form dropzone, browser overlay unaffected by the macro
+  extraction.
+
+Two fixes fell out of the same pass, both unrelated to drops:
+
+- `script.html` passed `recentUrl` in its markup but never read it into the
+  component, so `_loadRecentOutputs` fetched `undefined` and the Recent outputs
+  panel was **always empty** since it shipped in `d1526f1`. Guarded by
+  `test_recent_outputs_url_is_read_into_the_component`.
+- A multi-file drop on a single-file input silently kept the first file and
+  discarded the rest, which looks like the drop worked. `_send` now refuses it
+  and says so. Only a drop could cause this; the OS picker cannot.
 
 ## Remaining run-lifecycle work
 
@@ -155,6 +187,12 @@ timestamps, no Clear, no collapse and no "Jump to latest".
 Unifying means porting its waveform editor onto the `scriptRunner()` Alpine
 component in `script.html`. Worth doing when that file is next opened for
 another reason; not worth a dedicated pass.
+
+The gap widened on 2026-08-03: `scriptRunner` gained progress reporting and a
+window-level drop target, and `trimApp` has neither. So `av.trim` alone has an
+indeterminate bar and a detail page where a drop outside the dropzone does
+nothing. Both come free with the port; neither justifies reimplementing in
+`trimApp`.
 
 ## BatchPlan abstraction
 

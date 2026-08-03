@@ -12,14 +12,22 @@
    double-quoted attribute would terminate at the first JSON string. #}
 <div class="script-page" x-cloak x-data='scriptRunner({
        theme: {{ theme | tojson }},
+       scriptKey: {{ key | tojson }},
        runUrl: {{ ("/scripts/" ~ key_path ~ "/run") | tojson }},
        previewUrl: {{ ("/api/preview-command/" ~ key_path) | tojson }},
        recentUrl: {{ ("/api/recent-outputs/" ~ key_path) | tojson }},
        fileDest: {{ (file_spec.dest if file_spec else None) | tojson }},
        fileWidget: {{ (file_spec.widget if file_spec else None) | tojson }},
+       acceptExts: {{ accept_exts | tojson }},
        requiredDests: {{ required_dests | tojson }},
        defaults: {{ defaults | tojson }}
-     })'>
+     })'
+     {# preventDefault happens inside the handlers, only for file drags —
+        unconditionally here would stop text being dragged into a path field. #}
+     @dragenter.window="onWindowDragOver($event)"
+     @dragover.window="onWindowDragOver($event)"
+     @dragleave.window="onWindowDragLeave()"
+     @drop.window="onWindowDrop($event)">
 
   <div class="script-main">
     <nav class="detail-breadcrumb" aria-label="Breadcrumb">
@@ -56,6 +64,7 @@
   </div>
 
   {% include "_script_context.html" %}
+  {% include "_script_drop.html" %}
 </div>
 
 <script>
@@ -102,13 +111,30 @@
     return m + 'm ' + (sec < 10 ? '0' : '') + sec + 's';
   }
 
+  /* True only for a drag carrying files, as opposed to dragged text or a link. */
+  function _isFileDrag(event) {
+    return !!(event.dataTransfer && Array.from(event.dataTransfer.types || []).indexOf('Files') !== -1);
+  }
+
+  /* Lowercase extension with the dot, to compare against the accept list.
+     Returns '' for a name with no extension at all. */
+  function _extOf(name) {
+    var i = String(name).lastIndexOf('.');
+    return i > 0 ? String(name).slice(i).toLowerCase() : '';
+  }
+
   function scriptRunner(config) {
     return {
       theme: config.theme,
+      scriptKey: config.scriptKey,
       runUrl: config.runUrl,
       previewUrl: config.previewUrl,
+      /* Was passed in the markup but never read here, so _loadRecentOutputs
+         fetched `undefined` and the Recent outputs panel was always empty. */
+      recentUrl: config.recentUrl,
       fileDest: config.fileDest,
       fileWidget: config.fileWidget,
+      acceptExts: config.acceptExts || '',
       requiredDests: config.requiredDests || [],
       defaults: config.defaults || {},
 
@@ -121,6 +147,14 @@
       uploadError: '',
       dragOver: false,
       multiMode: 'file',
+
+      /* Window-level drop. The form's own dropzone still works and shows its
+         inline highlight; this covers the rest of the page, which previously
+         swallowed a drop silently. */
+      windowDropping: false,
+      dropError: '',
+      _dropHideTimer: null,
+      _errorTimer: null,
 
       /* Run */
       state: 'idle',
@@ -221,10 +255,93 @@
         if (files.length) this._send(files);
       },
 
+      /* ── Window-level drop ────────────────────────────────────────────── */
+
+      /* Extensions this script will accept, from its ACCEPTS categories. An
+         empty list means the script declares none, i.e. anything goes. */
+      get _acceptedExts() {
+        return (this.acceptExts || '')
+          .split(',')
+          .map((e) => e.trim().toLowerCase())
+          .filter(Boolean);
+      },
+
+      dropHintSub() {
+        if (!this.fileDest) return 'This script takes no file input';
+        var exts = this._acceptedExts;
+        if (!exts.length) return 'Any file';
+        return exts.join(', ');
+      },
+
+      onWindowDragOver(event) {
+        if (!_isFileDrag(event)) return;
+        /* Without this the browser navigates to the dropped file. Scoped to
+           file drags so dragging text into a path field still works. */
+        event.preventDefault();
+        /* dragleave fires constantly while crossing child elements, so the
+           hide is deferred and any further dragover cancels it. A counter
+           drifts out of sync the moment one event is missed. */
+        if (this._dropHideTimer) { clearTimeout(this._dropHideTimer); this._dropHideTimer = null; }
+        this.windowDropping = true;
+      },
+
+      onWindowDragLeave() {
+        if (this._dropHideTimer) clearTimeout(this._dropHideTimer);
+        this._dropHideTimer = setTimeout(() => {
+          this.windowDropping = false;
+          this._dropHideTimer = null;
+        }, 80);
+      },
+
+      onWindowDrop(event) {
+        if (!_isFileDrag(event)) return;
+        event.preventDefault();
+        if (this._dropHideTimer) { clearTimeout(this._dropHideTimer); this._dropHideTimer = null; }
+        this.windowDropping = false;
+
+        var files = Array.from((event.dataTransfer && event.dataTransfer.files) || []);
+        if (!files.length) return;
+        if (this.isBusy || this.uploading) return;
+
+        if (!this.fileDest) {
+          this.showDropError(this.scriptKey + ' takes no file input.');
+          return;
+        }
+
+        var exts = this._acceptedExts;
+        if (exts.length) {
+          var rejected = files.filter((f) => exts.indexOf(_extOf(f.name)) === -1);
+          if (rejected.length) {
+            this.showDropError(
+              _extOf(rejected[0].name)
+                ? this.scriptKey + ' does not take ' + _extOf(rejected[0].name) + ' files.'
+                : this.scriptKey + ' cannot use ' + rejected[0].name + '.'
+            );
+            return;
+          }
+        }
+
+        this._send(files);
+      },
+
+      showDropError(message) {
+        this.dropError = message;
+        if (this._errorTimer) clearTimeout(this._errorTimer);
+        this._errorTimer = setTimeout(() => { this.dropError = ''; }, 6000);
+      },
+
       async _send(files) {
         this.uploadError = '';
+        this.dropError = '';
         var multi = this.fileWidget === 'file-multi';
-        if (!multi) files = files.slice(0, 1);
+
+        /* Only a drop can produce several files for a single-file input — the
+           OS picker cannot. Silently keeping the first and discarding the rest
+           looks like the drop worked. */
+        if (!multi && files.length > 1) {
+          this.uploadError = 'This script takes one file at a time — drop just one.';
+          return;
+        }
 
         this.uploading = true;
         this.uploadLabel = files.length > 1 ? 'Uploading ' + files.length + ' files…' : 'Uploading…';

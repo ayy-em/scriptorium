@@ -1,6 +1,7 @@
 """Tests for the Scriptorium web server routes."""
 
 import json
+import re
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from fastapi.testclient import TestClient
@@ -78,6 +79,11 @@ class TestScriptDetail:
         response = client.get("/scripts/does/notexist")
         assert response.status_code == 404
 
+    def test_recent_outputs_url_is_read_into_the_component(self):
+        """It was passed in the markup but never read, so the fetch hit `undefined`."""
+        response = client.get("/scripts/formats/convert_video")
+        assert "recentUrl: config.recentUrl" in response.text
+
     def test_lora_validate_renders(self):
         response = client.get("/scripts/lora/validate")
         assert response.status_code == 200
@@ -150,6 +156,52 @@ class TestRunEndpoint:
             response = client.get("/scripts/lora/validate/run")
 
         assert b"exit 0" in response.content
+
+
+class TestWindowLevelDrop:
+    """A drop anywhere on a detail page prefills that script's file input.
+
+    The matching itself is client-side; what is checkable here is that the page
+    is wired up and carries the accept list the decision needs.
+    """
+
+    def test_detail_page_has_window_drag_handlers(self):
+        response = client.get("/scripts/photo/remove_bg")
+        assert "@dragover.window" in response.text
+        assert "onWindowDrop($event)" in response.text
+
+    def test_detail_page_renders_the_drop_hint(self):
+        response = client.get("/scripts/photo/remove_bg")
+        assert "Drop to use here" in response.text
+        assert 'x-show="windowDropping &amp;&amp; !dragOver"' in response.text
+
+    def test_accept_list_reaches_the_component(self):
+        """Client-side ACCEPTS matching has nothing to match against without it."""
+        response = client.get("/scripts/photo/remove_bg")
+        assert "acceptExts:" in response.text
+        assert ".png" in response.text
+
+    def test_accept_list_is_the_scripts_own_categories(self):
+        video = client.get("/scripts/formats/convert_video").text
+        assert re.search(r'acceptExts: "[^"]*\.mp4[^"]*"', video)
+        assert not re.search(r'acceptExts: "[^"]*\.png[^"]*"', video)
+
+    def test_a_script_with_no_file_input_still_renders(self):
+        """The hint explains why a drop will not be taken rather than going missing."""
+        response = client.get("/scripts/downloads/download")
+        assert response.status_code == 200
+        assert "takes no file input" in response.text
+
+    def test_the_forms_own_dropzone_stops_propagation(self):
+        """Otherwise the page-wide handler would upload the same drop twice."""
+        response = client.get("/scripts/photo/remove_bg")
+        assert "@drop.prevent.stop=" in response.text
+
+    def test_the_browser_overlay_is_unchanged_by_the_shared_macros(self):
+        home = client.get("/").text
+        assert "Drop to discover" in home
+        assert "drop-uploading" in home
+        assert "drop-reject" in home
 
 
 class TestProgressEvents:

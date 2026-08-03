@@ -154,7 +154,9 @@ templates/
 ├── _script_context.html   # right-hand context column
 ├── _terminal.html         # run status strip + streaming console
 ├── _sidebar.html, _onboarding_modal.html, _howto_modal.html
-├── _drop_{overlay,chooser,runner}.html
+├── _drop_{overlay,chooser,runner}.html   # browser-side drop: hint, wheel, runner
+├── _drop_hint.html        # drop_hover()/drop_reject() macros, shared by both pages
+├── _script_drop.html      # detail-page window-level drop target
 └── scripts/av/trim.html   # hand-written override via a script's TEMPLATE attr
 ```
 
@@ -746,8 +748,9 @@ declared — `webapp._form.batch_mode_for()` reads it off the argument parser:
 | `per_file` | file input has widget `file` | not yet implemented; the card renders dimmed |
 
 To make a new script batch-capable, give its source argument `nargs="?"` and
-have it accept a directory, as the `formats.convert_*` scripts do. Per-file
-fan-out is tracked in `BACKLOG.md`.
+have it accept a directory, as the `formats.convert_*` scripts do. A `per_file`
+script is run once per dropped file by a loop in `scriptBrowser.startRun()`;
+`RunRecord.batch_id` groups the resulting records.
 
 #### Drop sessions
 
@@ -755,6 +758,37 @@ Every drop or clipboard paste writes into its own directory,
 `inputs/drop/<timestamp>-<random>/` (see `core.paths.drop_session_dir`), so a
 directory-native script never sees files from an earlier drop. All files in one
 drop must share a category; mixed batches are rejected by `/api/drop-upload`.
+
+#### Drop targets
+
+A file drop is accepted anywhere in the window, but what it means depends on
+which page you are on:
+
+| Page | Handler | Behaviour |
+|---|---|---|
+| browser (`/`, `/favourites`) | `scriptBrowser` in `index.html` | stages via `/api/drop-upload`, opens the radial chooser — the script is not yet known |
+| script detail | `scriptRunner` in `script.html` | prefills *this* script's file input — the script is already chosen |
+
+The detail page deliberately does **not** reuse the browser's staging. Because
+the target script is already known, the useful answer needs no session
+directory, no category matching and no chooser — just the upload the form's own
+dropzone already did. So the page-wide handler funnels into the same `_send()`
+and the form dropzone keeps its inline highlight, with `@drop.prevent.stop` so
+one drop is not handled twice.
+
+Type checking is client-side, against the `accept_exts` string already rendered
+for the file input (derived from `ACCEPTS` — see `accept_exts_for`). A script
+declaring no categories accepts anything. Rejections are explained in a toast
+rather than ignored: wrong extension, no file input on this script, or more than
+one file for a single-file input.
+
+`preventDefault` is called inside the handlers and only for drags carrying
+files, not via Alpine's `.prevent` — the unconditional version would stop text
+being dragged into a path field.
+
+**Not covered:** `scripts/av/trim.html` overrides the template with its own
+`trimApp` component and so has no window-level drop. See the "Unify the
+trim.html console" entry in BACKLOG.md.
 
 ### Optional: `get_parser()`
 

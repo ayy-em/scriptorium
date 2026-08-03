@@ -1,0 +1,57 @@
+{# Drag-and-drop chrome shared by the browser and the script detail page.
+
+   Both pages accept a window-level drop but do different things with it: the
+   browser stages the files and opens the radial chooser, the detail page
+   prefills the script's own file input. The hint and the rejection toast are
+   the parts that are genuinely the same, so they live here as macros taking
+   the Alpine expression that drives them — rather than as an include, which
+   would tie them to one component's state names.
+#}
+
+{# sub is literal text; sub_expr is an Alpine expression, for a subtitle that
+   depends on component state. Pass one or the other. #}
+{% macro drop_hover(show, title, sub='', sub_expr='') %}
+<div class="drop-overlay drop-hover"
+     x-show="{{ show }}"
+     x-transition:enter="drop-fade-enter"
+     x-transition:enter-start="drop-fade-start"
+     x-transition:enter-end="drop-fade-end"
+     x-transition:leave="drop-fade-enter"
+     x-transition:leave-start="drop-fade-end"
+     x-transition:leave-end="drop-fade-start">
+  <div class="drop-hover-inner">
+    <svg class="drop-hover-icon" width="48" height="48" viewBox="0 0 48 48" fill="none" aria-hidden="true">
+      <path d="M24 6v28M14 26l10 10 10-10" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M6 38h36" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+    </svg>
+    <p class="drop-hover-text">{{ title }}</p>
+    {% if sub_expr %}
+    <p class="drop-hover-sub" x-text="{{ sub_expr }}"></p>
+    {% else %}
+    <p class="drop-hover-sub">{{ sub }}</p>
+    {% endif %}
+  </div>
+</div>
+{% endmacro %}
+
+{% macro drop_reject(message_expr) %}
+<div class="drop-reject" x-show="{{ message_expr }}" x-cloak
+     x-transition:enter="tip-enter"
+     x-transition:enter-start="tip-from"
+     x-transition:enter-end="tip-to"
+     x-transition:leave="tip-leave"
+     x-transition:leave-start="tip-to"
+     x-transition:leave-end="tip-from">
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+    <circle cx="8" cy="8" r="6.25" stroke="currentColor" stroke-width="1.4"/>
+    <path d="M8 4.8v3.6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+    <circle cx="8" cy="11.1" r="0.8" fill="currentColor"/>
+  </svg>
+  <span x-text="{{ message_expr }}"></span>
+  <button class="drop-reject-close" @click="{{ message_expr }} = ''" aria-label="Dismiss">
+    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+    </svg>
+  </button>
+</div>
+{% endmacro %}

@@ -103,10 +103,12 @@
              'is-uploading': uploading,
              'is-invalid': !!uploadError
            }"
+           {# .stop keeps the page-wide handler in _script_drop.html from
+              handling the same drop a second time. #}
            @dragover.prevent="dragOver = true"
            @dragenter.prevent="dragOver = true"
            @dragleave="dragOver = false"
-           @drop.prevent="dropFile($event)">
+           @drop.prevent.stop="dropFile($event)">
 
       {% if spec.widget == "file-multi" %}
       <template x-if="multiMode === 'file'">

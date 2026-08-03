@@ -1,23 +1,9 @@
-{# Transient drag/upload states. The chooser itself lives in _drop_chooser.html. #}
+{# Transient drag/upload states for the browser. The chooser itself lives in
+   _drop_chooser.html; the hint and rejection toast are shared with the script
+   detail page via _drop_hint.html. #}
+{% from "_drop_hint.html" import drop_hover, drop_reject %}
 
-<!-- Drag hover: full-viewport hint -->
-<div class="drop-overlay drop-hover"
-     x-show="dropping && !chooserOpen"
-     x-transition:enter="drop-fade-enter"
-     x-transition:enter-start="drop-fade-start"
-     x-transition:enter-end="drop-fade-end"
-     x-transition:leave="drop-fade-enter"
-     x-transition:leave-start="drop-fade-end"
-     x-transition:leave-end="drop-fade-start">
-  <div class="drop-hover-inner">
-    <svg class="drop-hover-icon" width="48" height="48" viewBox="0 0 48 48" fill="none" aria-hidden="true">
-      <path d="M24 6v28M14 26l10 10 10-10" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-      <path d="M6 38h36" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
-    </svg>
-    <p class="drop-hover-text">Drop to discover</p>
-    <p class="drop-hover-sub">One file, or several of the same type</p>
-  </div>
-</div>
+{{ drop_hover('dropping && !chooserOpen', 'Drop to discover', 'One file, or several of the same type') }}
 
 <!-- Upload spinner -->
 <div class="drop-overlay drop-uploading" x-show="uploading" x-transition.opacity.duration.150ms>
@@ -27,23 +13,4 @@
   </div>
 </div>
 
-<!-- Rejected drop -->
-<div class="drop-reject" x-show="dropError" x-cloak
-     x-transition:enter="tip-enter"
-     x-transition:enter-start="tip-from"
-     x-transition:enter-end="tip-to"
-     x-transition:leave="tip-leave"
-     x-transition:leave-start="tip-to"
-     x-transition:leave-end="tip-from">
-  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-    <circle cx="8" cy="8" r="6.25" stroke="currentColor" stroke-width="1.4"/>
-    <path d="M8 4.8v3.6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-    <circle cx="8" cy="11.1" r="0.8" fill="currentColor"/>
-  </svg>
-  <span x-text="dropError"></span>
-  <button class="drop-reject-close" @click="dropError = ''" aria-label="Dismiss">
-    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-    </svg>
-  </button>
-</div>
+{{ drop_reject('dropError') }}

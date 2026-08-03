@@ -1,0 +1,14 @@
+{# Window-level drop target for a script detail page.
+
+   Drop-to-Discover on the browser stages files and asks which script to run.
+   Here the script is already chosen, so a drop goes straight into this
+   script's file input — no chooser, no wheel. That is why this page does not
+   reuse scriptBrowser's staging: the useful answer needed none of it.
+
+   Hidden while the pointer is over the form's own dropzone, which shows its
+   own inline highlight instead. #}
+{% from "_drop_hint.html" import drop_hover, drop_reject %}
+
+{{ drop_hover('windowDropping && !dragOver', 'Drop to use here', sub_expr='dropHintSub()') }}
+
+{{ drop_reject('dropError') }}
