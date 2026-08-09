@@ -76,3 +76,55 @@ class TestFindReportedOutputs:
 
     def test_empty_input_is_fine(self, tmp_path):
         assert find_reported_outputs([], self._tree(tmp_path)) == []
+
+
+class TestFindReportedOutputsSince:
+    """Results written outside the managed tree still count.
+
+    A file the user sent to ``~/Downloads`` is theirs to see. Modification time
+    is what separates it from an input the script merely echoed.
+    """
+
+    def _tree(self, tmp_path):
+        root = tmp_path / "outputs"
+        (root / "av").mkdir(parents=True)
+        return root
+
+    def test_file_outside_the_root_written_during_the_run_is_reported(self, tmp_path):
+        root = self._tree(tmp_path)
+        elsewhere = tmp_path / "Downloads" / "transc.txt"
+        elsewhere.parent.mkdir()
+        elsewhere.write_text("x")
+        started = elsewhere.stat().st_mtime - 1
+        assert find_reported_outputs([str(elsewhere)], root, since=started) == [elsewhere.resolve()]
+
+    def test_file_outside_the_root_predating_the_run_is_ignored(self, tmp_path):
+        """This is the echoed-input case the root check used to cover alone."""
+        root = self._tree(tmp_path)
+        source = tmp_path / "input.m4a"
+        source.write_text("x")
+        started = source.stat().st_mtime + 60
+        assert find_reported_outputs([str(source)], root, since=started) == []
+
+    def test_a_file_in_the_root_still_counts_regardless_of_age(self, tmp_path):
+        root = self._tree(tmp_path)
+        f = root / "av" / "clip.mp4"
+        f.write_text("x")
+        started = f.stat().st_mtime + 60
+        assert find_reported_outputs([str(f)], root, since=started) == [f.resolve()]
+
+    def test_without_since_the_root_is_still_the_only_test(self, tmp_path):
+        root = self._tree(tmp_path)
+        elsewhere = tmp_path / "fresh.txt"
+        elsewhere.write_text("x")
+        assert find_reported_outputs([str(elsewhere)], root) == []
+
+    def test_a_missing_file_is_not_reported_even_when_fresh(self, tmp_path):
+        root = self._tree(tmp_path)
+        assert find_reported_outputs([str(tmp_path / "ghost.txt")], root, since=0) == []
+
+    def test_a_directory_is_not_reported_even_when_fresh(self, tmp_path):
+        root = self._tree(tmp_path)
+        d = tmp_path / "Downloads"
+        d.mkdir()
+        assert find_reported_outputs([str(d)], root, since=0) == []

@@ -8,13 +8,35 @@ import pytest
 
 from core.invocation import CALLER_ENV_VAR
 from core.outputs import (
+    anchor_user_path,
     deduplicate,
     default_stem,
     names_a_file,
+    relative_root,
     resolve_output,
     resolve_output_dir,
     resolve_single_output,
 )
+
+
+def _fake_home(tmp_path, monkeypatch):
+    """Point tilde expansion at a throwaway directory.
+
+    ``Path.expanduser`` reads the environment rather than calling ``Path.home``,
+    so patching the method is not enough — the variables are what has to move.
+
+    Args:
+        tmp_path: Test-scoped temporary directory.
+        monkeypatch: Pytest monkeypatch fixture.
+
+    Returns:
+        The directory ``~`` now expands to.
+    """
+    home = tmp_path / "home"
+    home.mkdir(exist_ok=True)
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
+    return home
 
 
 class TestDefaultStem:
@@ -57,6 +79,124 @@ class TestDeduplicate:
             (tmp_path / f"file_{i:03d}.pdf").touch()
         with pytest.raises(FileExistsError):
             deduplicate(path)
+
+
+class TestAnchorUserPath:
+    """Where a user-supplied path actually points.
+
+    Nothing typed into the web UI goes through a shell, so this is the only
+    thing standing between ``~/Downloads/x.txt`` and a directory named ``~``.
+    """
+
+    @pytest.fixture()
+    def webapp(self, tmp_path, monkeypatch):
+        """Web UI caller, with home and the managed outputs tree redirected."""
+        monkeypatch.setenv(CALLER_ENV_VAR, "webapp")
+        home = _fake_home(tmp_path, monkeypatch)
+        managed = tmp_path / "managed"
+        managed.mkdir()
+        monkeypatch.setattr("core.outputs.outputs_dir", lambda theme: managed)
+        return home, managed
+
+    @pytest.fixture()
+    def cli(self, tmp_path, monkeypatch):
+        """Command-line caller standing in a known directory."""
+        monkeypatch.delenv(CALLER_ENV_VAR, raising=False)
+        home = _fake_home(tmp_path, monkeypatch)
+        cwd = tmp_path / "cwd"
+        cwd.mkdir()
+        monkeypatch.chdir(cwd)
+        return home, cwd
+
+    def test_tilde_expands_to_home(self, webapp):
+        home, _ = webapp
+        assert anchor_user_path("~/Downloads/x.txt", theme="speech") == home / "Downloads" / "x.txt"
+
+    def test_tilde_result_is_absolute(self, webapp):
+        assert anchor_user_path("~/Downloads/x.txt", theme="speech").is_absolute()
+
+    def test_bare_tilde_is_home_itself(self, webapp):
+        home, _ = webapp
+        assert anchor_user_path("~", theme="speech") == home
+
+    def test_absolute_path_untouched(self, webapp, tmp_path):
+        target = tmp_path / "elsewhere" / "x.txt"
+        assert anchor_user_path(str(target), theme="speech") == target
+
+    def test_relative_with_directory_part_anchors_to_home_in_webapp(self, webapp):
+        home, _ = webapp
+        assert anchor_user_path("Downloads/x.txt", theme="speech") == home / "Downloads" / "x.txt"
+
+    def test_bare_name_anchors_to_managed_outputs_in_webapp(self, webapp):
+        _, managed = webapp
+        assert anchor_user_path("x.txt", theme="speech") == managed / "x.txt"
+
+    def test_relative_with_directory_part_anchors_to_cwd_on_the_cli(self, cli):
+        _, cwd = cli
+        assert anchor_user_path("Downloads/x.txt", theme="speech") == cwd / "Downloads" / "x.txt"
+
+    def test_bare_name_anchors_to_cwd_on_the_cli(self, cli):
+        _, cwd = cli
+        assert anchor_user_path("x.txt", theme="speech") == cwd / "x.txt"
+
+    def test_tilde_expands_on_the_cli_too(self, cli):
+        home, _ = cli
+        assert anchor_user_path("~/x.txt", theme="speech") == home / "x.txt"
+
+    def test_accepts_a_path_object(self, webapp):
+        home, _ = webapp
+        assert anchor_user_path(Path("~/x.txt"), theme="speech") == home / "x.txt"
+
+    def test_relative_root_follows_the_caller(self, webapp):
+        home, _ = webapp
+        assert relative_root() == home
+
+
+class TestResolveOutputAnchoring:
+    """``resolve_output`` inherits anchoring from ``anchor_user_path``.
+
+    Its absence is what put a transcript in ``<repo>/~/Downloads/`` instead of
+    the user's actual Downloads folder.
+    """
+
+    @pytest.fixture()
+    def webapp(self, tmp_path, monkeypatch):
+        monkeypatch.setenv(CALLER_ENV_VAR, "webapp")
+        home = _fake_home(tmp_path, monkeypatch)
+        (home / "Downloads").mkdir(parents=True)
+        managed = tmp_path / "managed"
+        managed.mkdir()
+        monkeypatch.setattr("core.outputs.outputs_dir", lambda theme: managed)
+        monkeypatch.chdir(managed)
+        return home, managed
+
+    def test_tilde_output_lands_in_the_real_home(self, webapp):
+        home, _ = webapp
+        result = resolve_output("~/Downloads/transc.txt", theme="speech", ext=".txt")
+        assert result == home / "Downloads" / "transc.txt"
+
+    def test_no_literal_tilde_directory_is_created(self, webapp, tmp_path):
+        resolve_output("~/Downloads/transc.txt", theme="speech", ext=".txt")
+        assert not (tmp_path / "managed" / "~").exists()
+        assert not Path("~").exists()
+
+    def test_tilde_directory_output_lands_in_the_real_home(self, webapp):
+        home, _ = webapp
+        result = resolve_output("~/Downloads", theme="speech", ext=".txt")
+        assert result.parent == home / "Downloads"
+
+    def test_relative_output_dir_anchors_to_home(self, webapp):
+        home, _ = webapp
+        result = resolve_output("Downloads/transc.txt", theme="speech", ext=".txt")
+        assert result == home / "Downloads" / "transc.txt"
+
+    def test_output_dir_helper_expands_tilde_too(self, webapp):
+        home, _ = webapp
+        assert resolve_output_dir("~/Downloads", theme="speech") == home / "Downloads"
+
+    def test_output_dir_helper_expands_tilde_on_a_file_path(self, webapp):
+        home, _ = webapp
+        assert resolve_output_dir("~/Downloads/x.txt", theme="speech") == home / "Downloads"
 
 
 class TestResolveOutput:

@@ -2258,6 +2258,60 @@ input[type=checkbox] {
   .terminal-jump:hover { background: var(--term-border); }
 }
 
+/* Destination bar under the console. Mirrors .terminal-head so the console
+   reads as one panel whether or not the log is collapsed. */
+.terminal-foot {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem 0.5rem 0.45rem 0.85rem;
+  background: var(--term-surface);
+  border-top: 1px solid var(--term-border);
+}
+
+.terminal-foot-label {
+  flex: none;
+  font-size: var(--fs-badge);
+  font-weight: 600;
+  color: var(--term-dim);
+}
+
+/* The path itself is the point, so it gets the mono face and the room. The
+   full value is on the title attribute for anything that does not fit. */
+.terminal-foot-path {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-family: var(--font-mono);
+  font-size: var(--fs-badge);
+  color: var(--term-text);
+}
+
+.terminal-foot-spacer { flex: 1; }
+
+/* The console keeps its own dark palette in both themes, so the button in it
+   has to as well — .btn--secondary alone would paint a light panel here. */
+.terminal-foot .btn--secondary {
+  flex: none;
+  background: transparent;
+  border-color: var(--term-border);
+  color: var(--term-text);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .terminal-foot .btn--secondary:hover:not(:disabled) {
+    background: var(--term-border);
+    border-color: var(--term-border);
+    color: var(--term-text);
+  }
+}
+
+@media (max-width: 640px) {
+  .terminal-foot { flex-wrap: wrap; }
+  .terminal-foot-spacer { display: none; }
+}
+
 @media (prefers-reduced-motion: no-preference) {
   .terminal-line { animation: lineIn 160ms var(--ease-out) backwards; }
 }

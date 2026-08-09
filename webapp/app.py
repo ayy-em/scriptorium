@@ -506,29 +506,91 @@ async def post_preferences(request: Request) -> JSONResponse:
     return JSONResponse({"ok": True, "favourites": cfg.favourites, "sort_order": cfg.sort_order})
 
 
+def _is_revealable(target: Path) -> bool:
+    """Report whether *target* is a path this server will open a window onto.
+
+    Two things qualify: anything inside the managed outputs tree, and anything a
+    past run was recorded as having written. The second is what covers a result
+    the user sent somewhere of their own choosing, such as ``~/Downloads``,
+    without turning the endpoint into "open any folder on this machine" for
+    whatever else can reach localhost.
+
+    Args:
+        target: Already-resolved path to check.
+
+    Returns:
+        True when the path may be revealed.
+    """
+    try:
+        if target.is_relative_to(outputs_root().resolve()):
+            return True
+    except OSError:
+        return False
+    for record in history.load():
+        for known in record.outputs:
+            try:
+                if Path(known).resolve() == target:
+                    return True
+            except OSError:
+                continue
+    return False
+
+
 @app.post("/api/reveal-output")
 async def reveal_output(request: Request) -> JSONResponse:
     """Open a produced file's folder in the OS file manager.
 
-    The path arrives from the client, so it is re-checked against the outputs
-    root here rather than trusted. Detection ran server-side and only ever
-    yields paths inside that tree, but this endpoint is reachable directly.
+    The path arrives from the client, so it is re-checked here rather than
+    trusted. Detection ran server-side and only ever yields outputs, but this
+    endpoint is reachable directly.
 
     Returns:
-        JSON ``{"ok": true}``, or 400 for anything outside the outputs root.
+        JSON ``{"ok": true}``, or 400 for a path that is not a known output.
     """
     body = await request.json()
     raw = str(body.get("path", ""))
-    root = outputs_root().resolve()
     try:
         target = Path(raw).resolve()
-        target.relative_to(root)
-    except OSError, ValueError:
-        raise HTTPException(status_code=400, detail="Path is not inside the outputs folder") from None
+    except OSError:
+        raise HTTPException(status_code=400, detail="Not a usable path") from None
+    if not _is_revealable(target):
+        raise HTTPException(status_code=400, detail="Path is not a known output")
     if not target.is_file():
         raise HTTPException(status_code=404, detail="File no longer exists")
     _open_in_file_manager(target.parent)
     return JSONResponse({"ok": True})
+
+
+@app.post("/api/reveal-run-outputs")
+async def reveal_run_outputs(request: Request) -> JSONResponse:
+    """Open the folders one run wrote into.
+
+    Takes a run id rather than a path so there is nothing to validate: the
+    folders come from what the server itself recorded for that run. Almost every
+    run writes to a single directory, but a script given both an explicit file
+    and a batch destination can produce two, and both are worth opening.
+
+    Returns:
+        JSON ``{"ok": true, "folders": [...]}``, or 404 when the run recorded no
+        surviving output files.
+    """
+    body = await request.json()
+    run_id = str(body.get("run_id", ""))
+    record = next((r for r in history.load() if r.run_id == run_id), None)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Unknown run")
+
+    folders: list[Path] = []
+    for known in record.outputs:
+        path = Path(known)
+        if path.is_file() and path.parent not in folders:
+            folders.append(path.parent)
+    if not folders:
+        raise HTTPException(status_code=404, detail="This run has no surviving output files")
+
+    for folder in folders:
+        _open_in_file_manager(folder)
+    return JSONResponse({"ok": True, "folders": [str(f) for f in folders]})
 
 
 @app.get("/api/recent-outputs/{theme}/{script_name}")
@@ -891,6 +953,11 @@ async def _stream_script(handle: _runs.RunHandle):
     env = webapp_spawn_env()
 
     t0 = time.monotonic()
+    # Wall-clock twin of t0, used to tell a file this run wrote from one it only
+    # echoed. Backdated a little because mtime granularity is coarser than this
+    # clock on some filesystems, and losing a real output is worse than the
+    # occasional stale one.
+    started_wall = time.time() - 2
     yield f"event: start\ndata: {json.dumps({'run_id': handle.run_id})}\n\n".encode()
 
     try:
@@ -935,7 +1002,11 @@ async def _stream_script(handle: _runs.RunHandle):
         # Only a clean run is credited with outputs. A cancelled transcode
         # leaves a truncated file behind, and offering that as a result is
         # worse than saying nothing.
-        detected = [str(p) for p in find_reported_outputs(stdout_lines)] if status == history.SUCCESS else []
+        detected = (
+            [str(p) for p in find_reported_outputs(stdout_lines, since=started_wall)]
+            if status == history.SUCCESS
+            else []
+        )
 
         if status == history.CANCELLED:
             yield b"data: <span class='exit-err'>cancelled</span>\n\n"

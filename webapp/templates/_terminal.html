@@ -107,4 +107,22 @@
       </button>
     </div>
   </div>
+
+  {# Where the files actually went. Outside the collapse toggle on purpose: an
+     output path the user chose is the first thing they want after a run, and
+     collapsing the log should not take it away. #}
+  <footer class="terminal-foot" x-show="state === 'success' && runOutputs.length" x-cloak>
+    <span class="terminal-foot-label">
+      <span x-text="runOutputs.length"></span>
+      <span x-text="runOutputs.length === 1 ? 'file written to' : 'files written to'"></span>
+    </span>
+    <span class="terminal-foot-path" x-text="outputFolderLabel()" :title="outputFolders().join('\n')"></span>
+    <span class="terminal-foot-spacer"></span>
+    <button type="button" class="btn btn--secondary btn--sm"
+            @click="revealRunOutputs()"
+            aria-label="Open the folder these files were written to">
+      {{ icon('folder-open', 14) }}
+      <span>Open containing folder</span>
+    </button>
+  </footer>
 </section>

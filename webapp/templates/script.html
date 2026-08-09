@@ -216,6 +216,38 @@
         }).catch(() => { /* the folder button below still works */ });
       },
 
+      /* Distinct directories this run's files landed in. Usually one; a script
+         that writes both an explicitly named file and a batch can give two. */
+      outputFolders() {
+        var seen = [];
+        this.runOutputs.forEach(function (f) {
+          var cut = Math.max(String(f.path).lastIndexOf('/'), String(f.path).lastIndexOf('\\'));
+          var dir = cut > 0 ? String(f.path).slice(0, cut) : String(f.path);
+          if (seen.indexOf(dir) === -1) seen.push(dir);
+        });
+        return seen;
+      },
+
+      /* Where the files went, said plainly — the destination is worth showing
+         because it is not always the managed outputs folder. */
+      outputFolderLabel() {
+        var folders = this.outputFolders();
+        if (!folders.length) return '';
+        if (folders.length > 1) return folders.length + ' folders';
+        return folders[0];
+      },
+
+      /* Sends the run id, not a path: the server reopens what it recorded for
+         that run, so there is nothing here for it to have to trust. */
+      revealRunOutputs() {
+        if (!this.runId) return;
+        fetch('/api/reveal-run-outputs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ run_id: this.runId }),
+        }).catch(() => { /* nothing useful to say if the OS call never happens */ });
+      },
+
       /* ── File input ───────────────────────────────────────────────────── */
       get hasFile() { return this.filenames.length > 0; },
 
