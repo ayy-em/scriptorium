@@ -103,6 +103,29 @@ Worth doing if the app is ever handed to someone who will not install anything.
 Not worth it while the audience is one person with Homebrew and MSYS2 already
 installed.
 
+## av.join: output container may not accept the joined codecs
+
+**Status:** open (2026-08-31).
+
+`av.join` takes the output extension from the first input file's suffix, and
+preprocessing always re-encodes audio to AAC. So a set of `.webm` files whose
+video parameters already agree takes the stream-copy path, and the concat step
+then tries to mux VP9 video plus AAC audio into `.webm`, which will not hold
+AAC. The intermediates dodge this — `_temp_suffix` falls back to Matroska for
+any codec MP4 cannot hold — but the final mux does not.
+
+Options, in rough order of preference:
+
+1. Choose the audio codec from the output container instead of hardcoding AAC:
+   Opus for `.webm`, AAC elsewhere.
+2. Force `reencode_video` whenever the copied video codec is incompatible with
+   the resolved output container.
+3. Default the output to `.mp4` unless `--output` says otherwise.
+
+Not urgent, and not a regression: before the common-format work the same set
+wrote `.mp4` intermediates for a VP9 stream and failed one step earlier. The
+common case is MP4 in, MP4 out.
+
 # Settled
 
 Closed, and kept only for the reasoning — either delivered, or considered and
