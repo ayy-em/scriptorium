@@ -143,8 +143,8 @@
   <!-- Waveform + time controls: shown as soon as a file is uploaded -->
   <div class="waveform-section" x-show="serverPath" x-cloak>
 
-    <!-- Canvas: only when audio decoded successfully -->
-    <div class="waveform-wrap" x-show="audioBuffer !== null">
+    <!-- Canvas: only once the server has returned peaks -->
+    <div class="waveform-wrap" x-show="hasWaveform" x-cloak>
       <canvas x-ref="canvas" class="waveform-canvas" height="128"
         @mousedown="onCanvasMouseDown($event)"
         @mousemove="onCanvasMouseMove($event)"
@@ -153,8 +153,8 @@
       </canvas>
     </div>
 
-    <!-- Shown when file is uploaded but audio decode failed (e.g. unsupported codec) -->
-    <p class="trim-no-waveform" x-show="audioBuffer === null">Waveform unavailable — enter times manually.</p>
+    <!-- Shown while peaks are being read, and when the file has none to read -->
+    <p class="trim-no-waveform" x-show="!hasWaveform" x-text="waveformMessage"></p>
 
     <div class="trim-controls">
       <!-- Play/stop button: only when waveform is available -->
@@ -227,11 +227,18 @@ function trimApp(theme) {
     serverPath: '',
     uploading: false,
 
-    /* ── Audio / waveform state ── */
-    audioCtx: null,
-    audioBuffer: null,
+    /* ── Waveform state ──
+       Peaks come from the server (ffmpeg), so the waveform works for every
+       file the script accepts. audioBuffer is separate and best-effort: it
+       only powers the play button, and only when the browser can decode this
+       file itself. A browser that cannot still gets a waveform. */
     peaks: null,
     duration: 0,
+    waveformState: 'idle',   /* idle | loading | ready | silent | unavailable */
+
+    /* ── Playback state (browser decode; optional) ── */
+    audioCtx: null,
+    audioBuffer: null,
 
     /* ── Selection state ── */
     selStart: 0,
@@ -250,6 +257,18 @@ function trimApp(theme) {
     /* ── Drag state ── */
     _dragging: null,
     _dragOffset: 0,
+
+    /* ──────────────── Derived state ──────────────── */
+
+    get hasWaveform() {
+      return this.peaks !== null && this.peaks.length > 0;
+    },
+
+    get waveformMessage() {
+      if (this.waveformState === 'loading') return 'Reading waveform…';
+      if (this.waveformState === 'silent') return 'This file has no audio track — enter times manually.';
+      return 'Waveform unavailable — enter times manually.';
+    },
 
     /* ──────────────── Lifecycle ──────────────── */
 
@@ -284,6 +303,17 @@ function trimApp(theme) {
         if (window.history.replaceState) {
           window.history.replaceState({}, '', window.location.pathname);
         }
+        /* A prefilled file never passed through this page, so there is no File
+           object to decode — but the server can still read its peaks. Before
+           this, arriving by drop meant no waveform at all. */
+        var prefilledStart = this.startInput;
+        var prefilledEnd = this.endInput;
+        this._loadWaveform(filePath).then(function() {
+          if (prefilledStart) self.startInput = prefilledStart;
+          if (prefilledEnd) self.endInput = prefilledEnd;
+          if (prefilledStart) self.onStartInputChange();
+          if (prefilledEnd) self.onEndInputChange();
+        });
       }
     },
 
@@ -308,7 +338,8 @@ function trimApp(theme) {
         var res = await fetch('/upload/' + theme, { method: 'POST', body: body });
         var data = await res.json();
         this.serverPath = data.path;
-        await this._loadAudio(file);
+        this._loadPlayback(file);
+        await this._loadWaveform(data.path);
       } catch (e) {
         this.filename = '';
         this.serverPath = '';
@@ -319,22 +350,28 @@ function trimApp(theme) {
 
     /* ──────────────── Waveform loading ──────────────── */
 
-    async _loadAudio(file) {
-      if (!this.audioCtx) {
-        this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      }
+    /* Peaks come from ffmpeg via /api/waveform. This is the only thing the
+       waveform depends on, so it works for every file av.trim accepts —
+       including the MP3s and MKVs no browser will decode — and for a file
+       arriving by drop prefill, which has no File object to decode at all. */
+    async _loadWaveform(serverPath) {
+      this.peaks = null;
+      this.waveformState = 'loading';
       try {
-        var url = URL.createObjectURL(file);
-        var arrayBuffer = await fetch(url).then(function(r) { return r.arrayBuffer(); });
-        URL.revokeObjectURL(url);
-        var self = this;
-        this.audioBuffer = await new Promise(function(resolve, reject) {
-          self.audioCtx.decodeAudioData(arrayBuffer, resolve, reject);
-        });
-        this.duration = this.audioBuffer.duration;
-        this.peaks = this._computePeaks(this.audioBuffer, 900);
+        var res = await fetch('/api/waveform?path=' + encodeURIComponent(serverPath) + '&buckets=900');
+        if (!res.ok) throw new Error('waveform request failed: ' + res.status);
+        var data = await res.json();
+        if (!data.peaks || !data.peaks.length) {
+          this.duration = data.duration || 0;
+          this.waveformState = 'silent';
+          return;
+        }
+        this.peaks = data.peaks;
+        this.duration = data.duration || 0;
+        this.waveformState = 'ready';
         this.selStart = 0;
         this.selEnd = 1;
+        this._syncInputs();
         var self = this;
         this.$nextTick(function() {
           var canvas = self.$refs.canvas;
@@ -342,37 +379,30 @@ function trimApp(theme) {
           self.drawWaveform();
         });
       } catch (e) {
-        console.error('Audio decode failed:', e);
+        console.error('Waveform unavailable:', e);
+        this.peaks = null;
+        this.waveformState = 'unavailable';
       }
     },
 
-    _computePeaks(audioBuffer, n) {
-      var length = audioBuffer.length;
-      var nChannels = audioBuffer.numberOfChannels;
-      var mixed = new Float32Array(length);
-      for (var ch = 0; ch < nChannels; ch++) {
-        var data = audioBuffer.getChannelData(ch);
-        for (var i = 0; i < length; i++) mixed[i] += data[i];
-      }
-      if (nChannels > 1) {
-        for (var i = 0; i < length; i++) mixed[i] /= nChannels;
-      }
-      var blockSize = Math.max(1, Math.floor(length / n));
-      var peaks = new Float32Array(n);
-      for (var i = 0; i < n; i++) {
-        var peak = 0;
-        var end = Math.min(length, (i + 1) * blockSize);
-        for (var j = i * blockSize; j < end; j++) {
-          var abs = mixed[j] < 0 ? -mixed[j] : mixed[j];
-          if (abs > peak) peak = abs;
+    /* Best-effort browser decode, for the play button alone. Failure is
+       expected and silent: plenty of files the trimmer handles cannot be
+       decoded by the Web Audio API, and none of the editor except playback
+       depends on this succeeding. */
+    async _loadPlayback(file) {
+      this.audioBuffer = null;
+      try {
+        if (!this.audioCtx) {
+          this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         }
-        peaks[i] = peak;
+        var arrayBuffer = await file.arrayBuffer();
+        var self = this;
+        this.audioBuffer = await new Promise(function(resolve, reject) {
+          self.audioCtx.decodeAudioData(arrayBuffer, resolve, reject);
+        });
+      } catch (e) {
+        this.audioBuffer = null;
       }
-      /* Normalise to [0, 1] */
-      var maxPeak = 0;
-      for (var i = 0; i < n; i++) if (peaks[i] > maxPeak) maxPeak = peaks[i];
-      if (maxPeak > 0) for (var i = 0; i < n; i++) peaks[i] /= maxPeak;
-      return peaks;
     },
 
     /* ──────────────── Canvas drawing ──────────────── */
@@ -502,6 +532,9 @@ function trimApp(theme) {
 
     /* ──────────────── Playback ──────────────── */
 
+    /* Preview only. The selection is measured against the server's duration,
+       which is the container's; a video whose audio track is shorter will end
+       the preview early. The trim itself reads the time fields, not this. */
     async play() {
       if (!this.audioBuffer) return;
       if (this.isPlaying) { this._stop(); return; }
@@ -558,7 +591,7 @@ function trimApp(theme) {
     /* ──────────────── Input ↔ selection sync ──────────────── */
 
     _syncInputs() {
-      if (!this.audioBuffer) return;
+      if (!(this.duration > 0)) return;
       this.startInput = this._formatTime(this.selStart * this.duration);
       /* Leave end empty when selection reaches the very end of the file */
       this.endInput = this.selEnd >= 0.9999
@@ -567,7 +600,7 @@ function trimApp(theme) {
     },
 
     onStartInputChange() {
-      if (!this.audioBuffer) return;
+      if (!(this.duration > 0)) return;
       var secs = this._parseTime(this.startInput);
       secs = Math.max(0, Math.min(secs, this.selEnd * this.duration - 0.05));
       this.selStart = secs / this.duration;
@@ -576,7 +609,7 @@ function trimApp(theme) {
     },
 
     onEndInputChange() {
-      if (!this.audioBuffer) return;
+      if (!(this.duration > 0)) return;
       var raw = this.endInput.trim();
       if (!raw) {
         this.selEnd = 1;

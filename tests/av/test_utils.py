@@ -10,6 +10,7 @@ import pytest
 
 from core.config import UserConfig
 from core.progress import parse
+from scripts.av import _utils
 from scripts.av._utils import (
     av_inputs_dir,
     av_outputs_dir,
@@ -239,3 +240,111 @@ class TestRunFfmpegWithProgress:
             with pytest.raises(subprocess.CalledProcessError):
                 run_ffmpeg_with_progress(["-i", "broken.mp4", "out.mp4"])
         assert [e for e in (parse(line) for line in capsys.readouterr().out.splitlines()) if e] == []
+
+
+class TestHasVideoStream:
+    """Cover art is a video stream to ffprobe but has no keyframes to seek to."""
+
+    def test_true_for_a_real_video_track(self):
+        streams = [{"codec_type": "video", "codec_name": "h264"}, {"codec_type": "audio"}]
+        with patch("scripts.av._utils.probe_streams", return_value=streams):
+            assert _utils.has_video_stream(Path("in.mp4")) is True
+
+    def test_false_for_an_mp3_with_embedded_artwork(self):
+        streams = [
+            {"codec_type": "audio", "codec_name": "mp3"},
+            {"codec_type": "video", "codec_name": "mjpeg", "disposition": {"attached_pic": 1}},
+        ]
+        with patch("scripts.av._utils.probe_streams", return_value=streams):
+            assert _utils.has_video_stream(Path("in.mp3")) is False
+
+    def test_false_when_the_probe_fails(self):
+        with patch("scripts.av._utils.probe_streams", side_effect=OSError):
+            assert _utils.has_video_stream(Path("missing.mp4")) is False
+
+
+class TestKeyframeAtOrBefore:
+    def test_zero_needs_no_probe(self):
+        with patch("scripts.av._utils.run_ffprobe") as probe:
+            assert _utils.keyframe_at_or_before(Path("in.mp4"), 0.0) == 0.0
+        assert probe.call_count == 0
+
+    def test_returns_the_last_keyframe_at_or_before_the_request(self):
+        packets = {
+            "packets": [
+                {"pts_time": "0.000", "flags": "K__"},
+                {"pts_time": "4.000", "flags": "K__"},
+                {"pts_time": "5.000", "flags": "___"},
+            ]
+        }
+        with patch("scripts.av._utils.run_ffprobe", return_value=packets):
+            assert _utils.keyframe_at_or_before(Path("in.mp4"), 6.0) == 4.0
+
+    def test_ignores_non_keyframe_packets(self):
+        packets = {"packets": [{"pts_time": "5.900", "flags": "___"}, {"pts_time": "1.000", "flags": "K_"}]}
+        with patch("scripts.av._utils.run_ffprobe", return_value=packets):
+            assert _utils.keyframe_at_or_before(Path("in.mp4"), 6.0) == 1.0
+
+    def test_reads_only_up_to_the_requested_point(self):
+        """Cost must not grow with the length of the file after the cut."""
+        with patch("scripts.av._utils.run_ffprobe", return_value={"packets": []}) as probe:
+            _utils.keyframe_at_or_before(Path("in.mp4"), 12.0)
+        args = probe.call_args[0][0]
+        assert args[args.index("-read_intervals") + 1].startswith("%+12.1")
+
+    def test_demuxes_rather_than_decodes(self):
+        with patch("scripts.av._utils.run_ffprobe", return_value={"packets": []}) as probe:
+            _utils.keyframe_at_or_before(Path("in.mp4"), 3.0)
+        assert "-show_packets" in probe.call_args[0][0]
+
+    def test_none_when_nothing_precedes_the_request(self):
+        packets = {"packets": [{"pts_time": "9.000", "flags": "K_"}]}
+        with patch("scripts.av._utils.run_ffprobe", return_value=packets):
+            assert _utils.keyframe_at_or_before(Path("in.mp4"), 3.0) is None
+
+    def test_none_when_ffprobe_cannot_be_asked(self):
+        with patch("scripts.av._utils.run_ffprobe", side_effect=FileNotFoundError):
+            assert _utils.keyframe_at_or_before(Path("in.mp4"), 3.0) is None
+
+
+class TestCopyWouldLandOn:
+    """The decision av.trim hangs its default behaviour on."""
+
+    def test_start_of_file_is_always_exact(self):
+        assert _utils.copy_would_land_on(Path("in.mp4"), 0.0) == (True, 0.0)
+
+    def test_audio_only_needs_no_keyframe(self):
+        """Audio frames are milliseconds long; there is no GOP to round to."""
+        with (
+            patch("scripts.av._utils.has_video_stream", return_value=False),
+            patch("scripts.av._utils.keyframe_at_or_before") as kf,
+        ):
+            accurate, landing = _utils.copy_would_land_on(Path("in.mp3"), 30.0)
+        assert accurate is True
+        assert landing == 30.0
+        assert kf.call_count == 0
+
+    def test_a_nearby_keyframe_keeps_the_copy(self):
+        with (
+            patch("scripts.av._utils.has_video_stream", return_value=True),
+            patch("scripts.av._utils.keyframe_at_or_before", return_value=9.95),
+        ):
+            assert _utils.copy_would_land_on(Path("in.mp4"), 10.0) == (True, 9.95)
+
+    def test_a_distant_keyframe_fails_the_copy(self):
+        """The reported bug: trimming a second off a sparsely-keyed file."""
+        with (
+            patch("scripts.av._utils.has_video_stream", return_value=True),
+            patch("scripts.av._utils.keyframe_at_or_before", return_value=0.0),
+        ):
+            accurate, landing = _utils.copy_would_land_on(Path("in.mp4"), 1.0)
+        assert accurate is False
+        assert landing == 0.0
+
+    def test_an_unknowable_keyframe_fails_the_copy(self):
+        """Unable to verify is not the same as verified; prefer the exact cut."""
+        with (
+            patch("scripts.av._utils.has_video_stream", return_value=True),
+            patch("scripts.av._utils.keyframe_at_or_before", return_value=None),
+        ):
+            assert _utils.copy_would_land_on(Path("in.mp4"), 10.0) == (False, None)

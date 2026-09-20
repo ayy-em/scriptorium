@@ -103,10 +103,115 @@ Worth doing if the app is ever handed to someone who will not install anything.
 Not worth it while the audience is one person with Homebrew and MSYS2 already
 installed.
 
+## HEIC support in formats.convert_image
+
+**Status:** open (2026-09-20). Requested, not yet built.
+
+`formats.convert_image` handles `.jpg .jpeg .png .webp .gif .bmp .tiff .tif` and
+nothing else, which means the format every iPhone and every modern Android
+camera actually writes — HEIC/HEIF — cannot be converted to a PNG or JPEG here
+at all. It is the single most likely thing to be dropped on the app and
+bounced.
+
+**What it needs:**
+
+- A decoder. Pillow does not read HEIC out of the box; the usual answer is
+  [`pillow-heif`](https://pypi.org/project/pillow-heif/), which registers an
+  opener with Pillow so the existing `convert_image` code path works unchanged
+  once `register_heif_opener()` has been called. The alternative is shelling
+  out to ffmpeg or `libheif`'s `heif-convert`, which avoids a dependency but
+  loses EXIF handling and adds a second conversion mechanism for one format.
+- `.heic` and `.heif` added to `IMAGE_EXTS` in `scripts/formats/_utils.py`,
+  which also puts them in `core.categories.CATEGORY_EXTS["image"]` and so into
+  Drop-to-Discover and every image script's `accept` attribute for free.
+- A `core.capabilities` entry if the ffmpeg route is taken, or an optional
+  dependency group if `pillow-heif` is. Prefer the dependency: HEIC decoding
+  that works only when a system library happens to be installed is the failure
+  mode `core.capabilities` exists to make visible, and a wheel avoids it
+  entirely.
+
+**Decisions to make first:**
+
+- **Direction.** Read-only (HEIC in, PNG/JPEG out) covers the actual complaint.
+  Writing HEIC is possible with the same library but nobody has asked for it,
+  and it would need a target-format entry in the UI.
+- **Live Photos.** A HEIC from an iPhone can hold multiple images plus a motion
+  track. Converting silently yields the primary image, which is almost always
+  what is wanted — but it should be *stated*, not discovered.
+- **Rotation.** HEIC leans on EXIF orientation more than JPEG does. Whatever
+  lands has to check that a portrait photo stays portrait, which is the classic
+  way this goes wrong.
+- **`photo.remove_bg`** gets HEIC support for free via `IMAGE_EXTS`, and should
+  be checked rather than assumed.
+
+Worth doing: it is a small, well-bounded change with an obvious user, and the
+extension set is already centralised in one place.
+
+## Playback for a prefilled file in av.trim
+
+**Status:** open (2026-09-20). Cosmetic gap left by the waveform move.
+
+The `av.trim` waveform now comes from `GET /api/waveform`, so it draws for any
+file ffmpeg can read, including one arriving from the global drop overlay. The
+**play button** did not make the same trip: it still needs a browser-decodable
+`AudioBuffer`, which only exists on the upload path where the page holds a
+`File`. A prefilled file therefore gets a full waveform, working time fields
+and no play button.
+
+Closing this needs an endpoint that streams a staged input back to the page so
+it can be decoded (or fed to an `<audio>` element, which would also fix the
+MP3-in-Chromium case for playback). That is a second "server hands a local file
+to the page" surface, and it wants the same `resolve_staged_input` containment
+check the waveform endpoint uses — worth doing deliberately rather than as a
+footnote to this one.
+
 # Settled
 
 Closed, and kept only for the reasoning — either delivered, or considered and
 deliberately not built. Nothing here is queued work.
+
+## Input archiving was three behaviours pretending to be one
+
+**Status:** delivered 2026-09-20. See SPEC.md "Post-processing: archiving input
+files" for the rule as shipped.
+
+SPEC.md had said since early on that every script accepting a file input must
+archive it. The code did three different things:
+
+- `formats.convert_*` and `photo.remove_bg` called
+  `core.paths.move_to_past_inputs`, which was already correctly guarded: it
+  moves a file only if it sits inside the shared `inputs/` tree.
+- `av.join` built `<source_dir>/processed/` and `shutil.move`d every file it
+  had read into it. Pointed at `~/Videos`, it created `~/Videos/processed/` and
+  relocated the user's media. This was the actual bug; a test asserted it as
+  correct behaviour.
+- `telegram.group_analysis` had a third implementation, filing into
+  `inputs/telegram/processed/` — a directory nothing else in the app knows
+  about — and renaming every export to `result_<stamp>`, discarding the one
+  thing that told two exports apart. It *was* containment-checked, so it was
+  only untidy rather than destructive, which is presumably why it survived.
+- Everything else archived nothing.
+
+All three now route through `move_to_past_inputs`, and the eight `av.*` scripts
+plus `speech.transcribe` that consumed a file without archiving it now do.
+
+Two things decided while doing it, both recorded in the SPEC table:
+
+- **Not every file-input script should archive.** `lora.*` mutates a dataset
+  directory in place, the `telegram` preprocess/embed/analyse chain re-reads its
+  export, `gif.make_gif` takes a directory of frames whose names would all
+  collide in a flat archive, and `av.tag` consumes nothing in read mode or
+  `--in-place`. Forcing the rule everywhere would have broken all four.
+- **The SPEC was wrong about the layout, not the code.** It specified
+  `inputs/processed/<category>/` with an always-on `_DDMMYY` tag; the shipped
+  helper is flat with a timestamp only on collision. The code won and the SPEC
+  was corrected, since nothing had ever written the documented layout.
+
+`tests/test_input_archiving.py` pins the inventory against the registry, so a
+new script cannot quietly inherit either behaviour, and fails any script that
+builds a `processed/` directory of its own. That test is what found the
+`telegram.group_analysis` implementation, which had been missed by reading the
+code.
 
 ## Runtime dependencies needed one coherent story
 
@@ -292,6 +397,17 @@ window-level drop target, and `trimApp` has neither. So `av.trim` alone has an
 indeterminate bar and a detail page where a drop outside the dropzone does
 nothing. Both come free with the port; neither justifies reimplementing in
 `trimApp`.
+
+**Narrowed 2026-09-20.** The file was opened to move the waveform server-side,
+and the temptation was to do the port at the same time. It was deliberately not
+taken: the waveform fix is self-contained and the port is a rewrite of the
+run-submission path, so bundling them would have made a UI refactor unreviewable
+alongside a correctness fix. What *did* change reduces what the port has to
+carry — `trimApp` no longer contains a peak-computation routine or a Web Audio
+decode path for drawing, since both moved to `webapp/_waveform.py`, and the
+prefill path now loads a waveform like the upload path does. The remaining
+duplication is the console and the run submission, which is the part
+`scriptRunner` actually replaces.
 
 ## BatchPlan abstraction
 

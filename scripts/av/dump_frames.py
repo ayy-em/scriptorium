@@ -7,7 +7,7 @@ import sys
 
 from core.argparse import ScriptoriumParser
 from core.outputs import resolve_output_dir
-from core.paths import resolve_input
+from core.paths import move_to_past_inputs, resolve_input
 from scripts.av._utils import parse_time, probe_duration_or_none, run_ffmpeg_with_progress
 
 TITLE = "Dump all frames from a video clip"
@@ -168,6 +168,7 @@ def run() -> None:
     try:
         frames = dump_frames(video, outputs_dir, start=args.start, end=args.end, fmt=args.format)
         dest = frames[0].parent if frames else outputs_dir
+        move_to_past_inputs("av", video)
         print(f"{len(frames)} frame(s) written to {dest}")
         sys.exit(0)
     except Exception as e:

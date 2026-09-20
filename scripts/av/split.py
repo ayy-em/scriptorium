@@ -6,7 +6,7 @@ import sys
 
 from core.argparse import ScriptoriumParser
 from core.outputs import default_stem, resolve_output_dir
-from core.paths import resolve_input
+from core.paths import move_to_past_inputs, resolve_input
 from core.progress import ProgressReporter
 from scripts.av._utils import format_time, parse_time, run_ffmpeg
 
@@ -111,6 +111,7 @@ def run() -> None:
 
     try:
         segments = split(input_file, args.timestamps, out_dir)
+        move_to_past_inputs("av", input_file)
         for s in segments:
             print(s)
         sys.exit(0)

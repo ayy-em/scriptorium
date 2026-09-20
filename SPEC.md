@@ -237,6 +237,7 @@ thing that failed. It clears when Alpine initialises and fonts are ready, with a
 | `GET /api/script-fields/{theme}/{script_name}` | field specs, minus the file input |
 | `GET /api/preview-command/{theme}/{script_name}` | CLI equivalent of the current form state |
 | `POST /upload/{theme}` | single-file upload |
+| `GET /api/waveform` | peak envelope for a staged media file, for the `av.trim` editor |
 | `POST /api/drop-upload` | multi-file drop; returns matching scripts |
 | `GET`/`POST /api/settings` | read/write `UserConfig` |
 | `POST /api/browse-folder` | native folder picker; 501 outside the desktop app |
@@ -286,6 +287,79 @@ path a past run was recorded as having written. That keeps `POST
 else can reach localhost. `POST /api/reveal-run-outputs` takes a run id instead
 of a path and needs no such check — the folders come from what the server itself
 recorded.
+
+### Waveforms are read server-side
+
+`av.trim` draws a waveform so a cut can be placed by eye. That waveform used to
+be decoded in the browser — `decodeAudioData` over the uploaded file — which
+made the editor's usefulness a property of the browser rather than of the file.
+MP3 needs a Chromium built with proprietary codecs, which not every one is, and
+MKV, AVI, FLV and WMA are never decodable that way. A file `av.trim` could
+happily cut would show "Waveform unavailable" and send the user back to typing
+timestamps blind. A file arriving via the drop overlay got no waveform at all,
+in any format, because the prefill path never decoded anything.
+
+`GET /api/waveform?path=…&buckets=900` answers with
+`{"duration": float, "peaks": [float, …]}`, peaks normalised so the loudest is
+`1.0`. ffmpeg is already a hard requirement for every `av.*` script, so the
+machine running the editor can always decode what the editor is about to cut.
+
+Three things worth not rediscovering, all in `webapp/_waveform.py`:
+
+- **Peaks, not averages.** A waveform is centred on zero, so an average over
+  thousands of samples tends to zero regardless of how loud the audio is. Every
+  file would draw a flat line.
+- **The decode rate is chosen per file**, from its duration and the bucket
+  count, and clamped to `[1000, 8000]` Hz. The ceiling stops a short file being
+  decoded at far more resolution than 900 bars can show; the floor stops the
+  resampler's low-pass flattening a two-hour recording into a silent-looking
+  line. Between them the PCM held in memory stays bounded whatever the input.
+- **Playback is separate and best-effort.** The browser decode still happens,
+  but only to power the play button, and only on the upload path where a `File`
+  object exists. When it fails the waveform is unaffected — the play button
+  simply does not appear. This is the reverse of the old coupling, where a
+  failed decode cost the waveform too.
+
+The endpoint reads whatever it is pointed at, so which paths it will accept is
+the whole of its security. `_waveform.resolve_staged_input` resolves the path
+first (collapsing `..` and symlinks) and then requires it to sit inside the
+shared inputs root — the only place `POST /upload/{theme}` and drop sessions
+ever write. Anything else is a 403.
+
+### Trimming respects what was asked for, not where the keyframes are
+
+A stream copy cannot begin mid-GOP, so `-ss` before `-i` seeks *backwards* to
+the nearest keyframe. On a sparsely-keyed source — a long GOP, a low frame
+rate, a screen recording — that keyframe can be seconds before the requested
+cut. Trimming the first second off such a file reported success and handed back
+something indistinguishable from the original.
+
+`av.trim --mode` decides what to do about it:
+
+| Mode | Behaviour |
+|---|---|
+| `auto` (default) | Probe where a copy would actually land. Within `KEYFRAME_TOLERANCE` (0.1 s) of the request → stream copy, as before. Further than that → re-encode, and say so on stdout. |
+| `fast` | Always stream-copy, accepting the keyframe snap. The old behaviour, kept as an opt-out. |
+| `precise` | Always re-encode. |
+
+`scripts.av._utils.copy_would_land_on` is the decision. It short-circuits twice
+before spending an ffprobe: a cut at `0` is always exact, and an audio-only
+file has no GOP to round to (audio frames are milliseconds long, so a copy
+lands closer than anyone can hear). Only a real video stream is probed — cover
+art is a video stream to ffprobe, so `has_video_stream` excludes attached
+pictures, or every MP3 with artwork would be treated as having keyframes.
+
+The probe reads *packets*, not frames, and only up to the requested cut point:
+a keyframe is a packet flag, so this demuxes rather than decodes, and the cost
+does not grow with however much file follows the cut.
+
+A re-encode keeps input-side seeking — modern ffmpeg seeks to the preceding
+keyframe and then decodes and discards up to the exact point, so the cut is
+accurate without decoding the whole file. Audio is `-c:a copy`: it has no GOP
+to be inaccurate about, and since the output container is the source's own, its
+codec is muxable by definition. No video encoder is named, for the same reason
+`formats.convert_video` names none — ffmpeg's default for a container is
+muxable into it, which `libx264` is not for every container.
 
 ### Progress reporting
 
@@ -687,22 +761,49 @@ first place.
 
 ### Post-processing: archiving input files
 
-Every script that accepts a file as input **must** move the processed file to
-`inputs/processed/<category>/` after a successful run. The archived filename
-should include a date tag so multiple runs don't collide — the convention is
-`<stem>_DDMMYY<ext>` using the UTC run-start date (with an `_HHMMSS` suffix
-appended on same-day collisions).
+A script that *consumes* a file moves it to `inputs/processed/` after a
+successful run, and does so by calling `core.paths.move_to_past_inputs(theme,
+source)`. That helper is not a convenience — it is the rule:
 
-Only files that live inside the shared `inputs/` tree are archived — files
-passed via an absolute path outside the inputs root are left in place.
+**Only files that live inside the shared `inputs/` tree are moved.** A file the
+user pointed at somewhere else on the disk is read and left exactly where it
+was. Pointing a script at `~/Movies/holiday.mp4` must never relocate it.
+
+The archive is flat, and the original filename is kept:
 
 ```
 inputs/
     result.json              ← before run
+    holiday.mp4
     processed/
-        telegram/
-            result_210526.json   ← after successful run (21 May 2026 UTC)
+        result.json          ← after a successful run
+        holiday.mp4
 ```
+
+A name collision inside `processed/` appends `_YYYYMMDDTHHMMSS` to the stem, so
+an earlier archived copy is never overwritten. Files already inside
+`processed/` are skipped, so re-running against the archive does not shuffle it.
+
+The return value is ignored by every caller: failing to tidy up is not a reason
+to fail a run that already produced its output.
+
+#### Which scripts archive
+
+| Archives | Does not archive | Why not |
+|---|---|---|
+| `av.dump_frames`, `av.filmstrip`, `av.join`, `av.split`, `av.to_anim`, `av.trim`, `av.video_crop`, `av.volume` | `downloads.download`, `sitemaps.status_check`, `util.*` | take a URL or a message, not a file |
+| `av.tag` (only when writing a *new* file) | `av.tag` in read mode and `--in-place` | nothing is consumed; `--in-place` rewrites the input itself |
+| `formats.convert_*` (via `_utils.run_convert`) | `gif.make_gif` | reads a *directory* of frames; flattening a frame set into the archive root collides on every `frame_001.png`, and frames get re-rendered at other settings |
+| `photo.remove_bg` | `lora.*` | operate on a dataset directory in place — archiving it would destroy the dataset |
+| `speech.transcribe` | `telegram.preprocess`, `telegram.embed_messages`, `telegram.chat_analysis` | chained or repeat-read: a later step needs the file the earlier one was given |
+| `telegram.group_analysis` | | |
+
+`tests/test_input_archiving.py` pins this inventory, so adding a script forces
+the decision rather than letting it inherit whichever behaviour was copied. It
+also fails any script that builds its own `processed/` directory — three
+separate hand-rolled archivers existed before this was centralised, and one of
+them (`av.join`) created `processed/` inside whatever directory it was pointed
+at and moved the user's media into it.
 
 ### `core.paths` — centralized path resolution
 
@@ -883,8 +984,11 @@ files, not via Alpine's `.prevent` — the unconditional version would stop text
 being dragged into a path field.
 
 **Not covered:** `scripts/av/trim.html` overrides the template with its own
-`trimApp` component and so has no window-level drop. See the "Unify the
-trim.html console" entry in BACKLOG.md.
+`trimApp` component and so has no window-level drop. A file arriving from the
+global drop overlay still *prefills* the page, and since the waveform moved
+server-side it now draws for a prefilled file too; what is missing is dropping
+onto the detail page itself. See the "Unify the trim.html console" entry in
+BACKLOG.md.
 
 ### Optional: `get_parser()`
 

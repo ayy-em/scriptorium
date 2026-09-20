@@ -53,6 +53,15 @@ COVER_SUPPORTED_EXTS = frozenset({".mp4", ".m4v", ".m4a", ".mp3", ".mkv", ".flac
 _HMS_PARTS = 3
 _MS_PARTS = 2
 
+# How far a stream copy may miss a requested cut point before the cut is
+# considered inaccurate. A tenth of a second is below what anyone notices in a
+# trim and above the rounding in a container's timebase.
+KEYFRAME_TOLERANCE = 0.1
+
+# Slack for comparing presentation timestamps, which arrive as decimal strings
+# rounded from a rational timebase and so rarely land on an exact value.
+_PTS_EPSILON = 0.001
+
 
 def parse_time(value: str) -> float:
     """Parse a timestamp string into seconds.
@@ -357,3 +366,106 @@ def read_tags(file: Path) -> dict[str, str]:
     """
     data = run_ffprobe(["-show_format", str(file)])
     return data.get("format", {}).get("tags", {})
+
+
+def has_video_stream(file: Path) -> bool:
+    """Report whether a file carries a real video stream.
+
+    Cover art counts as a video stream to ffprobe — an MP3 with embedded
+    artwork reports an mjpeg stream — so attached pictures are excluded. The
+    distinction matters wherever a decision hinges on "is there something here
+    with keyframes", which a still image pinned to an audio file is not.
+
+    Args:
+        file: Media file to probe.
+
+    Returns:
+        True if at least one non-attached-picture video stream is present.
+    """
+    try:
+        streams = probe_streams(file)
+    except Exception:
+        return False
+    for stream in streams:
+        if stream.get("codec_type") != "video":
+            continue
+        if stream.get("disposition", {}).get("attached_pic"):
+            continue
+        return True
+    return False
+
+
+def keyframe_at_or_before(file: Path, timestamp: float) -> float | None:
+    """Return the presentation time of the last video keyframe at or before *timestamp*.
+
+    This is the frame a stream copy actually starts from: ``-ss`` before ``-i``
+    seeks backwards to a keyframe, because a copied stream has no way to begin
+    mid-GOP. Callers compare the answer to what the user asked for to find out
+    whether a copy would honour the request or silently round it down.
+
+    Packets are read rather than frames — a keyframe is a packet flag, so this
+    needs demuxing only, not decoding — and only up to *timestamp*, so the cost
+    does not grow with the length of the file after the cut.
+
+    Args:
+        file: Media file to probe.
+        timestamp: Requested start position in seconds.
+
+    Returns:
+        Keyframe position in seconds, or None if the file has no video
+        keyframe at or before *timestamp* or ffprobe could not be asked.
+    """
+    if timestamp <= 0:
+        return 0.0
+    window = timestamp + KEYFRAME_TOLERANCE
+    try:
+        data = run_ffprobe(
+            [
+                "-select_streams",
+                "v:0",
+                "-show_packets",
+                "-show_entries",
+                "packet=pts_time,flags",
+                "-read_intervals",
+                f"%+{window:.3f}",
+                str(file),
+            ]
+        )
+    except Exception:
+        return None
+
+    best: float | None = None
+    for packet in data.get("packets", []):
+        if "K" not in packet.get("flags", ""):
+            continue
+        try:
+            pts = float(packet["pts_time"])
+        except KeyError, TypeError, ValueError:
+            continue
+        if pts <= timestamp + _PTS_EPSILON and (best is None or pts > best):
+            best = pts
+    return best
+
+
+def copy_would_land_on(file: Path, start: float) -> tuple[bool, float | None]:
+    """Report whether a stream copy can start exactly at *start*.
+
+    Args:
+        file: Media file to probe.
+        start: Requested start position in seconds.
+
+    Returns:
+        ``(accurate, keyframe)``. *accurate* is True when a stream copy would
+        begin within ``KEYFRAME_TOLERANCE`` of *start*; *keyframe* is where it
+        would actually begin, or None when that could not be determined.
+    """
+    if start <= 0:
+        return True, 0.0
+    if not has_video_stream(file):
+        # Audio frames are milliseconds long, so a copy lands close enough to
+        # the request that no user could tell — there is no GOP to round to.
+        return True, start
+    keyframe = keyframe_at_or_before(file, start)
+    if keyframe is None:
+        return False, None
+    return (start - keyframe) <= KEYFRAME_TOLERANCE, keyframe

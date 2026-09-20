@@ -43,7 +43,7 @@ from core.registry import (
     theme_descriptions,
     theme_labels,
 )
-from webapp import _runs
+from webapp import _runs, _waveform
 from webapp._badges import badges_for
 from webapp._form import (
     accepts_directory,
@@ -383,6 +383,39 @@ async def upload_file(theme: str, file: UploadFile, subdir: str = "") -> JSONRes
     content = await file.read()
     save_path.write_bytes(content)
     return JSONResponse({"path": str(save_path), "filename": file.filename, "dir": str(save_dir)})
+
+
+@app.get("/api/waveform")
+async def waveform(path: str, buckets: int = 900) -> JSONResponse:
+    """Return a peak envelope for a staged media file's audio.
+
+    Reading peaks here rather than in the page is what makes the ``av.trim``
+    waveform work for every file the script accepts: ffmpeg is already required
+    to do the trimming, whereas the browser's own decoder covers only the
+    formats it was built with.
+
+    Args:
+        path: Server-side path of a staged input file.
+        buckets: Number of peaks to return.
+
+    Returns:
+        ``{"duration": float, "peaks": [float, ...]}``. ``peaks`` is empty when
+        the file has no audio track.
+
+    Raises:
+        HTTPException: 400/403/404 when the path is not a staged input, 422
+            when the file cannot be decoded.
+    """
+    try:
+        target = _waveform.resolve_staged_input(path, inputs_dir("av"))
+    except _waveform.StagedInputError as e:
+        raise HTTPException(status_code=e.status, detail=str(e))
+    try:
+        result = await asyncio.to_thread(_waveform.read_waveform, target, buckets)
+    except _waveform.WaveformError as e:
+        logger.info("Waveform unavailable for %s: %s", target.name, e)
+        raise HTTPException(status_code=422, detail=str(e))
+    return JSONResponse(result.as_dict())
 
 
 def _webview_window(request: Request):  # noqa: ANN201

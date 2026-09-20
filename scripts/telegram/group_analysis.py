@@ -1,12 +1,10 @@
 """Generate a descriptive-analytics report from a Telegram group-chat export."""
 
 import argparse
-from datetime import datetime
 import hashlib
 import json
 from pathlib import Path
 import re
-import shutil
 import sys
 import tempfile
 import zipfile
@@ -14,7 +12,7 @@ import zipfile
 from core.argparse import ScriptoriumParser
 from core.outputs import resolve_output
 from core.paths import inputs_dir as _core_inputs_dir
-from core.paths import resolve_input
+from core.paths import move_to_past_inputs, resolve_input
 from scripts.telegram._group_metrics import DEFAULT_MSG_SHARE_THRESHOLD
 from scripts.telegram._group_parsing import InvalidExportError
 
@@ -127,18 +125,22 @@ def group_analysis(
 
 
 def _archive_source(source: Path) -> Path | None:
-    """Move a processed source file to ``inputs/telegram/processed/``."""
-    inputs_root = _core_inputs_dir("telegram").resolve()
-    try:
-        source.resolve().relative_to(inputs_root)
-    except ValueError:
-        return None
-    dest_dir = inputs_root / "telegram" / "processed"
-    dest_dir.mkdir(parents=True, exist_ok=True)
-    stamp = datetime.now().strftime("%d%m%y_%H%M%S")
-    dest = dest_dir / f"result_{stamp}{source.suffix}"
-    shutil.move(str(source), str(dest))
-    return dest
+    """Move a processed source file to the shared ``inputs/processed/`` archive.
+
+    This used to be a third hand-rolled archiver, filing into
+    ``inputs/telegram/processed/`` — a directory nothing else in the app knows
+    about — and renaming every export to ``result_<stamp>``, which threw away
+    the one thing telling two exports apart. It shares the guarded helper now,
+    so exports land where every other archived input does, under their own
+    names.
+
+    Args:
+        source: The export this run consumed.
+
+    Returns:
+        The archived path, or None when the source was left where it was.
+    """
+    return move_to_past_inputs("telegram", source)
 
 
 def _build_zip(staging: Path, zip_path: Path) -> None:

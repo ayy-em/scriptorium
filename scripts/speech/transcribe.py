@@ -6,7 +6,7 @@ import sys
 
 from core.argparse import ScriptoriumParser
 from core.outputs import resolve_output
-from core.paths import inputs_dir, resolve_input
+from core.paths import inputs_dir, move_to_past_inputs, resolve_input
 from scripts.speech._providers import (
     DEFAULT_PROVIDER,
     SUPPORTED_PROVIDERS,
@@ -129,5 +129,6 @@ def run() -> None:
         print(f"error: {exc}", file=sys.stderr)
         sys.exit(1)
 
+    move_to_past_inputs("speech", audio)
     print(f"wrote transcript to {result}")
     sys.exit(0)

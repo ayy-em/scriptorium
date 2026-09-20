@@ -6,7 +6,7 @@ import sys
 
 from core.argparse import ScriptoriumParser
 from core.outputs import resolve_output
-from core.paths import resolve_input
+from core.paths import move_to_past_inputs, resolve_input
 from scripts.av._utils import probe_duration_or_none, probe_streams, run_ffmpeg_with_progress
 
 TITLE = "Crop a video by trimming its edges"
@@ -133,6 +133,7 @@ def run() -> None:
 
     try:
         crop(source, output, top=args.top, right=args.right, bottom=args.bottom, left=args.left)
+        move_to_past_inputs("av", source)
         print(f"Written: {output}")
         sys.exit(0)
     except Exception as e:

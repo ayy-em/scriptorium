@@ -6,6 +6,7 @@ from unittest.mock import patch
 
 import pytest
 
+from core import paths
 from scripts.av.join import (
     _detect_trailing_black,
     _find_last_keyframe_before,
@@ -248,8 +249,16 @@ def test_join_tolerates_audio_codec_mismatch(tmp_path):
         join(tmp_path, out)  # must not raise
 
 
-def test_join_moves_inputs_to_processed(tmp_path):
+def test_join_moves_inputs_to_processed(tmp_path, monkeypatch):
+    """Sources staged in the inputs tree are archived after a successful join.
+
+    This used to assert that join() created ``processed/`` inside whatever
+    directory it was pointed at, which is the behaviour that made pointing it
+    at a real media library destructive. The archiving is the same; where it is
+    allowed to happen is not. See TestJoinArchivesItsSources below.
+    """
     files = _make_files(tmp_path, 2)
+    monkeypatch.setattr(paths, "inputs_dir", lambda _theme: tmp_path)
     out = tmp_path / "out" / "joined.mp4"
     side_effects = [_STREAMS, _STREAMS, _STREAMS, _STREAMS]
     with (
@@ -308,3 +317,48 @@ def test_join_respects_order_random(tmp_path):
     ):
         result = join(tmp_path, out, order="random")
     assert result == out
+
+
+class TestJoinArchivesItsSources:
+    """join() used to move the user's files into a processed/ dir it created.
+
+    Pointed at ``~/Videos``, it made ``~/Videos/processed/`` and moved every
+    clip it had just read into it. The helper it uses now moves a file only
+    when that file was staged inside the shared inputs tree.
+    """
+
+    @staticmethod
+    def _run_join(source_dir, output):
+        """Drive join() past ffmpeg, leaving only the archiving step real."""
+        with (
+            patch("scripts.av.join._assert_compatible"),
+            patch("scripts.av.join._preprocess_file", side_effect=lambda f, _w, _i: f),
+            patch("scripts.av.join.run_ffmpeg"),
+        ):
+            return join(source_dir, output)
+
+    def test_leaves_files_alone_outside_the_inputs_tree(self, tmp_path, monkeypatch):
+        library = tmp_path / "Videos"
+        library.mkdir()
+        clips = [library / "a.mp4", library / "b.mp4"]
+        for clip in clips:
+            clip.write_text("clip")
+        monkeypatch.setattr(paths, "inputs_dir", lambda _theme: tmp_path / "inputs")
+
+        self._run_join(library, tmp_path / "joined.mp4")
+
+        assert all(clip.exists() for clip in clips), "a join must not relocate someone's media library"
+        assert not (library / "processed").exists()
+
+    def test_archives_files_staged_in_the_inputs_tree(self, tmp_path, monkeypatch):
+        inputs = tmp_path / "inputs"
+        inputs.mkdir()
+        clips = [inputs / "a.mp4", inputs / "b.mp4"]
+        for clip in clips:
+            clip.write_text("clip")
+        monkeypatch.setattr(paths, "inputs_dir", lambda _theme: inputs)
+
+        self._run_join(inputs, tmp_path / "joined.mp4")
+
+        assert not any(clip.exists() for clip in clips)
+        assert sorted(p.name for p in (inputs / "processed").iterdir()) == ["a.mp4", "b.mp4"]
