@@ -24,6 +24,56 @@ def _default_output_dir(theme: str) -> Path:
     return outputs_dir(theme) if is_webapp_run() else Path.cwd()
 
 
+def anchor_user_path(raw: str | Path, *, theme: str) -> Path:
+    """Turn a user-supplied output path into an absolute one.
+
+    A path typed into the web UI never passes through a shell, so nothing
+    expands ``~`` and nothing resolves a relative path against anywhere
+    meaningful — ``Path("~/Downloads/x.txt")`` is a *relative* path whose first
+    component is a directory literally named ``~``, and writing to it silently
+    creates that directory next to whatever the server happens to be running
+    from. Every caller therefore anchors here first.
+
+    The rules, in order:
+
+    * ``~/x`` expands against the user's home directory.
+    * An absolute path is left alone.
+    * A relative path *with* a directory part (``Downloads/x.txt``) anchors to
+      the home directory under the web UI, and to the current directory on the
+      command line, where cwd is what a person typing it means.
+    * A bare name (``x.txt``) anchors to the default output directory — the
+      managed outputs tree under the web UI, cwd on the command line. This is
+      the one form with no location in it at all, and the managed tree is what
+      makes it show up in the UI's results list.
+
+    Args:
+        raw: Path exactly as the user supplied it.
+        theme: Script theme slug, for the default outputs directory.
+
+    Returns:
+        An absolute path.
+    """
+    path = Path(raw).expanduser()
+    if path.is_absolute():
+        return path
+    if path.parent == Path("."):
+        return _default_output_dir(theme) / path
+    return relative_root() / path
+
+
+def relative_root() -> Path:
+    """Return what a relative path with a directory part is measured against.
+
+    Args:
+        None.
+
+    Returns:
+        The user's home directory for a web UI run, the current working
+        directory otherwise.
+    """
+    return Path.home() if is_webapp_run() else Path.cwd()
+
+
 def default_stem() -> str:
     """Return a timestamp-based default filename stem.
 
@@ -57,24 +107,34 @@ def deduplicate(path: Path) -> Path:
     raise FileExistsError(f"all 999 suffixed variants of {path.name} already exist")
 
 
-def find_reported_outputs(lines: Iterable[str], root: Path | None = None) -> list[Path]:
+def find_reported_outputs(
+    lines: Iterable[str],
+    root: Path | None = None,
+    *,
+    since: float | None = None,
+) -> list[Path]:
     """Pick out the files a run wrote, by reading what it printed.
 
     Scripts announce their results inconsistently — ``print(out)`` in most,
     ``print(f"wrote {result}")`` in others, nothing at all in a few. Rather
     than a convention every one of them has to remember forever, this reads
     the output that already exists and keeps whatever turns out to be a real
-    file inside the outputs tree.
+    file the run is plausibly responsible for.
 
     Two candidates are tried per line: the whole line, which covers the bare
     ``print(path)`` case including paths containing spaces, and each
     whitespace-separated token, which covers a path embedded in a sentence.
-    Anything outside *root* is ignored, so a script echoing its input does not
-    get mistaken for having written it.
+
+    A file qualifies if it sits under *root*, or — when *since* is given — if it
+    was last modified after the run began. The second test is what lets a result
+    written to a directory the user named, such as ``~/Downloads``, still be
+    reported, while a script merely echoing an input path is not credited with
+    having written it: that file predates the run.
 
     Args:
         lines: Raw stdout lines from the run, unescaped.
-        root: Directory results must live under; defaults to ``outputs_root()``.
+        root: Directory results may live under; defaults to ``outputs_root()``.
+        since: Epoch seconds the run started. When None, only *root* counts.
 
     Returns:
         Existing output files, in the order they were first mentioned.
@@ -87,7 +147,7 @@ def find_reported_outputs(lines: Iterable[str], root: Path | None = None) -> lis
         if not stripped:
             continue
         for candidate in (stripped, *stripped.split()):
-            path = _output_under(candidate, root)
+            path = _written_by_run(candidate, root, since)
             if path is not None:
                 found.setdefault(path, None)
                 break
@@ -95,23 +155,27 @@ def find_reported_outputs(lines: Iterable[str], root: Path | None = None) -> lis
     return list(found)
 
 
-def _output_under(candidate: str, root: Path) -> Path | None:
-    """Return *candidate* as a resolved path if it is a file inside *root*.
+def _written_by_run(candidate: str, root: Path, since: float | None) -> Path | None:
+    """Return *candidate* as a resolved path if the run plausibly wrote it.
 
     Args:
         candidate: A string that may or may not be a path.
-        root: Already-resolved directory the path must be inside.
+        root: Already-resolved directory a path may live under.
+        since: Epoch seconds the run started, or None to require *root*.
 
     Returns:
-        The resolved path, or None if it is not a file under *root*.
+        The resolved path, or None if it does not qualify.
     """
     text = candidate.strip().strip("'\"")
     if not text:
         return None
     try:
         path = Path(text).resolve()
-        path.relative_to(root)
-        if path.is_file():
+        if not path.is_file():
+            return None
+        if path.is_relative_to(root):
+            return path
+        if since is not None and path.stat().st_mtime >= since:
             return path
     except OSError, ValueError:
         return None
@@ -127,15 +191,13 @@ def resolve_output(
 ) -> Path:
     """Resolve user-provided ``--output`` to a concrete, collision-free path.
 
-    Resolution rules based on what the user supplies:
+    The value is first made absolute by ``anchor_user_path``, which is what
+    expands ``~`` and decides where a relative path is measured from. What is
+    left is a shape question:
 
     * **Nothing** (``None``): default outputs dir + ``YYYYMMDD_HHmm.ext``.
     * **Existing directory**: that directory + ``YYYYMMDD_HHmm.ext``.
-    * **Path with file extension**: treated as a file specification.
-
-      - Bare filename (no directory part): placed in the default outputs dir.
-      - Full path: used as-is.
-
+    * **Path with a file extension**: used as the output file.
     * **Path without extension** (and not an existing directory): treated as a
       new directory + ``YYYYMMDD_HHmm.ext``.
 
@@ -154,11 +216,11 @@ def resolve_output(
     if output is None:
         path = _default_output_dir(theme) / f"{stamp}{ext}"
     else:
-        p = Path(output)
+        p = anchor_user_path(output, theme=theme)
         if p.is_dir():
             path = p / f"{stamp}{ext}"
         elif p.suffix:
-            path = p if p.parent != Path(".") else _default_output_dir(theme) / p
+            path = p
         else:
             path = p / f"{stamp}{ext}"
 
@@ -231,11 +293,11 @@ def resolve_output_dir(
     if output is None:
         d = _default_output_dir(theme)
     else:
-        p = Path(output)
+        p = anchor_user_path(output, theme=theme)
         if p.is_dir():
             d = p
         elif p.suffix:
-            d = _default_output_dir(theme) if p.parent == Path(".") else p.parent
+            d = p.parent
         else:
             d = p
 

@@ -241,6 +241,8 @@ thing that failed. It clears when Alpine initialises and fonts are ready, with a
 | `GET`/`POST /api/settings` | read/write `UserConfig` |
 | `POST /api/browse-folder` | native folder picker; 501 outside the desktop app |
 | `POST /api/open-outputs` | reveal the outputs root |
+| `POST /api/reveal-output` | reveal one produced file's folder |
+| `POST /api/reveal-run-outputs` | reveal the folders one run wrote into, by run id |
 | `POST /api/open-logs` | reveal the logs directory |
 | `POST /api/quit` | shut the server down (frozen mode only) |
 | `GET /api/update-check` | compare against the latest GitHub release |
@@ -270,6 +272,20 @@ demotes lines matching `^\[<key>\] ` to info — unless they say `failed`.
 Output artifacts are detected server-side from what the script printed; see
 `core.outputs.find_reported_outputs` and the "Recent outputs panel" entry in
 BACKLOG.md for what that heuristic does and does not cover.
+
+A printed path counts as a result if it is inside the managed outputs tree
+**or** was last modified after the run started. The second test is what lets a
+file the user sent to `~/Downloads` be reported at all, while still not
+crediting a script with writing an input path it merely echoed — that file
+predates the run. `_stream_script` passes the run's start time as `since`.
+
+Revealing a result in the OS file manager is gated the same way round:
+`webapp.app._is_revealable` accepts anything under the outputs root, plus any
+path a past run was recorded as having written. That keeps `POST
+/api/reveal-output` from becoming "open any folder on this machine" for whatever
+else can reach localhost. `POST /api/reveal-run-outputs` takes a run id instead
+of a path and needs no such check — the folders come from what the server itself
+recorded.
 
 ### Progress reporting
 
@@ -615,10 +631,10 @@ path, and both reach a script through the same `argv`. The caller is therefore
 announced out of band, via `SCRIPTORIUM_CALLER=webapp` in the spawned
 environment (`core/invocation.py`), and the two resolvers read it:
 
-| | Bare-filename input | Default output (no `--output`) |
-|---|---|---|
-| Web UI | `inputs/` | `outputs/<theme>/` |
-| Human CLI | current directory | current directory |
+| | Bare-filename input | Default output (no `--output`) | Relative path with a directory part |
+|---|---|---|---|
+| Web UI | `inputs/` | `outputs/<theme>/` | the user's home directory |
+| Human CLI | current directory | current directory | current directory |
 
 ```sh
 # from a terminal — reads ./clip.mp4, writes ./<stamp>.mp3
@@ -639,6 +655,30 @@ Two deliberate exceptions:
 - **`./name` does not force the cwd.** `Path` normalises the leading `./` away
   at construction, so it is indistinguishable from `name`. Use a real directory
   part if you need to be explicit.
+
+### Nothing user-supplied stays relative
+
+A path typed into the web UI never passes through a shell. Nothing expands `~`
+and nothing anchors a relative path, so `~/Downloads/x.txt` arrives as a
+*relative* path whose first component is a directory literally named `~` — and
+writing to it creates that directory next to wherever the server was started.
+
+`core.outputs.anchor_user_path(raw, theme=...)` is the single place this is
+handled, and every resolver runs a value through it before looking at its shape:
+
+| User types | Web UI | Human CLI |
+|---|---|---|
+| `~/Downloads/x.txt` | `$HOME/Downloads/x.txt` | `$HOME/Downloads/x.txt` |
+| `/Volumes/ext/x.txt` | used as-is | used as-is |
+| `Downloads/x.txt` | `$HOME/Downloads/x.txt` | `$PWD/Downloads/x.txt` |
+| `x.txt` | `outputs/<theme>/x.txt` | `$PWD/x.txt` |
+
+The bare-name row is the one asymmetry, and it is deliberate: a name with no
+location in it at all is the only form the managed outputs tree can claim, and
+being inside that tree is what puts the file in the UI's results list.
+
+`core.paths.resolve_input` applies the same rules to inputs, except that a bare
+name means a file staged in `inputs/` rather than one in the outputs tree.
 
 Scripts must not hand-roll this. `core.paths.resolve_input(source, theme)` is
 the single implementation — 18 hand-written copies of a
@@ -752,14 +792,15 @@ provides four functions:
 | `resolve_output(output, *, theme, ext)` | Resolves a user-provided `--output` value (or `None`) to a concrete file path |
 | `resolve_output_dir(output, *, theme)` | Same, but resolves to a directory (for multi-file output scripts) |
 
-`resolve_output` handles three input shapes:
+The value is first made absolute by `anchor_user_path` (see "Nothing
+user-supplied stays relative" above); what is left is a question of shape:
 
 | User provides | Behaviour |
 |---------------|-----------|
 | Nothing (`None`) | `outputs/<theme>/YYYYMMDD_HHmm.ext` |
-| Directory path | `<dir>/YYYYMMDD_HHmm.ext` |
-| Filename only (no directory) | `outputs/<theme>/<filename>` |
-| Full path with directory | Used as-is |
+| Existing directory | `<dir>/YYYYMMDD_HHmm.ext` |
+| Path with a file extension | Used as the output file |
+| Path without an extension | Treated as a new directory + `YYYYMMDD_HHmm.ext` |
 
 All scripts expose a single `--output` / `-o` flag (replacing the former
 `--outputs` directory flag). Scripts that produce a single file use

@@ -52,11 +52,16 @@ def inputs_dir(theme: str) -> Path:  # noqa: ARG001
 def resolve_input(source: Path, theme: str) -> Path:
     """Resolve a user-supplied input path for whoever supplied it.
 
-    A bare filename is the only ambiguous case. From the web UI it names a file
+    ``~`` is expanded first: nothing typed into the web UI passes through a
+    shell, so an unexpanded tilde would be read as a directory of that literal
+    name sitting next to the server.
+
+    A bare filename is the ambiguous case. From the web UI it names a file
     staged in ``inputs/``; from a terminal it names a file in the current
-    directory, the way every other command-line tool behaves. Anything with a
-    directory part, relative or absolute, is already unambiguous and is returned
-    untouched.
+    directory, the way every other command-line tool behaves. A relative path
+    *with* a directory part is measured against the home directory under the web
+    UI and against the current directory on the command line, matching
+    ``core.outputs.anchor_user_path``. Absolute paths are returned untouched.
 
     ``./name`` is *not* a way to force the cwd: ``Path`` normalises the leading
     ``./`` away at construction, so it arrives here identical to ``name``. That
@@ -71,8 +76,13 @@ def resolve_input(source: Path, theme: str) -> Path:
     Returns:
         The path to actually read from.
     """
-    if source.parent != Path(".") or source.is_absolute():
+    from core.outputs import relative_root  # noqa: PLC0415
+
+    source = source.expanduser()
+    if source.is_absolute():
         return source
+    if source.parent != Path("."):
+        return relative_root() / source
     if is_webapp_run():
         return inputs_dir(theme) / source.name
     return source

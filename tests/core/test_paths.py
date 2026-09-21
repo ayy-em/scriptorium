@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from core import paths
+from tests.core.test_outputs import _fake_home
 
 
 @pytest.fixture
@@ -156,3 +157,62 @@ class TestPathHelpers:
 
         assert result.exists()
         assert result == tmp_path / "logs"
+
+
+class TestResolveInput:
+    """Input paths have the same tilde hole outputs did.
+
+    Nothing in the web UI passes through a shell, so ``~`` has to be expanded
+    here or not at all.
+    """
+
+    @pytest.fixture
+    def webapp(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, Path]:
+        """Web UI caller, with home and the staged inputs directory redirected."""
+        from core.invocation import CALLER_ENV_VAR  # noqa: PLC0415
+
+        monkeypatch.setenv(CALLER_ENV_VAR, "webapp")
+        home = _fake_home(tmp_path, monkeypatch)
+        staged = tmp_path / "inputs"
+        staged.mkdir()
+        monkeypatch.setattr(paths, "inputs_dir", lambda _theme: staged)
+        return home, staged
+
+    @pytest.fixture
+    def cli(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, Path]:
+        """Command-line caller standing in a known directory."""
+        from core.invocation import CALLER_ENV_VAR  # noqa: PLC0415
+
+        monkeypatch.delenv(CALLER_ENV_VAR, raising=False)
+        home = _fake_home(tmp_path, monkeypatch)
+        cwd = tmp_path / "cwd"
+        cwd.mkdir()
+        monkeypatch.chdir(cwd)
+        return home, cwd
+
+    def test_tilde_expands_to_home(self, webapp: tuple[Path, Path]):
+        home, _ = webapp
+        assert paths.resolve_input(Path("~/Music/song.mp3"), "av") == home / "Music" / "song.mp3"
+
+    def test_absolute_path_untouched(self, webapp: tuple[Path, Path], tmp_path: Path):
+        target = tmp_path / "elsewhere" / "song.mp3"
+        assert paths.resolve_input(target, "av") == target
+
+    def test_bare_name_still_reads_from_staged_inputs(self, webapp: tuple[Path, Path]):
+        _, staged = webapp
+        assert paths.resolve_input(Path("song.mp3"), "av") == staged / "song.mp3"
+
+    def test_relative_with_directory_part_anchors_to_home(self, webapp: tuple[Path, Path]):
+        home, _ = webapp
+        assert paths.resolve_input(Path("Music/song.mp3"), "av") == home / "Music" / "song.mp3"
+
+    def test_tilde_expands_on_the_cli_too(self, cli: tuple[Path, Path]):
+        home, _ = cli
+        assert paths.resolve_input(Path("~/song.mp3"), "av") == home / "song.mp3"
+
+    def test_bare_name_stays_relative_on_the_cli(self, cli: tuple[Path, Path]):
+        assert paths.resolve_input(Path("song.mp3"), "av") == Path("song.mp3")
+
+    def test_relative_with_directory_part_anchors_to_cwd_on_the_cli(self, cli: tuple[Path, Path]):
+        _, cwd = cli
+        assert paths.resolve_input(Path("Music/song.mp3"), "av") == cwd / "Music" / "song.mp3"

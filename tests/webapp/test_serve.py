@@ -981,6 +981,91 @@ class TestOutputEndpoints:
         opener.assert_not_called()
 
 
+class TestRevealOutsideTheOutputsRoot:
+    """Revealing a result the user sent somewhere of their own choosing.
+
+    Naming ``~/Downloads`` as the destination still gets a working reveal
+    button, without the endpoint becoming "open any folder on this machine".
+    """
+
+    @pytest.fixture()
+    def recorded_elsewhere(self, tmp_path, monkeypatch):
+        """A run recorded as having written a file outside the managed tree."""
+        produced = tmp_path / "Downloads" / "transc.txt"
+        produced.parent.mkdir(parents=True)
+        produced.write_text("x")
+        monkeypatch.setattr("core.history._HISTORY_PATH", tmp_path / "history.json")
+        history.append(
+            history.RunRecord(
+                run_id="r-elsewhere",
+                key="speech.transcribe",
+                status="success",
+                started_at="2026-08-09T00:00:00",
+                elapsed=1.0,
+                exit_code=0,
+                outputs=[str(produced)],
+            )
+        )
+        return produced
+
+    def test_reveal_accepts_a_recorded_output_outside_the_root(self, recorded_elsewhere):
+        with patch("webapp.app._open_in_file_manager") as opener:
+            res = client.post("/api/reveal-output", json={"path": str(recorded_elsewhere)})
+        assert res.status_code == 200
+        opener.assert_called_once_with(recorded_elsewhere.parent)
+
+    def test_reveal_still_rejects_an_unrecorded_path(self, recorded_elsewhere, tmp_path):
+        stranger = tmp_path / "Downloads" / "private.txt"
+        stranger.write_text("x")
+        with patch("webapp.app._open_in_file_manager") as opener:
+            res = client.post("/api/reveal-output", json={"path": str(stranger)})
+        assert res.status_code == 400
+        opener.assert_not_called()
+
+    def test_run_outputs_endpoint_opens_the_containing_folder(self, recorded_elsewhere):
+        with patch("webapp.app._open_in_file_manager") as opener:
+            res = client.post("/api/reveal-run-outputs", json={"run_id": "r-elsewhere"})
+        assert res.status_code == 200
+        assert res.json()["folders"] == [str(recorded_elsewhere.parent)]
+        opener.assert_called_once_with(recorded_elsewhere.parent)
+
+    def test_run_outputs_endpoint_404s_for_an_unknown_run(self, recorded_elsewhere):
+        with patch("webapp.app._open_in_file_manager") as opener:
+            res = client.post("/api/reveal-run-outputs", json={"run_id": "nope"})
+        assert res.status_code == 404
+        opener.assert_not_called()
+
+    def test_run_outputs_endpoint_404s_once_the_files_are_gone(self, recorded_elsewhere):
+        recorded_elsewhere.unlink()
+        with patch("webapp.app._open_in_file_manager") as opener:
+            res = client.post("/api/reveal-run-outputs", json={"run_id": "r-elsewhere"})
+        assert res.status_code == 404
+        opener.assert_not_called()
+
+    def test_each_folder_is_opened_once(self, tmp_path, monkeypatch):
+        first = tmp_path / "Downloads" / "a.txt"
+        second = tmp_path / "Downloads" / "b.txt"
+        first.parent.mkdir(parents=True)
+        first.write_text("x")
+        second.write_text("x")
+        monkeypatch.setattr("core.history._HISTORY_PATH", tmp_path / "history.json")
+        history.append(
+            history.RunRecord(
+                run_id="r-two",
+                key="av.split",
+                status="success",
+                started_at="2026-08-09T00:00:00",
+                elapsed=1.0,
+                exit_code=0,
+                outputs=[str(first), str(second)],
+            )
+        )
+        with patch("webapp.app._open_in_file_manager") as opener:
+            res = client.post("/api/reveal-run-outputs", json={"run_id": "r-two"})
+        assert res.json()["folders"] == [str(first.parent)]
+        assert opener.call_count == 1
+
+
 class TestBatchFanOut:
     """A per-file script is run once per dropped file, sequentially.
 

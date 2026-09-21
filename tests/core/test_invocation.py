@@ -58,9 +58,12 @@ class TestResolveInput:
         monkeypatch.setattr("core.paths.inputs_dir", lambda theme: tmp_path)
         assert resolve_input(Path("./clip.mp4"), "av") == tmp_path / "clip.mp4"
 
-    def test_nested_relative_path_is_untouched(self, monkeypatch):
+    def test_nested_relative_path_anchors_to_home_in_the_webapp(self, tmp_path, monkeypatch):
+        """Nothing relative may stay relative: cwd is the server's, not the user's."""
         monkeypatch.setenv(CALLER_ENV_VAR, "webapp")
-        assert resolve_input(Path("sub/clip.mp4"), "av") == Path("sub/clip.mp4")
+        monkeypatch.setenv("HOME", str(tmp_path))
+        monkeypatch.setenv("USERPROFILE", str(tmp_path))
+        assert resolve_input(Path("sub/clip.mp4"), "av") == tmp_path / "sub" / "clip.mp4"
 
     def test_absolute_path_is_untouched(self, monkeypatch, tmp_path):
         monkeypatch.setenv(CALLER_ENV_VAR, "webapp")
