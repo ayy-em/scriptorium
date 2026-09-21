@@ -5,12 +5,12 @@ from dataclasses import dataclass
 from pathlib import Path
 import random
 import re
-import shutil
 import sys
 import tempfile
 
 from core.argparse import ScriptoriumParser
 from core.outputs import resolve_output
+from core.paths import move_to_past_inputs
 from core.progress import ProgressReporter
 from scripts.av._utils import (
     av_inputs_dir,
@@ -93,6 +93,12 @@ def join(
     common format — the largest input resolution, letterboxed — instead of
     being rejected.
 
+    Sources that live inside the shared inputs tree are archived to
+    ``inputs/processed/`` afterwards; sources anywhere else on the disk are
+    left where they are. This used to create a ``processed/`` directory next to
+    whatever the user pointed at and move their files into it, which is not a
+    thing a join is entitled to do to someone's media library.
+
     Args:
         inputs_dir: Directory containing source media files (non-recursive).
         output: Resolved output file path.
@@ -150,10 +156,8 @@ def join(
         run_ffmpeg(["-f", "concat", "-safe", "0", "-i", str(concat_list), "-c", "copy", str(output)])
         reporter.finish()
 
-    processed_dir = inputs_dir / "processed"
-    processed_dir.mkdir(exist_ok=True)
     for f in files:
-        shutil.move(str(f), processed_dir / f.name)
+        move_to_past_inputs("av", f)
 
     return output
 

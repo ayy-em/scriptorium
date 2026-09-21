@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 
 from core.argparse import ScriptoriumParser
 from core.outputs import resolve_output
-from core.paths import resolve_input
+from core.paths import move_to_past_inputs, resolve_input
 from core.progress import ProgressReporter
 from scripts.av._utils import probe_duration, run_ffmpeg
 
@@ -358,6 +358,7 @@ def run() -> None:
 
     try:
         out = filmstrip(source, output, grid=args.grid, offset=args.offset)
+        move_to_past_inputs("av", source)
         print(out)
         sys.exit(0)
     except Exception as e:

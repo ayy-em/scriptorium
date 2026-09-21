@@ -9,7 +9,7 @@ import tempfile
 
 from core.argparse import ScriptoriumParser
 from core.outputs import resolve_output
-from core.paths import resolve_input
+from core.paths import move_to_past_inputs, resolve_input
 from scripts.av._utils import (
     parse_time,
     probe_duration_or_none,
@@ -462,6 +462,7 @@ def run() -> None:
             sd=args.sd,
             optimize_gif=args.gif_optimize,
         )
+        move_to_past_inputs("av", source)
         print(output)
         sys.exit(0)
     except Exception as e:

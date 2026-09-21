@@ -120,13 +120,26 @@ def past_inputs_dir(theme: str) -> Path:  # noqa: ARG001
 def move_to_past_inputs(theme: str, source: Path) -> Path | None:
     """Move a processed input file to ``inputs/processed/``.
 
-    Only moves files that live inside the shared inputs root — files passed via
-    an absolute path outside that tree (or already inside ``processed/``) are
-    left alone. Returns the destination path on success, ``None`` if the source
-    was skipped or the move failed.
+    This is the only sanctioned way to archive an input, and the guard is the
+    reason: a file is moved **only** when it lives inside the shared inputs
+    root. Point a script at ``~/Movies/holiday.mp4`` and it is read and left
+    exactly where it was; stage a file in ``inputs/`` and it is filed away once
+    it has been used. Scripts that rolled their own ``processed/`` directory
+    created one next to whatever the user pointed at, which made pointing a
+    script at a real media library a destructive act.
 
-    Filename collisions inside ``processed/`` are resolved by appending a
-    timestamp suffix so prior archived copies are preserved.
+    Files already inside ``processed/`` are skipped, so re-running against the
+    archive does not shuffle it.
+
+    Args:
+        theme: Script theme slug, for the inputs directory lookup.
+        source: File the run has finished with.
+
+    Returns:
+        The destination path, or ``None`` when the source was skipped (outside
+        the inputs root, already archived, not a file) or the move failed.
+        Callers ignore the return value: failing to tidy up is never a reason
+        to fail a run that already produced its output.
     """
     if not source.is_file():
         return None

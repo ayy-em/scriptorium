@@ -227,6 +227,22 @@ Run it with no source argument and it falls back to the shared `inputs/` folder
 instead, which is what the web UI uses. Pass `--output` at any time to be
 explicit.
 
+### What happens to your input file
+
+A script that consumes a file moves it to `inputs/processed/` once it has
+finished with it, so the inputs folder shows what is still waiting to be done.
+
+**This only ever applies to files inside `inputs/`.** Point a script at
+`~/Movies/holiday.mp4` and it is read and left exactly where it is — nothing is
+moved, and no `processed/` folder appears next to your media. If a file of the
+same name is already archived, the new one gets a timestamp suffix rather than
+overwriting it.
+
+A few scripts deliberately do not archive: the `lora.*` tools work on a dataset
+folder in place, the `telegram.*` chain needs its export again at the next step,
+and `gif.make_gif` reads a folder of frames you will likely re-render at other
+settings.
+
 ## Scripts Available
 
 | Script     | Description                     |
@@ -260,11 +276,23 @@ explicit.
 uv run main.py av.join --help
 
 # Trim a video to a time range
-uv run main.py av.trim input.mp4 output.mp4 --start 00:00:05 --end 00:01:30
+uv run main.py av.trim input.mp4 00:00:05 00:01:30
 
-# Trim the first 30 seconds
-uv run main.py av.trim input.mp4 output.mp4 --seconds 30
+# Skip the first 30 seconds, keep the rest
+uv run main.py av.trim input.mp4 30
+
+# Name the output yourself
+uv run main.py av.trim input.mp4 1:03 5:04 --output cut.mp4
+
+# Accept a keyframe-snapped cut rather than re-encoding for an exact one
+uv run main.py av.trim input.mp4 00:03 --mode fast
 ```
+
+`av.trim` cuts where you asked. A stream copy can only start at a keyframe, so
+when the nearest one is not close enough to your start time, the video is
+re-encoded instead of quietly rounding the cut backwards — which on a
+low-frame-rate or long-GOP source used to mean getting most of the original
+file back and being told it worked. `--mode fast` opts out and keeps the copy.
 
 ## How To Use: Programmatic Examples
 

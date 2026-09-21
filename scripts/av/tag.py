@@ -9,7 +9,7 @@ import tempfile
 
 from core.argparse import ScriptoriumParser
 from core.outputs import resolve_output
-from core.paths import resolve_input
+from core.paths import move_to_past_inputs, resolve_input
 from scripts.av._utils import COVER_SUPPORTED_EXTS, read_tags, run_ffmpeg
 
 TITLE = "Read/write media metadata tags"
@@ -209,6 +209,7 @@ def run() -> None:
             cover=args.cover,
             force=args.force,
         )
+        move_to_past_inputs("av", input_file)
         print(f"Written: {output}")
         sys.exit(0)
     except Exception as e:

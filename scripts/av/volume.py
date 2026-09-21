@@ -6,7 +6,7 @@ import sys
 
 from core.argparse import ScriptoriumParser
 from core.outputs import resolve_output
-from core.paths import resolve_input
+from core.paths import move_to_past_inputs, resolve_input
 from scripts.av._utils import probe_duration_or_none, probe_streams, run_ffmpeg_with_progress, run_ffprobe
 
 TITLE = "Adjust audio volume, normalize, or apply fade-in/out"
@@ -166,6 +166,7 @@ def run() -> None:
             fade_in=args.fade_in,
             fade_out=args.fade_out,
         )
+        move_to_past_inputs("av", input_file)
         print(f"Written: {output}")
         sys.exit(0)
     except Exception as e:
