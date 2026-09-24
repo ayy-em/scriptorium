@@ -253,6 +253,7 @@ from an older build indefinitely. ETag revalidation makes the usual cost a 304.
 | `POST /api/quit` | shut the server down (frozen mode only) |
 | `GET /api/update-check` | compare against the latest GitHub release |
 | `GET /api/capabilities/{name}/install` | run a missing dependency's install command, output streamed as SSE |
+| `GET /api/model-weights/{theme}/{script_name}` | which model weights the current form state would download; only for scripts exposing `models_for_args` |
 
 `preview-command` shares `webapp._form.build_argv` with the run endpoint, so the
 previewed command cannot drift from what actually executes. It quotes with
@@ -388,6 +389,7 @@ Scripts do not write the sentinel by hand — `core/progress.py` owns it:
 |---|---|---|
 | `scripts.av._utils.run_ffmpeg_with_progress` | one long ffmpeg pass — `av.{trim,volume,video_crop,dump_frames,to_anim}`, `formats.convert_{audio,video}` | position within the output, from ffmpeg's `-progress pipe:1` |
 | `core.progress.ProgressReporter` directly | many short ffmpeg calls — `av.{split,filmstrip,join}` | calls completed |
+| `core.downloads.reporting_downloads` | model weights fetched by rembg — `photo.remove_bg` | bytes received, from pooch's progress-bar hook |
 
 The split matters. Where a script makes N short calls, ffmpeg's own progress
 reports against a different total each time, so the bar would reset on every
@@ -1072,13 +1074,29 @@ It changes nothing about the CLI — every argument stays equally visible in
 `--help`. The fields also stay in the DOM when collapsed, so their defaults
 still submit; only visibility changes.
 
-`photo.remove_bg` is the worked example. A `--quality` preset
-(`fast`/`balanced`/`best`) maps to a model, and the ten expert arguments —
-including `--model` itself, as an override — sit behind the disclosure.
-Prefer this shape when a script has one obvious decision and a long tail:
-a preset that covers the common case, with the full controls one click away.
-`balanced` resolves to the previous default, so no-argument behaviour is
-unchanged.
+`photo.remove_bg` is the worked example. A `--preset` (`fast`/`balanced`/`hq`)
+bundles a model with its edge treatment, and the expert arguments — including
+`--model`, `--alpha-matting` and `--post-process-mask`, which only ever add to
+what the preset set — sit behind the disclosure. Prefer this shape when a
+script has one obvious decision and a long tail: a preset that covers the
+common case, with the full controls one click away. `fast` resolves to the
+previous default, so no-argument behaviour is unchanged.
+
+The presets are named for cost, not quality, because no model wins on every
+image — u2net regularly beats the larger models on some photos. That is also
+why `--all-presets` exists: it runs the three in sequence over the same inputs
+into the same output location, prefixing each filename with the preset name,
+and archives the inputs only after the last pass so every pass can see them.
+One failing preset does not stop the others.
+
+Because every model downloads its weights on first use, the script exposes
+`models_for_args(args)` and `weights_url(model)`. The detail page calls
+`GET /api/model-weights/photo/remove_bg` with the live form state and shows
+which weights the run would fetch, with a size from a cached `HEAD` request
+when the server can learn one. During the run, `core.downloads` swaps pooch's
+tqdm bar for a `ProgressReporter`, so the download drives the status bar like
+a transcode does. Any script that loads model weights can opt in by exposing
+the same two functions.
 
 ### Minimal example
 

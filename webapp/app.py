@@ -10,6 +10,7 @@ import shlex
 import subprocess
 import sys
 import time
+import urllib.request
 import uuid
 
 from fastapi import FastAPI, HTTPException, Request, UploadFile
@@ -333,8 +334,88 @@ async def script_detail(theme: str, script_name: str, request: Request):
             "labels": theme_labels(),
             "version": _APP_VERSION,
             "git_hash": _GIT_HASH,
+            # Only a script that can say which models a form state loads gets
+            # the pre-run download notice; see /api/model-weights.
+            "reports_model_weights": hasattr(mod, "models_for_args"),
         },
     )
+
+
+# Content-length per weights URL. One HEAD per model per process is plenty;
+# release assets do not change size.
+_weights_sizes: dict[str, int | None] = {}
+
+
+def _weights_size(url: str) -> int | None:
+    """Ask the release server how big a weights file is.
+
+    Args:
+        url: The asset URL.
+
+    Returns:
+        Size in bytes, or None when offline or the server will not say. The
+        notice then shows the model name without a number rather than guess.
+    """
+    if url in _weights_sizes:
+        return _weights_sizes[url]
+    size: int | None = None
+    try:
+        request = urllib.request.Request(url, method="HEAD")
+        with urllib.request.urlopen(request, timeout=4) as response:  # noqa: S310
+            length = response.headers.get("Content-Length")
+            size = int(length) if length else None
+    except Exception:
+        size = None
+    _weights_sizes[url] = size
+    return size
+
+
+@app.get("/api/model-weights/{theme}/{script_name}")
+async def model_weights(theme: str, script_name: str, request: Request) -> JSONResponse:
+    """Say which model weights the current form state would download.
+
+    The script itself resolves the form into models via ``models_for_args``,
+    so the answer tracks ``run()`` exactly — presets, overrides and
+    compare-everything modes included.
+
+    Args:
+        theme: Script theme slug.
+        script_name: Script module name.
+        request: Request whose query params carry the current form values.
+
+    Returns:
+        JSON with ``downloads`` (absent models and their sizes, in run order)
+        and ``weights_dir``.
+
+    Raises:
+        HTTPException: 404 if the script is unknown or does not report models.
+    """
+    key = f"{theme}.{script_name}"
+    scripts = discover()
+    mod = scripts.get(key)
+    if mod is None or not hasattr(mod, "models_for_args"):
+        raise HTTPException(status_code=404, detail=f"Script {key!r} does not report model weights")
+
+    parser = mod.get_parser()
+    argv = build_argv(dict(request.query_params), fields_from_parser(parser))
+    try:
+        # parse_known_args rather than parse_args: the subclass's parse_args
+        # prints a startup banner to stderr, which belongs to a script run,
+        # not to a form keystroke in the server log.
+        args, _ = parser.parse_known_args(argv)
+    except SystemExit:
+        # A half-filled form is not an error; there is just nothing to say yet.
+        return JSONResponse({"downloads": [], "weights_dir": str(capabilities.model_weights_dir())})
+
+    downloads = []
+    for model in mod.models_for_args(args):
+        if capabilities.model_weights_present(model):
+            continue
+        url = mod.weights_url(model) if hasattr(mod, "weights_url") else None
+        size = await asyncio.to_thread(_weights_size, url) if url else None
+        downloads.append({"model": model, "size_bytes": size})
+
+    return JSONResponse({"downloads": downloads, "weights_dir": str(capabilities.model_weights_dir())})
 
 
 @app.get("/scripts/{theme}/{script_name}/run")

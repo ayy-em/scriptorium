@@ -16,6 +16,7 @@
        runUrl: {{ ("/scripts/" ~ key_path ~ "/run") | tojson }},
        previewUrl: {{ ("/api/preview-command/" ~ key_path) | tojson }},
        recentUrl: {{ ("/api/recent-outputs/" ~ key_path) | tojson }},
+       weightsUrl: {{ (("/api/model-weights/" ~ key_path) if reports_model_weights else None) | tojson }},
        fileDest: {{ (file_spec.dest if file_spec else None) | tojson }},
        fileWidget: {{ (file_spec.widget if file_spec else None) | tojson }},
        acceptExts: {{ accept_exts | tojson }},
@@ -132,6 +133,8 @@
       /* Was passed in the markup but never read here, so _loadRecentOutputs
          fetched `undefined` and the Recent outputs panel was always empty. */
       recentUrl: config.recentUrl,
+      /* Null for scripts that load no model weights; the notice never shows. */
+      weightsUrl: config.weightsUrl || null,
       fileDest: config.fileDest,
       fileWidget: config.fileWidget,
       acceptExts: config.acceptExts || '',
@@ -187,6 +190,12 @@
       copied: false,
       _previewTimer: null,
 
+      /* Model weights the current form state would download on this run.
+         Filled from the server, which asks the script itself. */
+      pendingDownloads: [],
+      weightsDir: '',
+      _weightsTimer: null,
+
       init() {
         this.values = Object.assign({}, this.defaults);
         for (var k in this.values) {
@@ -198,6 +207,36 @@
            form without a request per keystroke. */
         this.$watch('values', () => { if (this.previewOpen) this._schedulePreview(); });
         this._loadRecentOutputs();
+
+        if (this.weightsUrl) {
+          this.$watch('values', () => this._scheduleWeightsCheck());
+          this._loadWeights();
+        }
+      },
+
+      _scheduleWeightsCheck() {
+        if (this._weightsTimer) clearTimeout(this._weightsTimer);
+        this._weightsTimer = setTimeout(() => this._loadWeights(), 250);
+      },
+
+      async _loadWeights() {
+        try {
+          var res = await fetch(this.weightsUrl + '?' + this._buildParams().toString());
+          var data = await res.json();
+          this.pendingDownloads = Array.isArray(data.downloads) ? data.downloads : [];
+          this.weightsDir = data.weights_dir || '';
+        } catch (e) {
+          this.pendingDownloads = [];
+        }
+      },
+
+      /* "u2net (176 MB), isnet-general-use" — a size only when the server
+         could learn one, never a guess. */
+      downloadSummary() {
+        return this.pendingDownloads.map((d) => {
+          if (!d.size_bytes) return d.model;
+          return d.model + ' (' + Math.round(d.size_bytes / 1048576) + ' MB)';
+        }).join(', ');
       },
 
       async _loadRecentOutputs() {

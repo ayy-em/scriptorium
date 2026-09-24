@@ -2556,6 +2556,32 @@ html.dark .dependency-banner-title {
   color: var(--text-muted);
 }
 
+/* Pre-run download notice ------------------------------------------------- */
+.download-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  margin-bottom: 0.9rem;
+  padding: 0.6rem 0.8rem;
+  border-radius: var(--r-md);
+  border: 1px solid color-mix(in oklch, var(--accent) 30%, transparent);
+  background: var(--accent-bg);
+  color: var(--text-muted);
+  font-size: var(--fs-helper);
+  line-height: 1.5;
+}
+
+.download-notice svg { flex-shrink: 0; margin-top: 0.2rem; color: var(--accent-text); }
+.download-notice strong { color: var(--text); font-weight: 600; }
+.download-notice code {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  background: var(--bg-hover);
+  padding: 0.05rem 0.3rem;
+  border-radius: 4px;
+  overflow-wrap: anywhere;
+}
+
 /* ─── Top-bar icon actions ──────────────────────────────────────────────── */
 .icon-action {
   position: relative;

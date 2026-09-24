@@ -12,14 +12,19 @@ sys.modules["rembg"] = mock_rembg
 from scripts.photo import remove_bg as remove_bg_mod  # noqa: E402
 from scripts.photo.remove_bg import (  # noqa: E402
     DEFAULT_MODEL,
-    DEFAULT_QUALITY,
+    DEFAULT_PRESET,
     MODELS,
-    QUALITY_PRESETS,
+    PRESETS,
+    WEIGHTS_FILES,
+    Preset,
     get_parser,
     hex_to_rgba,
-    model_for,
+    models_for_args,
+    presets_for_run,
     remove_bg,
     remove_bg_batch,
+    settings_for,
+    weights_url,
 )
 from webapp._form import fields_from_parser  # noqa: E402
 
@@ -138,10 +143,11 @@ def test_get_parser_source_is_optional():
 def test_get_parser_defaults():
     args = get_parser().parse_args(["photo.jpg"])
 
-    # --model is now an override with no default of its own; the effective
-    # model comes from the quality preset and must still be u2net.
+    # --model is an override with no default of its own; the effective model
+    # comes from the preset and must still be u2net.
     assert args.model is None
-    assert model_for(args.quality, args.model) == "u2net"
+    assert settings_for(args.preset, model=args.model).model == "u2net"
+    assert args.all_presets is False
     assert args.alpha_matting is False
     assert args.alpha_matting_foreground_threshold == 240
     assert args.alpha_matting_background_threshold == 10
@@ -335,34 +341,129 @@ def test_module_constants():
     assert callable(remove_bg_mod.run)
 
 
-class TestQualityPresets:
+class TestPresets:
     """A preset picker for the common case; --model stays for everyone else."""
 
-    def test_balanced_is_the_previous_default(self):
+    def test_the_default_preset_is_the_previous_default(self):
         """The no-arguments result must not change under the new front end."""
-        assert model_for("balanced", None) == DEFAULT_MODEL
+        assert settings_for(DEFAULT_PRESET) == Preset(DEFAULT_MODEL)
 
     def test_each_preset_names_a_real_model(self):
-        for preset, model in QUALITY_PRESETS.items():
-            assert model in MODELS, f"{preset} -> {model}"
+        for preset, settings in PRESETS.items():
+            assert settings.model in MODELS, f"{preset} -> {settings.model}"
+
+    def test_presets_are_named_for_cost_not_quality(self):
+        """No model wins on every image, so the names promise speed, not results."""
+        assert list(PRESETS) == ["fast", "balanced", "hq"]
+
+    def test_balanced_and_hq_clean_the_mask(self):
+        assert PRESETS["balanced"].post_process_mask is True
+        assert PRESETS["hq"].post_process_mask is True
+        assert PRESETS["hq"].alpha_matting is True
 
     def test_explicit_model_overrides_the_preset(self):
-        assert model_for("fast", "birefnet-portrait") == "birefnet-portrait"
+        assert settings_for("fast", model="birefnet-portrait").model == "birefnet-portrait"
+
+    def test_explicit_flags_only_add(self):
+        """A store_true flag cannot say "off", so the preset's choices survive."""
+        merged = settings_for("hq", alpha_matting=False, post_process_mask=False)
+        assert merged.alpha_matting is True
+        merged = settings_for("fast", alpha_matting=True)
+        assert merged.alpha_matting is True
 
     def test_unknown_preset_is_rejected(self):
-        with pytest.raises(ValueError, match="unknown quality preset"):
-            model_for("turbo", None)
+        with pytest.raises(ValueError, match="unknown preset"):
+            settings_for("turbo")
 
     def test_no_preset_pulls_the_950mb_model(self):
         """A one-click preset should not start a ~1GB download."""
-        assert "birefnet-general" not in QUALITY_PRESETS.values()
+        assert all(p.model != "birefnet-general" for p in PRESETS.values())
+
+
+class TestAllPresets:
+    def test_all_presets_runs_every_preset_in_declared_order(self):
+        assert presets_for_run("hq", all_presets=True) == ("fast", "balanced", "hq")
+
+    def test_otherwise_only_the_chosen_one(self):
+        assert presets_for_run("hq", all_presets=False) == ("hq",)
+
+    def test_models_for_args_ignores_the_override_when_comparing(self):
+        args = get_parser().parse_args(["x.jpg", "--all-presets", "--model", "silueta"])
+        assert models_for_args(args) == ["u2net", "isnet-general-use", "birefnet-general-lite"]
+
+    def test_models_for_args_honours_the_override_otherwise(self):
+        args = get_parser().parse_args(["x.jpg", "--preset", "hq", "--model", "silueta"])
+        assert models_for_args(args) == ["silueta"]
+
+    @patch("scripts.photo.remove_bg.move_to_past_inputs")
+    @patch("scripts.photo.remove_bg.Image")
+    def test_run_prefixes_outputs_and_archives_once(self, mock_pil, mock_archive, tmp_path, monkeypatch, capsys):
+        src = tmp_path / "pic.jpg"
+        src.write_bytes(b"x")
+        out_dir = tmp_path / "out"
+        monkeypatch.setattr(sys, "argv", ["prog", str(src), "-o", str(out_dir / "pic.png"), "--all-presets"])
+        remove_bg_mod.run()
+        printed = capsys.readouterr().out.splitlines()
+        assert [Path(p).name for p in printed] == ["fast_pic.png", "balanced_pic.png", "hq_pic.png"]
+        assert mock_archive.call_count == 1
+
+    @patch("scripts.photo.remove_bg.move_to_past_inputs")
+    @patch("scripts.photo.remove_bg.Image")
+    def test_one_failing_preset_does_not_stop_the_others(self, mock_pil, mock_archive, tmp_path, monkeypatch, capsys):
+        src = tmp_path / "pic.jpg"
+        src.write_bytes(b"x")
+        monkeypatch.setattr(sys, "argv", ["prog", str(src), "-o", str(tmp_path / "out" / "pic.png"), "--all-presets"])
+        results = iter([RuntimeError("boom"), _mock_image(), _mock_image()])
+
+        def _remove(*args, **kwargs):
+            value = next(results)
+            if isinstance(value, Exception):
+                raise value
+            return value
+
+        mock_rembg.remove.side_effect = _remove
+        with pytest.raises(SystemExit) as exc:
+            remove_bg_mod.run()
+        assert exc.value.code == 1
+        captured = capsys.readouterr()
+        assert "fast" not in captured.out
+        assert "balanced_pic.png" in captured.out
+        assert "hq_pic.png" in captured.out
+        assert "boom" in captured.err
+
+
+class TestWeightsTable:
+    def test_every_selectable_model_has_a_weights_file(self):
+        assert set(WEIGHTS_FILES) == set(MODELS)
+
+    def test_weights_url_is_none_for_unknown_models(self):
+        assert weights_url("nope") is None
+
+    def test_table_matches_the_installed_rembg(self):
+        """The filenames are copied out of rembg; catch it if a release moves them.
+
+        Read as text from site-packages because this module replaces ``rembg``
+        in sys.modules with a mock for every other test here.
+        """
+        import re  # noqa: PLC0415
+        import sysconfig  # noqa: PLC0415
+
+        sessions = Path(sysconfig.get_paths()["purelib"]) / "rembg" / "sessions"
+        if not sessions.is_dir():
+            pytest.skip("rembg not installed")
+        published = set()
+        for source in sessions.glob("*.py"):
+            text = source.read_text(encoding="utf-8")
+            published.update(re.findall(r"releases/download/v0\.0\.0/([^\"']+\.onnx)", text))
+        for model, filename in WEIGHTS_FILES.items():
+            assert filename in published, f"{model}: {filename} is not in the installed rembg"
 
 
 class TestAdvancedFields:
     def test_only_the_preset_and_paths_are_in_the_basic_form(self):
         specs = fields_from_parser(get_parser())
         basic = {s.dest for s in specs if not s.advanced}
-        assert basic == {"source", "output", "quality"}
+        assert basic == {"source", "output", "preset", "all_presets"}
 
     def test_model_and_matting_are_advanced(self):
         specs = {s.dest: s for s in fields_from_parser(get_parser())}
@@ -372,8 +473,8 @@ class TestAdvancedFields:
     def test_defaults_are_unchanged_when_nothing_is_touched(self):
         """Advanced fields are hidden, not removed — their defaults still apply."""
         args = get_parser().parse_args(["pic.png"])
-        assert args.quality == DEFAULT_QUALITY
+        assert args.preset == DEFAULT_PRESET
         assert args.model is None
-        assert model_for(args.quality, args.model) == DEFAULT_MODEL
+        assert settings_for(args.preset, model=args.model).model == DEFAULT_MODEL
         assert args.alpha_matting is False
         assert args.bgcolor is None

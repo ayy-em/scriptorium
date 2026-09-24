@@ -132,7 +132,7 @@ so installing something and reloading the page clears it without a restart.
 | `formats.convert_docs` | **pandoc** on `PATH` | Document conversion fails |
 | Telegram PDF reports | **pango, cairo, glib** — Homebrew on macOS, MSYS2 or the GTK3 runtime on Windows | PDF output fails; the other Telegram scripts are unaffected |
 | `speech.transcribe` | `OPENAI_API_KEY` in a `.env` file | The script errors out |
-| `photo.remove_bg` | Model weights, ~170MB per model (~950MB for `birefnet-general`) | Downloaded to `~/.u2net/` on first use of each model |
+| `photo.remove_bg` | Model weights, ~170MB per model (~215MB for the `hq` preset's `birefnet-general-lite`, ~950MB for `birefnet-general`) | Downloaded to `~/.u2net/` on first use of each model; the form says so before you run, and the status bar shows the download |
 
 Two more are optional — reported, but nothing breaks without them: **gifsicle**
 makes `av.to_anim --optimize` more effective, and the **weasyprint** CLI gives

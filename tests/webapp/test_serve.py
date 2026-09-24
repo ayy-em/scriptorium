@@ -319,6 +319,51 @@ class TestInstallEndpoint:
         assert "event: done" in response.content.decode()
 
 
+class TestModelWeightsEndpoint:
+    """The pre-run notice asks the script which weights a form state loads."""
+
+    def test_scripts_without_models_are_404(self):
+        assert client.get("/api/model-weights/lora/validate").status_code == 404
+
+    def test_absent_models_are_listed_with_sizes(self):
+        with (
+            patch.object(capabilities, "model_weights_present", return_value=False),
+            patch("webapp.app._weights_size", return_value=176 * 1024 * 1024),
+        ):
+            response = client.get("/api/model-weights/photo/remove_bg", params={"preset": "fast"})
+        assert response.status_code == 200
+        data = response.json()
+        assert data["downloads"] == [{"model": "u2net", "size_bytes": 176 * 1024 * 1024}]
+        assert data["weights_dir"]
+
+    def test_present_models_are_not_listed(self):
+        with patch.object(capabilities, "model_weights_present", return_value=True):
+            response = client.get("/api/model-weights/photo/remove_bg", params={"preset": "hq"})
+        assert response.json()["downloads"] == []
+
+    def test_all_presets_lists_every_model_in_run_order(self):
+        with (
+            patch.object(capabilities, "model_weights_present", return_value=False),
+            patch("webapp.app._weights_size", return_value=None),
+        ):
+            response = client.get("/api/model-weights/photo/remove_bg", params={"all_presets": "on"})
+        assert [d["model"] for d in response.json()["downloads"]] == [
+            "u2net",
+            "isnet-general-use",
+            "birefnet-general-lite",
+        ]
+
+    def test_an_unparseable_form_says_nothing(self):
+        with patch.object(capabilities, "model_weights_present", return_value=False):
+            response = client.get("/api/model-weights/photo/remove_bg", params={"preset": "turbo"})
+        assert response.status_code == 200
+        assert response.json()["downloads"] == []
+
+    def test_detail_page_is_wired_only_for_model_scripts(self):
+        assert '"/api/model-weights/photo/remove_bg"' in client.get("/scripts/photo/remove_bg").text
+        assert "weightsUrl: null" in client.get("/scripts/lora/validate").text
+
+
 class TestWindowLevelDrop:
     """A drop anywhere on a detail page prefills that script's file input.
 

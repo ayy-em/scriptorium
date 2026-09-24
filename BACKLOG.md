@@ -64,38 +64,6 @@ no command and render the disabled "Coming soon!" button instead:
 - **Linux.** `apt` needs sudo, which a background process cannot supply. Options
   are a `pkexec` prompt or just keeping the hint.
 
-## Visible first-run cost for rembg model weights
-
-**Status:** open (2026-08-04), decided and designed, not built.
-
-**Decided:** do *not* bundle model weights — they are per-option, and
-`birefnet-general` alone is ~950MB. Instead tell the user before the download
-starts and show progress while it runs.
-
-The groundwork is done: `core.capabilities.model_weights_present(model)` answers
-"will selecting this model trigger a download" without importing rembg, so a
-form can warn *before* the run rather than after.
-
-**How the progress part works** — verified against the installed sources, not
-assumed:
-
-- rembg fetches weights with `pooch.retrieve(..., progressbar=True)` in each
-  session class's `download_models()`.
-- pooch accepts a **custom** progressbar object instead of `True`: anything with
-  `.total` (settable), `.update(n)`, `.reset()` and `.close()`
-  (`pooch/downloaders.py`, the `elif self.progressbar:` branch). tqdm's default
-  writes to stderr, which is why the existing bar is invisible until the run
-  ends.
-- So a ~15-line adapter over `core.progress.ProgressReporter` makes the download
-  drive the same status bar transcodes already use.
-- rembg hardcodes `progressbar=True`, so this needs a contained wrap of
-  `pooch.retrieve`. Precedent: `core/native_libs.py` patches `cffi.FFI.dlopen`.
-
-**One open question:** where the size in the warning comes from. A `HEAD` request
-to the model's release URL is accurate and self-maintaining but means the form
-page makes an outbound request; a hardcoded table is offline but goes stale.
-Leaning `HEAD`, cached, with no number shown on failure.
-
 ## Bundle the pango/cairo/glib stack
 
 **Status:** open (2026-08-04). Deliberately deferred in favour of detection.
@@ -253,6 +221,16 @@ new script cannot quietly inherit either behaviour, and fails any script that
 builds a `processed/` directory of its own. That test is what found the
 `telegram.group_analysis` implementation, which had been missed by reading the
 code.
+
+## Visible first-run cost for rembg model weights
+
+**Status:** settled (2026-09-24), built as designed. The detail page shows
+which weights a run would download (size from a cached `HEAD`, omitted when
+offline), and `core.downloads` routes pooch's progress into the status bar.
+Weights are still not bundled. The open question resolved as leaning: `HEAD`,
+cached per process, no number on failure. The same change replaced the
+`--quality` presets with `--preset fast|balanced|hq` and added `--all-presets`;
+see SPEC.md.
 
 ## Runtime dependencies needed one coherent story
 

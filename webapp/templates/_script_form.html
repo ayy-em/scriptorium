@@ -212,6 +212,17 @@
   </div>
   {% endif %}
 
+  {# Model weights this run would fetch first. Rendered from the server's
+     answer so it stays true to what run() will load; the run's own status
+     bar then shows the download moving. #}
+  <div class="download-notice" x-show="pendingDownloads.length" x-cloak role="status">
+    {{ icon('download', 14) }}
+    <p>
+      <span x-text="pendingDownloads.length === 1 ? 'First run downloads model weights: ' : 'First run downloads ' + pendingDownloads.length + ' sets of model weights: '"></span><strong x-text="downloadSummary()"></strong>.
+      Saved to <code x-text="weightsDir"></code>, so later runs skip this.
+    </p>
+  </div>
+
   <div class="run-controls">
     <button type="submit" class="run-btn" id="run-btn"
             :disabled="!canRun"
