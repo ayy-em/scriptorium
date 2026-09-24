@@ -1,5 +1,6 @@
 {% from "_macros.html" import theme_icon %}
 {% from "_icons.html" import icon %}
+{% from "_components.html" import soon_button %}
 <aside class="sidebar">
   <nav class="sidebar-nav">
     <a href="/"
@@ -68,10 +69,28 @@
     </div>
     <ul class="dependency-list">
       {% for capability in absent %}
-      <li>
-        <span class="dependency-name">{{ capability.label }}</span>
+      {# A dependency with an unattended install command gets a live button
+         that runs it and streams the installer's output underneath. One
+         without (pango on Windows, a key to configure) keeps the text hint and
+         a disabled button, per the "Coming soon!" convention. #}
+      <li x-data="dependencyInstall('{{ capability.name }}')">
+        <div class="dependency-row">
+          <span class="dependency-name">{{ capability.label }}</span>
+          {% if capability.command %}
+          <button type="button"
+                  class="btn btn--secondary btn--sm dependency-install"
+                  :class="{ 'is-done': state === 'done', 'is-failed': state === 'failed' }"
+                  :disabled="state === 'running' || state === 'done'"
+                  @click="start()"
+                  x-text="buttonLabel()">Install</button>
+          {% else %}
+          {{ soon_button('Install', cls='btn-soon--sm') }}
+          {% endif %}
+        </div>
         <span class="dependency-need">{{ capability.needed_for }}</span>
-        {% if capability.hint %}<code>{{ capability.hint }}</code>{% endif %}
+        {% if capability.hint and not capability.command %}<code>{{ capability.hint }}</code>{% endif %}
+        <pre class="dependency-log" x-show="log" x-ref="log" x-text="log" x-cloak></pre>
+        <span class="dependency-note" x-show="note" x-text="note" x-cloak></span>
       </li>
       {% endfor %}
     </ul>

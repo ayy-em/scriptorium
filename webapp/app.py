@@ -68,6 +68,31 @@ app = FastAPI(title="Scriptorium")
 app.mount("/static", StaticFiles(directory=str(static_dir())), name="static")
 templates = Jinja2Templates(directory=str(templates_dir()))
 templates.env.globals["is_frozen"] = FROZEN
+templates.env.globals["host_is_mac"] = sys.platform == "darwin"
+
+
+# The packaged app binds the same port on every launch, so every build shares
+# one browser origin. Without this, the Chromium app window kept a stylesheet
+# from an older build for days — the sidebar rendered with rules that no
+# longer existed. no-cache still allows the ETag round-trip, so a 304 is the
+# usual cost.
+@app.middleware("http")
+async def revalidate_static(request: Request, call_next):  # noqa: ANN001, ANN201
+    """Make browsers revalidate static assets on every load.
+
+    Args:
+        request: Incoming request.
+        call_next: The next handler in the middleware chain.
+
+    Returns:
+        The response, with ``Cache-Control: no-cache`` on ``/static`` paths.
+    """
+    response = await call_next(request)
+    if request.url.path.startswith("/static/"):
+        response.headers["Cache-Control"] = "no-cache"
+    return response
+
+
 templates.env.globals["accepts_directory"] = accepts_directory
 templates.env.globals["spans_full_row"] = spans_full_row
 
@@ -336,6 +361,95 @@ async def run_script(theme: str, script_name: str, request: Request) -> Streamin
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+# Names of capabilities whose install is currently running. winget refuses a
+# second concurrent install anyway, and two buttons for one dependency racing
+# each other would only produce a confusing pair of logs.
+_installs_in_flight: set[str] = set()
+
+
+@app.get("/api/capabilities/{name}/install")
+async def install_capability(name: str) -> StreamingResponse:
+    """Run a dependency's install command and stream its output.
+
+    Args:
+        name: Capability name from ``core.capabilities``.
+
+    Returns:
+        Server-Sent Events: the command's output lines, then a ``done`` event
+        carrying the exit code and whether the capability is now present.
+
+    Raises:
+        HTTPException: 404 for an unknown capability, 409 when it has no
+            unattended install command on this platform or is already being
+            installed.
+    """
+    capability = capabilities.probe(name)
+    if capability is None:
+        raise HTTPException(status_code=404, detail=f"Unknown capability {name!r}")
+    if not capability.command:
+        raise HTTPException(status_code=409, detail=f"{capability.label} has no unattended install on this platform")
+    if name in _installs_in_flight:
+        raise HTTPException(status_code=409, detail=f"{capability.label} is already being installed")
+
+    return StreamingResponse(
+        _stream_install(name, capability.command),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+async def _stream_install(name: str, command: tuple[str, ...]):
+    """Run an install command and yield its output as SSE events.
+
+    Lines are sent raw, not HTML-escaped: the sidebar renders them as text,
+    unlike the script terminal which takes markup. On success the process PATH
+    is re-read so the new binary is found without a restart, and the ``done``
+    event says whether the probe now passes.
+
+    Args:
+        name: Capability being installed.
+        command: Argv to run.
+
+    Yields:
+        SSE-formatted byte strings.
+    """
+    _installs_in_flight.add(name)
+    try:
+        yield f"data: $ {' '.join(command)}\n\n".encode()
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                *command,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT,
+                **_runs.spawn_kwargs(),
+            )
+        except OSError as exc:
+            yield f"data: {exc}\n\n".encode()
+            payload = json.dumps({"exit_code": None, "present": False, "error": str(exc)})
+            yield f"event: done\ndata: {payload}\n\n".encode()
+            return
+
+        async for line in proc.stdout:  # type: ignore[union-attr]
+            # winget redraws its progress bar with carriage returns; only the
+            # final state of such a line is worth showing.
+            text = line.decode(errors="replace").rstrip().rsplit("\r", 1)[-1].strip()
+            if text:
+                yield f"data: {text}\n\n".encode()
+
+        await proc.wait()
+        capabilities.refresh_environment()
+        present = capabilities.probe(name)
+        payload = json.dumps(
+            {
+                "exit_code": proc.returncode,
+                "present": bool(present and present.present),
+            }
+        )
+        yield f"event: done\ndata: {payload}\n\n".encode()
+    finally:
+        _installs_in_flight.discard(name)
 
 
 @app.post("/api/runs/{run_id}/cancel")

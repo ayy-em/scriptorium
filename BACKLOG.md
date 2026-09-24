@@ -46,6 +46,24 @@ So the obligations are real, because releases are published on GitHub:
 **Note:** `gif.make_gif` is *not* affected. It assembles frames with Pillow; the
 original entry listing `gif.*` as an ffmpeg consumer was wrong.
 
+## Install buttons for dependencies without an unattended command
+
+**Status:** open (2026-09-24).
+
+The sidebar's dependency banner runs `capability.command` when the user clicks
+Install (`GET /api/capabilities/{name}/install`, see SPEC.md). Three cases have
+no command and render the disabled "Coming soon!" button instead:
+
+- **pango on Windows.** Needs MSYS2 then `pacman`, or the GTK3 runtime; neither
+  is one unattended command. Bundling the stack (see "Bundle the pango/cairo/glib
+  stack") would remove the need for a button altogether.
+- **OpenAI API key.** A configure remedy, not an install. The natural fix is a
+  masked field in the settings modal that writes `OPENAI_API_KEY` to `.env`
+  through `core.env`, then `capabilities.invalidate()`. Explicitly deferred by
+  the user on 2026-09-24.
+- **Linux.** `apt` needs sudo, which a background process cannot supply. Options
+  are a `pkexec` prompt or just keeping the hint.
+
 ## Visible first-run cost for rembg model weights
 
 **Status:** open (2026-08-04), decided and designed, not built.

@@ -255,7 +255,70 @@
       Alpine.store('ui').loadSettings();
       Alpine.store('ui').checkUpdate();
       Alpine.store('ui').initOnboarding();
+
+      /* One missing dependency in the sidebar banner. Runs the server-side
+         install command and shows the installer's output as it arrives. On
+         success the page reloads so the banner re-renders without the entry;
+         the server has already re-read PATH by then. */
+      Alpine.data('dependencyInstall', (name) => ({
+        state: 'idle',
+        log: '',
+        note: '',
+
+        buttonLabel() {
+          return { idle: 'Install', running: 'Installing…', done: 'Installed', failed: 'Retry' }[this.state];
+        },
+
+        start() {
+          if (this.state === 'running') return;
+          this.state = 'running';
+          this.log = '';
+          this.note = '';
+          var source = new EventSource('/api/capabilities/' + encodeURIComponent(name) + '/install');
+          source.onmessage = (e) => {
+            this.log += (this.log ? '\n' : '') + e.data;
+            this.$nextTick(() => { if (this.$refs.log) this.$refs.log.scrollTop = this.$refs.log.scrollHeight; });
+          };
+          source.addEventListener('done', (e) => {
+            source.close();
+            var data = JSON.parse(e.data);
+            if (data.present) {
+              this.state = 'done';
+              this.note = 'Installed. Reloading…';
+              setTimeout(() => window.location.reload(), 900);
+            } else if (data.exit_code === 0) {
+              this.state = 'failed';
+              this.note = 'The installer finished, but it is still not found. Restart Scriptorium to pick it up.';
+            } else {
+              this.state = 'failed';
+              this.note = data.error || ('The installer exited with code ' + data.exit_code + '.');
+            }
+          });
+          source.onerror = () => {
+            source.close();
+            if (this.state === 'running') {
+              this.state = 'failed';
+              this.note = 'Could not start the installer.';
+            }
+          };
+        },
+      }));
     });
+
+    /* Scrollbars are hidden at rest and shown while the container scrolls or
+       is hovered (see .is-scrolling in style.css). CSS cannot tell "is being
+       scrolled" from "can scroll", so this flags it. Capture phase, because
+       scroll events do not bubble. */
+    (function () {
+      var timers = new WeakMap();
+      document.addEventListener('scroll', function (e) {
+        var el = e.target;
+        if (!(el instanceof Element)) return;
+        el.classList.add('is-scrolling');
+        clearTimeout(timers.get(el));
+        timers.set(el, setTimeout(function () { el.classList.remove('is-scrolling'); }, 700));
+      }, true);
+    })();
   </script>
   {# Self-hosted so the desktop app works offline. The focus plugin, which
      provides x-trap, must load before Alpine core. #}
@@ -287,7 +350,10 @@
              autocomplete="off"
              spellcheck="false"
              aria-label="Search scripts">
-      <span class="search-kbd" aria-hidden="true">⌘ K</span>
+      {# Server-side default from the host OS so the first paint is right in
+         the packaged app; the client override covers a remote browser. #}
+      <span class="search-kbd" aria-hidden="true"
+            x-text="/Mac|iPhone|iPad/.test(navigator.platform) ? '⌘ K' : 'Ctrl K'">{% if host_is_mac %}⌘ K{% else %}Ctrl K{% endif %}</span>
     </div>
 
     <div class="topnav-actions">

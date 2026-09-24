@@ -6,7 +6,9 @@ regress is the reason this module exists: results that expire, so installing a
 dependency does not need an app restart to be noticed.
 """
 
+import os
 from pathlib import Path
+import sys
 
 import pytest
 
@@ -180,6 +182,67 @@ class TestScriptMapping:
     def test_remove_bg_is_not_in_the_static_registry(self):
         """Its dependency is per-model, so it goes through model_weights_present."""
         assert for_script("photo.remove_bg") is None
+
+
+class TestInstallCommands:
+    """A button only appears where one unattended command actually fixes it."""
+
+    def test_winget_commands_never_prompt(self, monkeypatch):
+        monkeypatch.setattr(sys, "platform", "win32")
+        command = probe("pandoc").command
+        assert command[:2] == ("winget", "install")
+        assert "--accept-source-agreements" in command
+        assert "--accept-package-agreements" in command
+        assert "--disable-interactivity" in command
+
+    def test_pango_has_no_unattended_install_on_windows(self, monkeypatch):
+        """MSYS2 plus pacman is not one command; the hint stays text."""
+        monkeypatch.setattr(sys, "platform", "win32")
+        assert probe("pango").command == ()
+        assert probe("pango").hint
+
+    def test_macos_uses_brew(self, monkeypatch):
+        monkeypatch.setattr(sys, "platform", "darwin")
+        assert probe("ffmpeg").command == ("brew", "install", "ffmpeg")
+
+    def test_linux_has_no_command(self, monkeypatch):
+        """Apt needs sudo, which a background process cannot supply."""
+        monkeypatch.setattr(sys, "platform", "linux")
+        assert probe("ffmpeg").command == ()
+
+    def test_a_key_is_never_installable(self, monkeypatch):
+        monkeypatch.setattr(sys, "platform", "win32")
+        assert probe("openai-key").command == ()
+
+
+class TestRefreshEnvironment:
+    def test_windows_prepends_the_registry_path_and_keeps_extras(self, monkeypatch):
+        monkeypatch.setattr(sys, "platform", "win32")
+        monkeypatch.setattr(capabilities, "_windows_registry_path", lambda: os.pathsep.join(["C:/new", "C:/old"]))
+        monkeypatch.setenv("PATH", os.pathsep.join(["C:/old", "C:/launcher"]))
+        capabilities.refresh_environment()
+        assert os.environ["PATH"].split(os.pathsep) == ["C:/new", "C:/old", "C:/launcher"]
+
+    def test_a_registry_failure_leaves_path_alone(self, monkeypatch):
+        monkeypatch.setattr(sys, "platform", "win32")
+
+        def _boom():
+            raise OSError("no registry")
+
+        monkeypatch.setattr(capabilities, "_windows_registry_path", _boom)
+        monkeypatch.setenv("PATH", "C:/only")
+        capabilities.refresh_environment()
+        assert os.environ["PATH"] == "C:/only"
+
+    def test_other_platforms_only_drop_the_cache(self, monkeypatch, stub_registry):
+        monkeypatch.setattr(sys, "platform", "linux")
+        monkeypatch.setenv("PATH", "/usr/bin")
+        answers = iter([False, True])
+        stub_registry(lambda: next(answers))
+        assert probe("stub").present is False
+        capabilities.refresh_environment()
+        assert os.environ["PATH"] == "/usr/bin"
+        assert probe("stub").present is True
 
 
 class TestModelWeights:

@@ -225,6 +225,11 @@ thing that failed. It clears when Alpine initialises and fonts are ready, with a
 
 ### Web endpoints
 
+Everything under `/static/` is served with `Cache-Control: no-cache`. The
+packaged app binds the same port every launch, so every build shares one
+browser origin; without the header the Chromium app window kept a stylesheet
+from an older build indefinitely. ETag revalidation makes the usual cost a 304.
+
 | Endpoint | Purpose |
 |---|---|
 | `GET /` | script browser |
@@ -247,6 +252,7 @@ thing that failed. It clears when Alpine initialises and fonts are ready, with a
 | `POST /api/open-logs` | reveal the logs directory |
 | `POST /api/quit` | shut the server down (frozen mode only) |
 | `GET /api/update-check` | compare against the latest GitHub release |
+| `GET /api/capabilities/{name}/install` | run a missing dependency's install command, output streamed as SSE |
 
 `preview-command` shares `webapp._form.build_argv` with the run endpoint, so the
 previewed command cannot drift from what actually executes. It quotes with
@@ -871,6 +877,15 @@ Four rules worth not rediscovering:
   working Homebrew/MSYS2 install reads as missing.
 - **`photo.remove_bg` is not in the registry.** Its dependency is a *per-model*
   weights file, so it goes through `model_weights_present(model)` instead.
+- **`command` is separate from `hint`.** The hint is prose for a human; the
+  command is argv the app runs itself from the sidebar's Install button, and it
+  exists only where one unattended command is the whole fix — winget on
+  Windows, brew on macOS. apt needs sudo, pango on Windows needs MSYS2, a key
+  needs typing, so those have no command and render a disabled button. winget
+  is invoked with every accept/non-interactive flag, since nobody is there to
+  answer it. After a successful install `refresh_environment()` re-reads PATH
+  from the registry on Windows — a running process otherwise keeps the PATH it
+  started with and would report the new binary missing until a restart.
 
 The script→capability map lives here, keyed by dotted key first and theme
 second. It is deliberately *not* merged with `webapp/_badges.py`'s tool map,

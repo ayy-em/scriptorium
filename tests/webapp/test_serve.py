@@ -2,6 +2,7 @@
 
 import json
 import re
+import sys
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from fastapi.testclient import TestClient
@@ -14,6 +15,24 @@ from core.registry import discover, discover_themes
 from webapp.app import _parse_version, _read_git_hash, _themes_meta_json, _themes_search_json, app
 
 client = TestClient(app)
+
+
+class TestStaticCaching:
+    def test_static_assets_must_revalidate(self):
+        response = client.get("/static/style.css")
+        assert response.status_code == 200
+        assert response.headers["cache-control"] == "no-cache"
+
+    def test_pages_are_not_marked(self):
+        response = client.get("/")
+        assert response.headers.get("cache-control") != "no-cache"
+
+
+class TestSearchShortcutLabel:
+    def test_label_matches_host_platform(self):
+        response = client.get("/")
+        expected = "⌘ K" if sys.platform == "darwin" else "Ctrl K"
+        assert expected in response.text
 
 
 class TestIndex:
@@ -198,6 +217,106 @@ class TestDependencyBanner:
             assert "1 dependency missing" in client.get("/").text
         with patch.object(capabilities, "missing", return_value=()):
             assert "dependency-banner" not in client.get("/").text
+
+
+class TestInstallButton:
+    """The sidebar offers to run an install only where a command exists."""
+
+    def _absent(self, name, command=()):
+        return (
+            capabilities.Capability(
+                name=name,
+                label=name,
+                present=False,
+                remedy=capabilities.REMEDY_INSTALL,
+                required=True,
+                needed_for="Something",
+                hint="do it by hand",
+                command=command,
+            ),
+        )
+
+    def test_a_runnable_command_gets_a_live_button(self):
+        with patch.object(capabilities, "missing", return_value=self._absent("pandoc", ("winget", "install", "x"))):
+            body = client.get("/").text
+        assert "dependencyInstall('pandoc')" in body
+        assert 'class="btn btn--secondary btn--sm dependency-install"' in body
+        assert "do it by hand" not in body
+
+    def test_no_command_keeps_the_hint_and_a_disabled_button(self):
+        with patch.object(capabilities, "missing", return_value=self._absent("pango")):
+            body = client.get("/").text
+        assert "do it by hand" in body
+        assert 'data-soon="Coming soon!"' in body
+        assert "dependency-install" not in body
+
+
+class TestInstallEndpoint:
+    def _capability(self, command):
+        return capabilities.Capability(
+            name="pandoc",
+            label="pandoc",
+            present=False,
+            remedy=capabilities.REMEDY_INSTALL,
+            required=True,
+            needed_for="docs",
+            hint="hint",
+            command=command,
+        )
+
+    def test_unknown_capability_is_404(self):
+        assert client.get("/api/capabilities/nope/install").status_code == 404
+
+    def test_without_a_command_is_409(self):
+        with patch.object(capabilities, "probe", return_value=self._capability(())):
+            assert client.get("/api/capabilities/pandoc/install").status_code == 409
+
+    def test_streams_output_then_reports_presence(self):
+        async def _stdout():
+            yield b"Found pandoc\r\n"
+            yield b"  10%\r  50%\r 100%\r\n"
+
+        mock_proc = MagicMock()
+        mock_proc.stdout = _stdout()
+        mock_proc.returncode = 0
+        mock_proc.wait = AsyncMock(return_value=0)
+
+        async def fake_create(*args, **kwargs):
+            assert args[:2] == ("winget", "install")
+            return mock_proc
+
+        absent = self._capability(("winget", "install"))
+        present = capabilities.Capability(**{**absent.__dict__, "present": True})
+        answers = iter([absent, present])
+        with (
+            patch.object(capabilities, "probe", side_effect=lambda name: next(answers)),
+            patch.object(capabilities, "refresh_environment") as refresh,
+            patch("asyncio.create_subprocess_exec", new=fake_create),
+        ):
+            response = client.get("/api/capabilities/pandoc/install")
+
+        assert response.status_code == 200
+        body = response.content.decode()
+        assert "data: $ winget install" in body
+        assert "data: Found pandoc" in body
+        assert "data: 100%" in body
+        assert "50%" not in body
+        assert '"present": true' in body
+        assert '"exit_code": 0' in body
+        refresh.assert_called_once()
+
+    def test_a_missing_installer_is_reported_not_raised(self):
+        async def fake_create(*args, **kwargs):
+            raise FileNotFoundError("winget")
+
+        with (
+            patch.object(capabilities, "probe", return_value=self._capability(("winget", "install"))),
+            patch("asyncio.create_subprocess_exec", new=fake_create),
+        ):
+            response = client.get("/api/capabilities/pandoc/install")
+        assert response.status_code == 200
+        assert '"present": false' in response.content.decode()
+        assert "event: done" in response.content.decode()
 
 
 class TestWindowLevelDrop:

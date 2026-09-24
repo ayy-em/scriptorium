@@ -26,7 +26,8 @@ Two things it deliberately does *not* do:
 """
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+import logging
 import os
 from pathlib import Path
 import shutil
@@ -37,6 +38,8 @@ import time
 # re-import weasyprint several times, short enough that installing a dependency
 # and reloading reflects it without a restart.
 CACHE_SECONDS = 5.0
+
+logger = logging.getLogger(__name__)
 
 # What the user has to do about a missing capability. The distinction drives
 # where it is surfaced, not just its wording: an install is a blocking banner,
@@ -60,6 +63,10 @@ class Capability:
             are reported but never as a blocking warning.
         needed_for: Plain-language "what stops working without this".
         hint: What to do about it, already resolved for this platform.
+        command: An install command the app can run on the user's behalf, as
+            argv, already resolved for this platform. Empty when the fix is
+            not a single unattended command — pango on Windows, anything
+            needing sudo, a key to configure.
     """
 
     name: str
@@ -69,6 +76,7 @@ class Capability:
     required: bool
     needed_for: str
     hint: str = ""
+    command: tuple[str, ...] = ()
 
 
 def _probe_binary(*names: str) -> Callable[[], bool]:
@@ -132,6 +140,7 @@ class _Spec:
     needed_for: str
     probe: Callable[[], bool]
     hints: dict[str, str]
+    commands: dict[str, tuple[str, ...]] = field(default_factory=dict)
 
 
 def _hint_for(hints: dict[str, str]) -> str:
@@ -144,6 +153,42 @@ def _hint_for(hints: dict[str, str]) -> str:
         The most specific hint available, or an empty string.
     """
     return hints.get(sys.platform, hints.get("", ""))
+
+
+def _command_for(commands: dict[str, tuple[str, ...]]) -> tuple[str, ...]:
+    """Pick the runnable install command for the running platform.
+
+    Unlike hints there is no ``""`` default: a command that is wrong for the
+    platform is worse than no button.
+
+    Args:
+        commands: Mapping of ``sys.platform`` value to argv.
+
+    Returns:
+        The argv, or an empty tuple when nothing can be run unattended here.
+    """
+    return commands.get(sys.platform, ())
+
+
+def _winget(package_id: str) -> tuple[str, ...]:
+    """Build an unattended winget install for one package.
+
+    Args:
+        package_id: The exact winget package identifier.
+
+    Returns:
+        Argv that neither prompts for agreements nor guesses at the name.
+    """
+    return (
+        "winget",
+        "install",
+        "--id",
+        package_id,
+        "--exact",
+        "--accept-source-agreements",
+        "--accept-package-agreements",
+        "--disable-interactivity",
+    )
 
 
 _SPECS: tuple[_Spec, ...] = (
@@ -159,6 +204,10 @@ _SPECS: tuple[_Spec, ...] = (
             "win32": "winget install Gyan.FFmpeg — or download from gyan.dev/ffmpeg/builds and add it to PATH.",
             "": "Install ffmpeg with your package manager, e.g. apt install ffmpeg.",
         },
+        commands={
+            "darwin": ("brew", "install", "ffmpeg"),
+            "win32": _winget("Gyan.FFmpeg"),
+        },
     ),
     _Spec(
         name="pandoc",
@@ -171,6 +220,10 @@ _SPECS: tuple[_Spec, ...] = (
             "darwin": "brew install pandoc",
             "win32": "winget install JohnMacFarlane.Pandoc",
             "": "apt install pandoc",
+        },
+        commands={
+            "darwin": ("brew", "install", "pandoc"),
+            "win32": _winget("JohnMacFarlane.Pandoc"),
         },
     ),
     _Spec(
@@ -187,6 +240,7 @@ _SPECS: tuple[_Spec, ...] = (
             "win32": "Install MSYS2 and `pacman -S mingw-w64-ucrt-x86_64-pango`, or the GTK3 runtime.",
             "": "apt install libpango-1.0-0 libpangoft2-1.0-0",
         },
+        commands={"darwin": ("brew", "install", "pango")},
     ),
     _Spec(
         name="weasyprint-cli",
@@ -209,6 +263,7 @@ _SPECS: tuple[_Spec, ...] = (
             "win32": "winget install gifsicle",
             "": "apt install gifsicle",
         },
+        commands={"darwin": ("brew", "install", "gifsicle")},
     ),
     _Spec(
         name="openai-key",
@@ -298,6 +353,7 @@ def _build(spec: _Spec) -> Capability:
         required=spec.required,
         needed_for=spec.needed_for,
         hint=_hint_for(spec.hints),
+        command=_command_for(spec.commands),
     )
 
 
@@ -334,6 +390,58 @@ def missing(*, required_only: bool = True) -> tuple[Capability, ...]:
         Absent capabilities, in declaration order.
     """
     return tuple(c for c in probe_all() if not c.present and (c.required or not required_only))
+
+
+def _windows_registry_path() -> str:
+    """Read the PATH a *new* process would get on Windows.
+
+    Installers write to the registry and broadcast a change that only new
+    processes pick up. A long-running app keeps the PATH it was born with, so
+    something it just installed is invisible to ``shutil.which`` until a
+    restart. This is the machine PATH followed by the user PATH, the same order
+    Windows uses.
+
+    Returns:
+        The combined PATH string, with ``%VAR%`` references expanded.
+    """
+    import winreg  # noqa: PLC0415
+
+    keys = (
+        (winreg.HKEY_LOCAL_MACHINE, r"SYSTEM\CurrentControlSet\Control\Session Manager\Environment"),
+        (winreg.HKEY_CURRENT_USER, "Environment"),
+    )
+    parts: list[str] = []
+    for root, subkey in keys:
+        try:
+            with winreg.OpenKey(root, subkey) as handle:
+                value, _ = winreg.QueryValueEx(handle, "Path")
+        except OSError:
+            continue
+        parts.append(os.path.expandvars(str(value)))
+    return os.pathsep.join(part for part in parts if part)
+
+
+def refresh_environment() -> None:
+    """Make a just-installed binary findable without restarting the app.
+
+    On Windows the process PATH is replaced with what the registry now says,
+    keeping any entries the process already had so a launcher-injected path is
+    not lost. Elsewhere installers put binaries in directories already on PATH,
+    so there is nothing to do. Cached probe results are dropped either way.
+    """
+    if sys.platform == "win32":
+        try:
+            fresh = _windows_registry_path()
+        except Exception:
+            logger.warning("Could not re-read PATH from the registry", exc_info=True)
+            fresh = ""
+        if fresh:
+            fresh_entries = [entry for entry in fresh.split(os.pathsep) if entry]
+            kept = [
+                entry for entry in os.environ.get("PATH", "").split(os.pathsep) if entry and entry not in fresh_entries
+            ]
+            os.environ["PATH"] = os.pathsep.join(fresh_entries + kept)
+    invalidate()
 
 
 def capability_name_for(key: str) -> str | None:
