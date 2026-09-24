@@ -118,8 +118,10 @@ completed runs are recorded and re-runnable from `/history`.
 
 Uploaded files are saved to the theme's inputs directory via `POST /upload/{theme}`.
 
-When ffmpeg is not found on PATH, a banner appears in the sidebar with install
-instructions.
+When a required dependency is missing (ffmpeg, pandoc, the pango stack, an
+API key) it is named in the sidebar, at the top of any script page that needs
+it, and — for ffmpeg — on a final onboarding slide, each with a one-click
+Install where an unattended install command exists. See `core.capabilities`.
 
 ---
 
@@ -158,6 +160,7 @@ templates/
 ├── _script_context.html   # right-hand context column
 ├── _terminal.html         # run status strip + streaming console
 ├── _sidebar.html, _onboarding_modal.html, _howto_modal.html
+├── _capability_banner.html   # "this script needs X" + Install, shared by script.html and trim.html
 ├── _drop_{overlay,chooser,runner}.html   # browser-side drop: hint, wheel, runner
 ├── _drop_hint.html        # drop_hover()/drop_reject() macros, shared by both pages
 ├── _script_drop.html      # detail-page window-level drop target

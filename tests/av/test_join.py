@@ -240,6 +240,94 @@ def test_temp_suffix_falls_back_to_matroska_for_other_codecs():
     assert _temp_suffix(_video(codec_name="vp9"), _profile()) == ".mkv"
 
 
+def test_temp_suffix_uses_matroska_for_opus_audio():
+    """MP4 will not take Opus next to a copied H.264 stream reliably; MKV takes both."""
+    assert _temp_suffix(_video(codec_name="h264"), _profile(audio_codec="libopus")) == ".mkv"
+    assert _temp_suffix(None, _profile(has_video=False, audio_codec="libopus")) == ".mka"
+
+
+# ---------------------------------------------------------------------------
+# Output container
+# ---------------------------------------------------------------------------
+
+
+def test_webm_output_gets_opus_audio(tmp_path):
+    """WebM refuses AAC, so the codec every file leaves preprocessing with follows the container."""
+    files = _make_files(tmp_path, 2, suffix=".webm")
+    streams = {f: [_video(codec_name="vp9"), _AUDIO] for f in files}
+    profile = _resolve_profile(files, streams, "high", output_suffix=".webm")
+    assert profile.audio_codec == "libopus"
+    assert profile.reencode_video is False
+    assert profile.output_suffix == ".webm"
+
+
+def test_mp4_output_keeps_aac(tmp_path):
+    files = _make_files(tmp_path, 2)
+    streams = {f: _STREAMS for f in files}
+    profile = _resolve_profile(files, streams, "high", output_suffix=".mp4")
+    assert profile.audio_codec == "aac"
+    assert profile.output_suffix == ".mp4"
+
+
+def test_copied_codec_the_container_cannot_hold_forces_a_reencode(tmp_path):
+    """Matching VP9 inputs asked to become .mp4: MP4 does not hold VP9 well, so re-encode."""
+    files = _make_files(tmp_path, 2, suffix=".webm")
+    streams = {f: [_video(codec_name="vp9")] for f in files}
+    profile = _resolve_profile(files, streams, "high", output_suffix=".mp4")
+    assert profile.reencode_video is True
+    assert profile.output_suffix == ".mp4"
+
+
+def test_matroska_output_copies_anything(tmp_path):
+    files = _make_files(tmp_path, 2, suffix=".webm")
+    streams = {f: [_video(codec_name="vp9")] for f in files}
+    profile = _resolve_profile(files, streams, "high", output_suffix=".mkv")
+    assert profile.reencode_video is False
+    assert profile.output_suffix == ".mkv"
+
+
+def test_a_reencode_bound_for_webm_moves_to_mp4(tmp_path):
+    """Re-encodes produce H.264 + AAC, which WebM will not hold."""
+    files = _make_files(tmp_path, 2, suffix=".webm")
+    streams = {files[0]: [_video(codec_name="vp9")], files[1]: [_video(codec_name="vp8")]}
+    profile = _resolve_profile(files, streams, "high", output_suffix=".webm")
+    assert profile.reencode_video is True
+    assert profile.output_suffix == ".mp4"
+    assert profile.audio_codec == "aac"
+
+
+def test_join_writes_opus_and_keeps_webm_for_matching_webm_inputs(tmp_path):
+    _make_files(tmp_path, 2, suffix=".webm")
+    out = tmp_path / "out" / "joined.webm"
+    streams = [_video(codec_name="vp9"), _AUDIO]
+    with (
+        patch("scripts.av.join.probe_streams", side_effect=[streams, streams]),
+        patch("scripts.av.join._detect_trailing_black", return_value=None),
+        patch("scripts.av.join.run_ffmpeg") as mock_ff,
+    ):
+        assert join(tmp_path, out) == out
+    preprocess_calls = mock_ff.call_args_list[:-1]
+    for call in preprocess_calls:
+        argv = call[0][0]
+        assert "libopus" in argv
+        assert argv[argv.index("-c:v") + 1] == "copy"
+    assert str(out) in mock_ff.call_args_list[-1][0][0]
+
+
+def test_join_moves_a_reencoded_webm_to_mp4(tmp_path, capsys):
+    _make_files(tmp_path, 2, suffix=".webm")
+    out = tmp_path / "out" / "joined.webm"
+    with (
+        patch("scripts.av.join.probe_streams", side_effect=[[_video(codec_name="vp9")], [_video(codec_name="vp8")]]),
+        patch("scripts.av.join._detect_trailing_black", return_value=None),
+        patch("scripts.av.join.run_ffmpeg") as mock_ff,
+    ):
+        result = join(tmp_path, out)
+    assert result == out.with_suffix(".mp4")
+    assert str(result) in mock_ff.call_args_list[-1][0][0]
+    assert "writing .mp4 instead" in capsys.readouterr().out
+
+
 # ---------------------------------------------------------------------------
 # _detect_trailing_black
 # ---------------------------------------------------------------------------

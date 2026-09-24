@@ -44,9 +44,28 @@ _TARGET_SAMPLE_RATE = "48000"
 _TARGET_CHANNELS = "2"
 _X264_PRESET = "medium"
 
+# Which audio codec the output container can hold. Preprocessing always
+# re-encodes audio, so the choice is free — but WebM refuses AAC, and a VP9
+# stream copied into .webm next to AAC audio failed at the very last step.
+_CONTAINER_AUDIO_CODEC = {".webm": "libopus", ".ogg": "libopus", ".opus": "libopus"}
+_DEFAULT_AUDIO_CODEC = "aac"
+
+# Containers that cannot hold the H.264 + AAC pair every re-encode produces.
+# A join that has to re-encode into one of these moves to MP4 instead.
+_REENCODE_HOSTILE_CONTAINERS = frozenset({".webm", ".ogg", ".opus"})
+
 # Video codecs an MP4 container holds happily. Anything else copied verbatim
 # goes into Matroska instead, which accepts every combination we might produce.
 _MP4_VIDEO_CODECS = frozenset({"h264", "hevc", "mpeg4", "av1", "mpeg2video", "mjpeg"})
+
+# Video codecs each output container accepts for a stream copy. A container
+# not listed here (Matroska, mostly) takes anything.
+_CONTAINER_VIDEO_CODECS = {
+    ".mp4": _MP4_VIDEO_CODECS,
+    ".m4v": _MP4_VIDEO_CODECS,
+    ".mov": _MP4_VIDEO_CODECS | frozenset({"prores", "dnxhd"}),
+    ".webm": frozenset({"vp8", "vp9", "av1"}),
+}
 
 
 @dataclass(frozen=True)
@@ -68,6 +87,10 @@ class _JoinProfile:
         has_audio: Whether the output carries an audio stream. When True, files
             without audio of their own are given a silent one.
         quality: Key into QUALITY_PRESETS driving CRF and audio bitrate.
+        audio_codec: ffmpeg encoder name for the audio every file leaves
+            preprocessing with; chosen to fit ``output_suffix``.
+        output_suffix: Container the join is written to. Usually what the
+            caller asked for; MP4 when a re-encode cannot go where they asked.
     """
 
     reencode_video: bool
@@ -77,6 +100,8 @@ class _JoinProfile:
     has_video: bool
     has_audio: bool
     quality: str
+    audio_codec: str = _DEFAULT_AUDIO_CODEC
+    output_suffix: str = ".mp4"
 
 
 def join(
@@ -126,12 +151,15 @@ def join(
 
     files = _sort_files(files, order)
     streams_by_file = {f: probe_streams(f) for f in files}
-    profile = _resolve_profile(files, streams_by_file, quality)
+    profile = _resolve_profile(files, streams_by_file, quality, output_suffix=output.suffix.lower())
     if profile.reencode_video:
         print(
             f"  inputs disagree on video format → re-encoding all to "
             f"{profile.width}x{profile.height} H.264 (quality: {quality})",
         )
+    if profile.output_suffix != output.suffix.lower():
+        print(f"  {output.suffix} cannot hold H.264 + AAC → writing {profile.output_suffix} instead")
+        output = output.with_suffix(profile.output_suffix)
 
     output.parent.mkdir(parents=True, exist_ok=True)
 
@@ -245,6 +273,7 @@ def _resolve_profile(
     files: list[Path],
     streams_by_file: dict[Path, list[dict]],
     quality: str,
+    output_suffix: str = ".mp4",
 ) -> _JoinProfile:
     """Decide the common format the inputs will be joined in.
 
@@ -253,10 +282,15 @@ def _resolve_profile(
     the largest input resolution and the highest input frame rate, so no clip
     is cropped and none is slowed down.
 
+    The output container has a say too. Its audio codec is chosen to fit it,
+    a copied video codec it cannot hold forces a re-encode, and a re-encode it
+    cannot hold either (WebM will not take H.264) moves the output to MP4.
+
     Args:
         files: Input files in join order.
         streams_by_file: Probed streams for each file.
         quality: Quality preset key for any re-encode.
+        output_suffix: Lower-case extension of the requested output file.
 
     Returns:
         The resolved profile.
@@ -290,20 +324,33 @@ def _resolve_profile(
             has_video=False,
             has_audio=has_audio,
             quality=quality,
+            audio_codec=_CONTAINER_AUDIO_CODEC.get(output_suffix, _DEFAULT_AUDIO_CODEC),
+            output_suffix=output_suffix,
         )
 
     fingerprints = {_video_fingerprint(videos[f]) for f in with_video}
     widest = max(with_video, key=lambda f: (videos[f].get("width") or 0) * (videos[f].get("height") or 0))
     fastest = max(with_video, key=lambda f: _parse_frame_rate(videos[f].get("avg_frame_rate")))
 
+    reencode = len(fingerprints) > 1
+    if not reencode:
+        accepted = _CONTAINER_VIDEO_CODECS.get(output_suffix)
+        copied_codec = videos[with_video[0]].get("codec_name")
+        reencode = accepted is not None and copied_codec not in accepted
+
+    if reencode and output_suffix in _REENCODE_HOSTILE_CONTAINERS:
+        output_suffix = ".mp4"
+
     return _JoinProfile(
-        reencode_video=len(fingerprints) > 1,
+        reencode_video=reencode,
         width=videos[widest].get("width"),
         height=videos[widest].get("height"),
         frame_rate=videos[fastest].get("avg_frame_rate"),
         has_video=True,
         has_audio=has_audio,
         quality=quality,
+        audio_codec=_CONTAINER_AUDIO_CODEC.get(output_suffix, _DEFAULT_AUDIO_CODEC),
+        output_suffix=output_suffix,
     )
 
 
@@ -330,9 +377,9 @@ def _video_filter(profile: _JoinProfile) -> str:
 def _temp_suffix(video: dict | None, profile: _JoinProfile) -> str:
     """Return the container extension for a preprocessed intermediate file.
 
-    Audio always leaves preprocessing as AAC, so a copied video stream has to
-    go somewhere that holds both. MP4 does for the common codecs; Matroska
-    does for everything else.
+    Audio leaves preprocessing re-encoded, so a copied video stream has to go
+    somewhere that holds both. MP4 does for the common codecs with AAC;
+    Matroska does for everything else, Opus included.
 
     Args:
         video: The file's video stream, or None for audio-only input.
@@ -341,11 +388,12 @@ def _temp_suffix(video: dict | None, profile: _JoinProfile) -> str:
     Returns:
         A suffix including the leading dot.
     """
+    aac = profile.audio_codec == _DEFAULT_AUDIO_CODEC
     if video is None:
-        return ".m4a"
+        return ".m4a" if aac else ".mka"
     if profile.reencode_video:
         return ".mp4"
-    return ".mp4" if video.get("codec_name") in _MP4_VIDEO_CODECS else ".mkv"
+    return ".mp4" if aac and video.get("codec_name") in _MP4_VIDEO_CODECS else ".mkv"
 
 
 def _detect_trailing_black(
@@ -560,7 +608,7 @@ def _preprocess_file(
             args += ["-af", f"loudnorm=I={_LUFS_TARGET}:TP={_TRUE_PEAK}:LRA={_LRA}"]
         args += [
             "-c:a",
-            "aac",
+            profile.audio_codec,
             "-b:a",
             preset["audio_bitrate"],
             "-ar",

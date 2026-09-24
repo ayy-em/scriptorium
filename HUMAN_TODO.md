@@ -22,7 +22,34 @@ Nothing here is a blocker any more.
 
 ---
 
-## 2. Optional illustrations
+## 2. pango for PDF output in the installed Windows app
+
+The Telegram PDF reports need pango, cairo and glib, which are not bundled
+(decision 2026-09-24: not worth three native dependency graphs for one user).
+The packaged app looks for them in exactly two places, from
+`core/native_libs.py`: `C:\msys64\ucrt64\bin` first, then
+`C:\msys64\mingw64\bin`. So the install has to land in the default MSYS2
+location — no custom install directory — and use the UCRT64 environment.
+
+Run once, in a normal Command Prompt (not as administrator):
+
+```
+winget install --id MSYS2.MSYS2 --exact --accept-source-agreements --accept-package-agreements
+C:\msys64\usr\bin\bash.exe -lc "pacman -S --noconfirm --needed mingw-w64-ucrt-x86_64-pango"
+```
+
+Then reload Scriptorium (a restart is not needed; the probe re-runs on each
+page). The sidebar entry for "pango / cairo / glib" disappears when it works.
+The same two lines are what an Install button would run if one were ever
+added; they are not wired up because the second step can prompt to close a
+running MSYS2 shell, which an unattended run cannot answer.
+
+- [ ] Run the two lines above on the machine that has the installed app.
+- [ ] Open `telegram.chat_analysis` and confirm the banner is gone.
+
+---
+
+## 3. Optional illustrations
 
 Small spot art for empty states. The shared `empty_state()` macro currently
 renders a single icon in a lavender rounded square, which is fine — this is
@@ -35,7 +62,7 @@ polish, not a gap.
 
 ---
 
-## 3. Checks that need a real desktop session
+## 4. Checks that need a real desktop session
 
 The prettification pass was verified in a headless browser pane. The following
 could not be verified there and need a human with the app actually open.
@@ -89,7 +116,7 @@ could not be verified there and need a human with the app actually open.
 
 ---
 
-## 4. Housekeeping
+## 5. Housekeeping
 
 - [ ] **Alpine is pinned at 3.15.12** in `webapp/static/js/`. It is vendored, so
       updating means re-downloading both `alpinejs.min.js` and

@@ -17,7 +17,8 @@ Done.
 ### Prereqs for individual scripts
 
 1. `av.*` scripts require **ffmpeg** (and **ffprobe**) to be on your `PATH` for all platforms.
-**Fix:** Install via your package manager (e.g. `winget install Gyan.FFmpeg`, `brew install ffmpeg`).
+**Fix:** Install via your package manager (e.g. `winget install Gyan.FFmpeg`, `brew install ffmpeg`),
+or click **Install** where the web UI reports it missing — sidebar, script page, or first-run tour.
 
 ## Quickstart: Run the Web UI
 
@@ -123,8 +124,11 @@ heavy native ones, and every script still works without them except the ones
 listed here.
 
 Each of these is **detected**, and any that is missing is named in the sidebar
-with an install command for your platform. The check re-runs as you use the app,
-so installing something and reloading the page clears it without a restart.
+and at the top of every script page that needs it. Where one unattended command
+does the job (winget on Windows, brew on macOS) there is an **Install** button
+that runs it for you and shows the installer's output; otherwise you get the
+command to run. The check re-runs as you use the app, so installing something
+and reloading the page clears it without a restart.
 
 | Needed for | Requirement | Without it |
 |---|---|---|
@@ -305,6 +309,13 @@ run_fn(export, Path("inputs"), Path("outputs/lora/captions.json"))
 ```
 
 ## Version History
+
+### Unreleased
+- **Install missing dependencies from the app** — ffmpeg and pandoc get an Install button in the sidebar, on the script pages that need them, and on a first-run tour slide; winget or brew runs with output streamed into the UI, no restart needed
+- **`photo.remove_bg` presets** — `--quality` is now `--preset fast|balanced|hq`, named for cost rather than quality because no model wins on every image; `--all-presets` runs all three over the same inputs for side-by-side comparison
+- **Model downloads are visible** — the form says which weights a run will fetch and how big they are; the status bar shows the download instead of a run that looks hung
+- **`av.join` respects the output container** — WebM output gets Opus audio, a copied codec the container cannot hold forces a re-encode, and a re-encode that WebM cannot hold is written as MP4 with a note
+- **UI** — thin scrollbars that appear only while scrolling, more contrast between dark-mode surfaces, search icon no longer overlaps its placeholder, the shortcut badge reads Ctrl K off macOS, and static assets revalidate so a new build never shows an old stylesheet
 
 ### v0.5.3
 - **Background removal works in the packaged app** — `photo.remove_bg` failed to start in every built release; two separate packaging faults, both now guarded by tests

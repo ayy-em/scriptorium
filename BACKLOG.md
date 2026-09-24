@@ -14,62 +14,37 @@ Install (`GET /api/capabilities/{name}/install`, see SPEC.md). Three cases have
 no command and render the disabled "Coming soon!" button instead:
 
 - **pango on Windows.** Needs MSYS2 then `pacman`, or the GTK3 runtime; neither
-  is one unattended command. Bundling the stack (see "Bundle the pango/cairo/glib
-  stack") would remove the need for a button altogether.
-- **OpenAI API key.** A configure remedy, not an install. The natural fix is a
-  masked field in the settings modal that writes `OPENAI_API_KEY` to `.env`
-  through `core.env`, then `capabilities.invalidate()`. Explicitly deferred by
-  the user on 2026-09-24.
+  is one unattended command. Bundling the stack was considered and dropped on
+  2026-09-24 (three native dependency graphs to lay out, dylib re-signing on
+  macOS, for an audience of one who already has MSYS2). HUMAN_TODO.md carries
+  the exact command that installs it where the packaged app looks.
+- **OpenAI API key.** A configure remedy, not an install — see "API keys from
+  the settings modal" below.
 - **Linux.** `apt` needs sudo, which a background process cannot supply. Options
   are a `pkexec` prompt or just keeping the hint.
 
-## Bundle the pango/cairo/glib stack
+## API keys from the settings modal
 
-**Status:** open (2026-08-04). Deliberately deferred in favour of detection.
+**Status:** open (2026-09-24).
 
-Detection shipped instead: a missing pango stack is now named in the sidebar with
-a per-platform install command, and only the two Telegram scripts that render
-PDFs are affected. That is enough that PDF output no longer fails with a raw
-`OSError` from inside cffi.
+`speech.transcribe` needs `OPENAI_API_KEY`, and today the only way to provide
+it is a `.env` file — which means a user of the packaged app has to find the
+right directory and edit a dotfile by hand. That is the one remaining
+dependency with no in-app remedy.
 
-Bundling it properly would make PDF output work on a machine with neither
-Homebrew nor MSYS2. It is the most painful of the native dependencies:
+**What to build:** a "Keys" section in the settings modal with one masked
+field per key the capability registry knows about (`remedy=REMEDY_CONFIGURE`,
+so new keys appear without UI work). Saving writes the value through
+`core.env` into the same `.env` the app already loads, then calls
+`capabilities.invalidate()` so the sidebar clears on the next render. Show
+"set" / "not set", never the value. The sidebar entry and the script-page
+banner for a configure-remedy capability should open this section instead of
+the disabled "Coming soon!" button they render now.
 
-- Three separate stacks to lay out — Homebrew dylibs, MSYS2/UCRT DLLs, Linux
-  shared objects — each with its own transitive graph (pango → harfbuzz →
-  freetype → fontconfig → glib → cairo → pixman …).
-- macOS dylibs need relocating and re-signing after being moved into the bundle,
-  or Gatekeeper rejects them.
-- `core/native_libs.py` already has the runtime half: it prepends
-  `sys._MEIPASS/lib` to the cffi dlopen fallback search path, so bundled libs
-  are found first. The missing part is purely build-time layout.
-
-Worth doing if the app is ever handed to someone who will not install anything.
-Not worth it while the audience is one person with Homebrew and MSYS2 already
-installed.
-
-## av.join: output container may not accept the joined codecs
-
-**Status:** open (2026-08-31).
-
-`av.join` takes the output extension from the first input file's suffix, and
-preprocessing always re-encodes audio to AAC. So a set of `.webm` files whose
-video parameters already agree takes the stream-copy path, and the concat step
-then tries to mux VP9 video plus AAC audio into `.webm`, which will not hold
-AAC. The intermediates dodge this — `_temp_suffix` falls back to Matroska for
-any codec MP4 cannot hold — but the final mux does not.
-
-Options, in rough order of preference:
-
-1. Choose the audio codec from the output container instead of hardcoding AAC:
-   Opus for `.webm`, AAC elsewhere.
-2. Force `reencode_video` whenever the copied video codec is incompatible with
-   the resolved output container.
-3. Default the output to `.mp4` unless `--output` says otherwise.
-
-Not urgent, and not a regression: before the common-format work the same set
-wrote `.mp4` intermediates for a VP9 stream and failed one step earlier. The
-common case is MP4 in, MP4 out.
+**Constraints:** the key must never reach the browser after saving, never be
+logged, and never be echoed in the CLI command preview. Keep it out of
+`UserConfig` — that file is not a secrets store — and write `.env` with
+user-only permissions where the platform supports it.
 
 ## HEIC support in formats.convert_image
 
@@ -235,6 +210,34 @@ Weights are still not bundled. The open question resolved as leaning: `HEAD`,
 cached per process, no number on failure. The same change replaced the
 `--quality` presets with `--preset fast|balanced|hq` and added `--all-presets`;
 see SPEC.md.
+
+## av.join: output container may not accept the joined codecs
+
+**Status:** settled (2026-09-24). Options 1 and 2 below were built, with 3
+applied only where neither can help: the audio codec follows the output
+container (Opus for WebM/Ogg, AAC elsewhere), a copied video codec the
+container cannot hold forces a re-encode, and a re-encode bound for a
+container that cannot hold H.264 + AAC is written as `.mp4` with a printed
+note. `join()` returns the path actually written. Original entry follows.
+
+`av.join` takes the output extension from the first input file's suffix, and
+preprocessing always re-encodes audio to AAC. So a set of `.webm` files whose
+video parameters already agree takes the stream-copy path, and the concat step
+then tries to mux VP9 video plus AAC audio into `.webm`, which will not hold
+AAC. The intermediates dodge this — `_temp_suffix` falls back to Matroska for
+any codec MP4 cannot hold — but the final mux does not.
+
+Options, in rough order of preference:
+
+1. Choose the audio codec from the output container instead of hardcoding AAC:
+   Opus for `.webm`, AAC elsewhere.
+2. Force `reencode_video` whenever the copied video codec is incompatible with
+   the resolved output container.
+3. Default the output to `.mp4` unless `--output` says otherwise.
+
+Not urgent, and not a regression: before the common-format work the same set
+wrote `.mp4` intermediates for a VP9 stream and failed one step earlier. The
+common case is MP4 in, MP4 out.
 
 ## Runtime dependencies needed one coherent story
 
@@ -650,7 +653,10 @@ deliberately not done up front because localStorage needed no backend at all.
 
 ## Photos.Remove_bg user friendliness
 
-**Status:** resolved 2026-08-02.
+**Status:** resolved 2026-08-02. Superseded on 2026-09-24: `--quality` became
+`--preset fast|balanced|hq` with `--all-presets`; see "Visible first-run cost
+for rembg model weights" above and SPEC.md. The text below describes the
+2026-08-02 state.
 
 `--quality {fast,balanced,best}` is the whole basic form now, alongside source
 and output. The ten expert arguments — `--model` among them, as an override —
