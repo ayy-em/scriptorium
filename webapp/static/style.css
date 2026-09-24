@@ -2556,6 +2556,51 @@ html.dark .dependency-banner-title {
   color: var(--text-muted);
 }
 
+/* Missing-dependency banner on a detail page ------------------------------ */
+.capability-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-bottom: 1.25rem;
+  padding: 0.75rem 0.9rem;
+  border-radius: var(--r-md);
+  border: 1px solid oklch(72% 0.152 85 / 35%);
+  background: oklch(72% 0.152 85 / 8%);
+  font-size: var(--fs-helper);
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.capability-banner-row {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.capability-banner-row > svg { flex-shrink: 0; color: var(--warn); }
+.capability-banner-text { flex: 1; }
+.capability-banner-text strong { color: var(--text); font-weight: 600; }
+.capability-banner code {
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  background: var(--bg-hover);
+  padding: 0.05rem 0.3rem;
+  border-radius: 4px;
+  overflow-wrap: anywhere;
+}
+.capability-banner .dependency-install { padding: 0.35rem 0.8rem; font-size: var(--fs-helper); }
+
+/* Onboarding's install slide reuses the sidebar's log and note styles. */
+.onboarding-install {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+.onboarding-install .dependency-log { width: 100%; text-align: left; max-height: 90px; }
+.onboarding-install .dependency-install { padding: 0.55rem 1.1rem; font-size: var(--fs-body); }
+
 /* Pre-run download notice ------------------------------------------------- */
 .download-notice {
   display: flex;

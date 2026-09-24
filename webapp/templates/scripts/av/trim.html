@@ -124,6 +124,8 @@
 <h1 class="detail-title">{{ mod.TITLE }}</h1>
 <p class="detail-desc">{{ mod.DESCRIPTION }}</p>
 
+{% include "_capability_banner.html" %}
+
 <form id="run-form" data-run-url="/scripts/{{ key_path }}/run" x-data="trimApp('{{ key.split('.')[0] }}')">
 
   <!-- File upload -->

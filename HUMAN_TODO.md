@@ -5,37 +5,20 @@ confirm, and checks that need a real desktop session. Ordered roughly by how
 much they affect what people see.
 
 Everything here is **optional** — the app ships and looks coherent without any
-of it — **except item 1**, which blocks one specific future release.
+of it. Item 1 is kept as a record of a decision, not as work.
 
 ---
 
-## 1. ffmpeg licensing, before any release that bundles it
+## 1. ffmpeg licensing — resolved
 
-**This one is a blocker**, and only for a release that ships ffmpeg inside the
-bundle. Nothing about the app today is affected: ffmpeg is still required on
-`PATH`, and requiring a binary carries no obligation.
+**Decided 2026-09-24: ffmpeg is not bundled.** The app asks for an install
+instead: a final onboarding slide and a banner on every media script's page
+carry the same one-click Install as the sidebar (winget on Windows, brew on
+macOS), so there is no GPL binary in the release and no licence work. The
+full reasoning and the bundling alternative, should it ever be wanted, are
+under "Runtime dependencies: bundle ffmpeg" in BACKLOG.md's Settled section.
 
-The decision on record (see BACKLOG.md, "Runtime dependencies: bundle ffmpeg") is
-to bundle a **GPL** build. That is not a preference — LGPL builds ship without
-libx264/libx265, and `formats.convert_video` encodes H.264 by default, so an
-LGPL build cannot do what the script advertises.
-
-Distributing a GPL binary in a public GitHub release brings obligations. What
-needs a human:
-
-- [ ] **Confirm you are comfortable distributing under GPL terms.** The practical
-      reading is that invoking ffmpeg as a separate process is aggregation rather
-      than linking, so it does not make Scriptorium's own code GPL — but you are
-      still redistributing a GPL binary and that part is unambiguous.
-- [ ] **Decide which build to ship** and record its exact version and source URL.
-      A named, reproducible build makes the source offer answerable.
-- [ ] **Write the source offer** for the release notes — where the corresponding
-      source for that exact build can be obtained.
-- [ ] **Confirm the licence text placement.** `COPYING.GPLv3` plus the build's
-      own configuration/credits belongs inside the bundle next to the binaries.
-
-If any of that is unwelcome, the fallback is to keep requiring ffmpeg on `PATH`,
-which is what the app does now and needs no licence work at all.
+Nothing here is a blocker any more.
 
 ---
 

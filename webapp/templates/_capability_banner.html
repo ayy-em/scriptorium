@@ -1,0 +1,30 @@
+{% from "_icons.html" import icon %}
+{% from "_components.html" import soon_button %}
+{# The one dependency this script cannot run without, when it is missing.
+   Someone who skipped onboarding, or installed the app before this
+   existed, meets it here rather than as a failed run. Same install
+   plumbing as the sidebar; the banner disappears once the probe passes. #}
+{% set need = capability_for_script(key) %}
+{% if need and not need.present %}
+<div class="capability-banner" role="status" x-data="dependencyInstall('{{ need.name }}')">
+  <div class="capability-banner-row">
+    {{ icon('info', 16) }}
+    <div class="capability-banner-text">
+      <strong>This script needs {{ need.label }}</strong>, which is not installed.
+      {% if need.command %}Install it here, then run as normal.{% else %}<code>{{ need.hint }}</code>{% endif %}
+    </div>
+    {% if need.command %}
+    <button type="button"
+            class="btn btn--primary btn--sm dependency-install"
+            :class="{ 'is-done': state === 'done', 'is-failed': state === 'failed' }"
+            :disabled="state === 'running' || state === 'done'"
+            @click="start()"
+            x-text="buttonLabel()">Install</button>
+    {% else %}
+    {{ soon_button('Install', cls='btn-soon--sm') }}
+    {% endif %}
+  </div>
+  <pre class="dependency-log" x-show="log" x-ref="log" x-text="log" x-cloak></pre>
+  <span class="dependency-note" x-show="note" x-text="note" x-cloak></span>
+</div>
+{% endif %}

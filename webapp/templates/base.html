@@ -51,6 +51,8 @@
         latestVersion: '',
         onboardingOpen: false,
         onboardingStep: 0,
+        /* Set by the modal at render: 3, or 4 while ffmpeg is missing. */
+        onboardingSteps: 3,
 
         /* Server-side, in UserConfig. localStorage would tie these to one
            browser profile, and the packaged app has three launch tiers that do
@@ -238,7 +240,7 @@
         },
 
         nextOnboarding() {
-          if (this.onboardingStep < 2) {
+          if (this.onboardingStep < this.onboardingSteps - 1) {
             this.onboardingStep++;
           } else {
             this.finishOnboarding();

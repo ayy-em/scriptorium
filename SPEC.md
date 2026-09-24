@@ -888,6 +888,12 @@ Four rules worth not rediscovering:
   answer it. After a successful install `refresh_environment()` re-reads PATH
   from the registry on Windows — a running process otherwise keeps the PATH it
   started with and would report the new binary missing until a restart.
+- **The Install button appears in three places**, all driven by the same
+  Alpine component: the sidebar banner (every missing required capability), a
+  banner at the top of a detail page whose script needs something absent
+  (`capability_for_script`), and a fourth onboarding slide rendered only while
+  ffmpeg is missing. ffmpeg is deliberately **not bundled** — see HUMAN_TODO.md
+  item 1 and the Settled backlog entry for why.
 
 The script→capability map lives here, keyed by dotted key first and theme
 second. It is deliberately *not* merged with `webapp/_badges.py`'s tool map,

@@ -42,6 +42,8 @@
       <p class="detail-desc">{{ mod.DESCRIPTION }}</p>
     </header>
 
+    {% include "_capability_banner.html" %}
+
     {% if field_specs %}
     {% include "_script_form.html" %}
     {% else %}

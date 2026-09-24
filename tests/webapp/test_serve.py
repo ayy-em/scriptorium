@@ -251,6 +251,82 @@ class TestInstallButton:
         assert "dependency-install" not in body
 
 
+class TestOnboardingInstallSlide:
+    """A fourth slide asks for ffmpeg, only while it is missing."""
+
+    def _absent_ffmpeg(self, command=("winget", "install", "x")):
+        return (
+            capabilities.Capability(
+                name="ffmpeg",
+                label="ffmpeg",
+                present=False,
+                remedy=capabilities.REMEDY_INSTALL,
+                required=True,
+                needed_for="Audio and video scripts",
+                hint="brew install ffmpeg",
+                command=command,
+            ),
+        )
+
+    def test_slide_is_added_when_ffmpeg_is_missing(self):
+        with patch.object(capabilities, "missing", return_value=self._absent_ffmpeg()):
+            body = client.get("/").text
+        assert "Media scripts need ffmpeg" in body
+        assert "onboardingSteps = 4" in body
+        assert "dependencyInstall('ffmpeg')" in body
+
+    def test_slide_is_absent_otherwise(self):
+        with patch.object(capabilities, "missing", return_value=()):
+            body = client.get("/").text
+        assert "Media scripts need ffmpeg" not in body
+        assert "onboardingSteps = 3" in body
+
+    def test_without_a_command_the_slide_shows_the_hint(self):
+        with patch.object(capabilities, "missing", return_value=self._absent_ffmpeg(command=())):
+            body = client.get("/").text
+        assert "Media scripts need ffmpeg" in body
+        assert "brew install ffmpeg" in body
+        assert "Install ffmpeg" not in body
+
+
+class TestDetailCapabilityBanner:
+    """A detail page names the dependency the script cannot run without."""
+
+    def _cap(self, present, command=("winget", "install", "x")):
+        return capabilities.Capability(
+            name="ffmpeg",
+            label="ffmpeg",
+            present=present,
+            remedy=capabilities.REMEDY_INSTALL,
+            required=True,
+            needed_for="Audio and video scripts",
+            hint="brew install ffmpeg",
+            command=command,
+        )
+
+    def test_missing_dependency_gets_a_banner_with_install(self):
+        with patch.object(capabilities, "for_script", return_value=self._cap(False)):
+            body = client.get("/scripts/av/trim").text
+        assert "This script needs ffmpeg" in body
+        assert 'class="btn btn--primary btn--sm dependency-install"' in body
+
+    def test_present_dependency_gets_no_banner(self):
+        with patch.object(capabilities, "for_script", return_value=self._cap(True)):
+            body = client.get("/scripts/av/trim").text
+        assert "capability-banner" not in body
+
+    def test_no_dependency_gets_no_banner(self):
+        with patch.object(capabilities, "for_script", return_value=None):
+            body = client.get("/scripts/lora/validate").text
+        assert "capability-banner" not in body
+
+    def test_without_a_command_the_hint_is_shown(self):
+        with patch.object(capabilities, "for_script", return_value=self._cap(False, command=())):
+            body = client.get("/scripts/av/trim").text
+        assert "brew install ffmpeg" in body
+        assert 'data-soon="Coming soon!"' in body
+
+
 class TestInstallEndpoint:
     def _capability(self, command):
         return capabilities.Capability(

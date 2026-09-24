@@ -1,6 +1,15 @@
-{# First-visit onboarding carousel. Visibility persisted in localStorage. #}
+{# First-visit onboarding carousel. Visibility persisted in localStorage.
+
+   The last slide exists only while ffmpeg is missing: most of what a new
+   user will try first needs it, and the decision on record (BACKLOG.md,
+   "Runtime dependencies: bundle ffmpeg") is to ask for an install rather than
+   ship a GPL binary. Probed at render, like the sidebar banner. #}
+{% from "_components.html" import soon_button %}
+{% set ffmpeg = missing_capabilities() | selectattr('name', 'equalto', 'ffmpeg') | first %}
+{% set slide_count = 4 if ffmpeg else 3 %}
 <div class="modal-overlay"
      x-show="$store.ui.onboardingOpen"
+     x-init="$store.ui.onboardingSteps = {{ slide_count }}"
      x-transition:enter="modal-fade"
      x-transition:enter-start="modal-fade-from"
      x-transition:enter-end="modal-fade-to"
@@ -74,9 +83,42 @@
       </p>
     </div>
 
+    {% if ffmpeg %}
+    <!-- Slide 4: only rendered while ffmpeg is missing -->
+    <div class="onboarding-slide" x-show="$store.ui.onboardingStep === 3" x-data="dependencyInstall('ffmpeg')">
+      <div class="onboarding-art">
+        <svg viewBox="0 0 96 96" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="14" y="20" width="68" height="48" rx="3"/>
+          <path d="M14 32h68M26 20v12M40 20v12M54 20v12M68 20v12"/>
+          <path d="M48 76v10M34 86h28"/>
+          <path d="M43 44v14l12-7-12-7Z" fill="currentColor" stroke="none"/>
+        </svg>
+      </div>
+      <p class="onboarding-eyebrow">One more thing</p>
+      <h2 class="onboarding-title">Media scripts need ffmpeg</h2>
+      <p class="onboarding-body">
+        {{ ffmpeg.needed_for }} all run through ffmpeg, which is not on this machine yet.
+        {% if ffmpeg.command %}Install it now — it takes a minute — or later from the sidebar.{% else %}
+        Install it with <code>{{ ffmpeg.hint }}</code>, then reload Scriptorium.{% endif %}
+      </p>
+      {% if ffmpeg.command %}
+      <div class="onboarding-install">
+        <button type="button"
+                class="btn btn--primary dependency-install"
+                :class="{ 'is-done': state === 'done', 'is-failed': state === 'failed' }"
+                :disabled="state === 'running' || state === 'done'"
+                @click="start()"
+                x-text="buttonLabel() === 'Install' ? 'Install ffmpeg' : buttonLabel()">Install ffmpeg</button>
+        <pre class="dependency-log" x-show="log" x-ref="log" x-text="log" x-cloak></pre>
+        <span class="dependency-note" x-show="note" x-text="note" x-cloak></span>
+      </div>
+      {% endif %}
+    </div>
+    {% endif %}
+
     <div class="onboarding-footer">
       <div class="onboarding-dots" role="tablist" aria-label="Onboarding progress">
-        <template x-for="i in 3" :key="i">
+        <template x-for="i in $store.ui.onboardingSteps" :key="i">
           <button class="onboarding-dot"
                   :class="{ 'is-active': $store.ui.onboardingStep === i - 1 }"
                   @click="$store.ui.onboardingStep = i - 1"
@@ -85,8 +127,8 @@
         </template>
       </div>
       <button class="onboarding-next" @click="$store.ui.nextOnboarding()">
-        <span x-show="$store.ui.onboardingStep < 2">Next</span>
-        <span x-show="$store.ui.onboardingStep === 2">Let's go</span>
+        <span x-show="$store.ui.onboardingStep < $store.ui.onboardingSteps - 1">Next</span>
+        <span x-show="$store.ui.onboardingStep === $store.ui.onboardingSteps - 1">Let's go</span>
         <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
           <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>

@@ -5,47 +5,6 @@ Deferred work with enough context to pick up cold.
 Everything above the **Settled** heading is open work. Below it are closed
 entries, kept because the reasoning is worth not having to reconstruct.
 
-## Runtime dependencies: bundle ffmpeg
-
-**Status:** open (2026-08-04), decision made, not yet built. The detection half
-of the original entry is delivered — see "Runtime dependencies needed one
-coherent story" under Settled for the reasoning and the corrected dependency
-table.
-
-**Decided:** bundle a **GPL** ffmpeg build and comply, rather than LGPL.
-
-The usual way to avoid GPL obligations is an LGPL build, and it does not work
-here: LGPL ffmpeg ships without libx264/libx265, and `formats.convert_video`
-encodes H.264 by default — `--quality max` is documented as "CRF 0, lossless
-H.264". An LGPL build cannot do that. openh264 is not a clean swap either; it is
-a different encoder with different quality behaviour.
-
-So the obligations are real, because releases are published on GitHub:
-
-- Ship ffmpeg's licence text inside the bundle.
-- Provide a source offer for the exact build shipped.
-- See HUMAN_TODO.md — this needs a human decision, not an agent's.
-
-**What to build:**
-
-1. Fetch a **shared** GPL build per platform at build time, not a static one.
-   The static Windows pair measured **370MB** (185MB each, everything embedded
-   twice) against a current `dist/` of 657MB. Shared builds put the codecs in
-   DLLs both executables share. The saving is expected but **unverified** —
-   measure before committing to it.
-2. Add the binaries to `binaries=` in all three specs.
-3. Resolve them at runtime. Every invocation goes through
-   `scripts/av/_utils.py` (`run_ffmpeg`, `run_ffmpeg_with_progress`,
-   `run_ffmpeg_stderr`, `run_ffprobe`), which currently spawns the bare name
-   `"ffmpeg"` and relies on PATH. That is the one chokepoint to change —
-   prefer the bundled binary, fall back to PATH.
-4. `core.capabilities`' `ffmpeg` probe must then check the bundled location
-   too, or the banner will claim ffmpeg is missing inside a bundle that
-   contains it.
-
-**Note:** `gif.make_gif` is *not* affected. It assembles frames with Pillow; the
-original entry listing `gif.*` as an ffmpeg consumer was wrong.
-
 ## Install buttons for dependencies without an unattended command
 
 **Status:** open (2026-09-24).
@@ -221,6 +180,51 @@ new script cannot quietly inherit either behaviour, and fails any script that
 builds a `processed/` directory of its own. That test is what found the
 `telegram.group_analysis` implementation, which had been missed by reading the
 code.
+
+## Runtime dependencies: bundle ffmpeg
+
+**Status:** settled (2026-09-24) — **not bundling.** Requiring ffmpeg on PATH
+carries no licence obligation; redistributing a GPL binary does, commercial or
+not, and the practical alternative turned out to be cheap: the sidebar, a final
+onboarding slide and a banner on each media script's page all carry a one-click
+Install (winget / brew) through `GET /api/capabilities/ffmpeg/install`. Linux
+and machines without a package manager get the text hint.
+
+Kept below is the plan for bundling, should it ever be wanted — for instance
+for users who cannot run a package manager. The build choice would have to be
+**GPL**, not LGPL:
+
+The usual way to avoid GPL obligations is an LGPL build, and it does not work
+here: LGPL ffmpeg ships without libx264/libx265, and `formats.convert_video`
+encodes H.264 by default — `--quality max` is documented as "CRF 0, lossless
+H.264". An LGPL build cannot do that. openh264 is not a clean swap either; it is
+a different encoder with different quality behaviour.
+
+So the obligations are real, because releases are published on GitHub:
+
+- Ship ffmpeg's licence text inside the bundle.
+- Provide a source offer for the exact build shipped.
+- See HUMAN_TODO.md — this needs a human decision, not an agent's.
+
+**What to build:**
+
+1. Fetch a **shared** GPL build per platform at build time, not a static one.
+   The static Windows pair measured **370MB** (185MB each, everything embedded
+   twice) against a current `dist/` of 657MB. Shared builds put the codecs in
+   DLLs both executables share. The saving is expected but **unverified** —
+   measure before committing to it.
+2. Add the binaries to `binaries=` in all three specs.
+3. Resolve them at runtime. Every invocation goes through
+   `scripts/av/_utils.py` (`run_ffmpeg`, `run_ffmpeg_with_progress`,
+   `run_ffmpeg_stderr`, `run_ffprobe`), which currently spawns the bare name
+   `"ffmpeg"` and relies on PATH. That is the one chokepoint to change —
+   prefer the bundled binary, fall back to PATH.
+4. `core.capabilities`' `ffmpeg` probe must then check the bundled location
+   too, or the banner will claim ffmpeg is missing inside a bundle that
+   contains it.
+
+**Note:** `gif.make_gif` is *not* affected. It assembles frames with Pillow; the
+original entry listing `gif.*` as an ffmpeg consumer was wrong.
 
 ## Visible first-run cost for rembg model weights
 
