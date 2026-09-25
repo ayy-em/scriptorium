@@ -2573,6 +2573,55 @@ html.dark .dependency-banner-title {
 .key-row-status { font-size: var(--fs-helper); color: var(--green); }
 .key-row-status.is-error { color: var(--red); }
 
+/* Settings → Notifications ------------------------------------------------ */
+.switch-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  cursor: pointer;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md, 8px);
+  background: var(--bg-panel);
+  transition: border-color var(--dur-fast) ease, background-color var(--dur) ease;
+}
+.switch-row:hover { border-color: var(--accent-border); background: var(--bg-hover); }
+.switch-row:has(.switch-input:focus-visible) { box-shadow: var(--focus-ring); }
+.switch-row:has(.switch-input:checked) { border-color: var(--accent); background: var(--accent-bg); }
+.switch-input { position: absolute; opacity: 0; width: 0; height: 0; }
+.switch {
+  position: relative;
+  flex-shrink: 0;
+  width: 2.1rem;
+  height: 1.2rem;
+  border-radius: var(--r-pill);
+  background: var(--border-strong, var(--border));
+  transition: background-color var(--dur-fast) ease;
+}
+.switch::after {
+  content: "";
+  position: absolute;
+  top: 0.15rem;
+  left: 0.15rem;
+  width: 0.9rem;
+  height: 0.9rem;
+  border-radius: 50%;
+  background: var(--bg-panel);
+  box-shadow: 0 1px 2px oklch(0% 0 0 / 25%);
+  transition: transform var(--dur-fast) ease;
+}
+.switch-input:checked + .switch { background: var(--accent); }
+.switch-input:checked + .switch::after { transform: translateX(0.9rem); }
+.switch-row-text { display: flex; flex-direction: column; min-width: 0; }
+.switch-row-title { font-size: var(--fs-helper); font-weight: 600; color: var(--text); }
+.switch-row-sub { font-size: var(--fs-badge); color: var(--text-faint); line-height: 1.4; }
+
+.notify-threshold { margin-top: 0.7rem; display: flex; flex-direction: column; gap: 0.35rem; }
+.notify-threshold-label { font-size: var(--fs-helper); color: var(--text-muted); }
+.input-group--inline { align-items: center; }
+.input--short { width: 5.5rem; flex: 0 0 auto; }
+.input-unit { font-size: var(--fs-helper); color: var(--text-muted); margin-right: auto; }
+
 /* Missing-dependency banner on a detail page ------------------------------ */
 .capability-banner {
   display: flex;

@@ -334,11 +334,13 @@ class TestKeysEndpoints:
     def _isolate_env(self, tmp_path, monkeypatch):
         monkeypatch.setattr("core.env.user_env_path", lambda: tmp_path / ".env")
         monkeypatch.setattr("core.env._repo_root", lambda: tmp_path)
-        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        for var in ("OPENAI_API_KEY", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID"):
+            monkeypatch.delenv(var, raising=False)
         capabilities.invalidate()
         yield
         capabilities.invalidate()
-        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        for var in ("OPENAI_API_KEY", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID"):
+            monkeypatch.delenv(var, raising=False)
 
     def test_lists_configure_capabilities_without_values(self, monkeypatch):
         monkeypatch.setenv("OPENAI_API_KEY", "sk-secret")
@@ -354,15 +356,36 @@ class TestKeysEndpoints:
     def test_saving_a_key_makes_the_capability_present(self, tmp_path):
         assert client.get("/api/keys").json()["keys"][0]["is_set"] is False
         response = client.post("/api/keys", json={"name": "openai-key", "value": "sk-new"})
-        assert response.json() == {"is_set": True}
+        assert response.json() == {"is_set": True, "value": ""}
         assert "OPENAI_API_KEY=sk-new" in (tmp_path / ".env").read_text(encoding="utf-8")
         assert capabilities.probe("openai-key").present is True
 
     def test_clearing_a_key(self, tmp_path):
         client.post("/api/keys", json={"name": "openai-key", "value": "sk-new"})
         response = client.post("/api/keys", json={"name": "openai-key", "value": ""})
-        assert response.json() == {"is_set": False}
+        assert response.json() == {"is_set": False, "value": ""}
         assert "OPENAI_API_KEY" not in (tmp_path / ".env").read_text(encoding="utf-8")
+
+    def test_telegram_token_and_chat_id_are_offered(self, monkeypatch):
+        """The settings modal is where the bot token and chat id go."""
+        monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "123:abc")
+        monkeypatch.setenv("TELEGRAM_CHAT_ID", "4242")
+        data = client.get("/api/keys").json()
+        by_name = {k["name"]: k for k in data["keys"]}
+        assert by_name["telegram-bot-token"]["secret"] is True
+        assert by_name["telegram-bot-token"]["value"] == ""
+        assert "123:abc" not in json.dumps(data)
+        assert by_name["telegram-chat-id"]["secret"] is False
+        assert by_name["telegram-chat-id"]["value"] == "4242"
+
+    def test_saving_the_chat_id_echoes_it_back(self, tmp_path):
+        response = client.post("/api/keys", json={"name": "telegram-chat-id", "value": "4242"})
+        assert response.json() == {"is_set": True, "value": "4242"}
+        assert "TELEGRAM_CHAT_ID=4242" in (tmp_path / ".env").read_text(encoding="utf-8")
+
+    def test_saving_the_token_never_echoes_it(self, tmp_path):
+        response = client.post("/api/keys", json={"name": "telegram-bot-token", "value": "123:abc"})
+        assert response.json() == {"is_set": True, "value": ""}
 
     def test_only_managed_keys_can_be_written(self):
         assert client.post("/api/keys", json={"name": "ffmpeg", "value": "x"}).status_code == 404
@@ -662,6 +685,45 @@ class TestSettingsAPI:
             json={"theme": "light", "outputs_dir": ""},
         )
         assert response.status_code == 200
+
+    def test_notification_settings_roundtrip(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("core.config._CONFIG_PATH", tmp_path / "config.json")
+        client.post(
+            "/api/settings",
+            json={"theme": "light", "outputs_dir": "", "notify_telegram": True, "notify_min_seconds": 120},
+        )
+        data = client.get("/api/settings").json()
+        assert data["notify_telegram"] is True
+        assert data["notify_min_seconds"] == 120
+
+    def test_notification_settings_default_off(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("core.config._CONFIG_PATH", tmp_path / "config.json")
+        client.post("/api/settings", json={"theme": "light", "outputs_dir": ""})
+        data = client.get("/api/settings").json()
+        assert data["notify_telegram"] is False
+        assert data["notify_min_seconds"] == 30
+
+    def test_a_bad_threshold_falls_back_to_the_default(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("core.config._CONFIG_PATH", tmp_path / "config.json")
+        client.post("/api/settings", json={"theme": "light", "outputs_dir": "", "notify_min_seconds": 45})
+        client.post("/api/settings", json={"theme": "light", "outputs_dir": "", "notify_min_seconds": "lots"})
+        assert client.get("/api/settings").json()["notify_min_seconds"] == 30
+
+
+class TestNotifyTest:
+    """One real message is the only proof a token and chat id pair up."""
+
+    def test_reports_success(self):
+        with patch("scripts.util.notify.send", return_value=True) as mock_send:
+            response = client.post("/api/notify-test")
+        assert response.json() == {"ok": True}
+        assert "Scriptorium" in mock_send.call_args.args[0]
+
+    def test_reports_a_refusal_without_erroring(self):
+        with patch("scripts.util.notify.send", return_value=False):
+            response = client.post("/api/notify-test")
+        assert response.status_code == 200
+        assert response.json() == {"ok": False}
 
 
 class TestOpenOutputs:

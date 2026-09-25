@@ -7,11 +7,19 @@ Build from the repo root:
 """
 
 import os
+import sys
 from pathlib import Path
 
 from PyInstaller.utils.hooks import collect_all, collect_submodules, copy_metadata
 
 ROOT = Path(os.path.abspath(os.path.join(SPECPATH, "..")))
+
+# The commit hash is only reachable while the repository is in front of us, so
+# it is written now and bundled beside pyproject.toml for the sidebar to read.
+sys.path.insert(0, str(ROOT / "packaging"))
+from build_sha import write_build_sha  # noqa: E402
+
+BUILD_SHA_PATH = write_build_sha(ROOT, Path(workpath))
 
 # WeasyPrint imports many sub-modules lazily and ships data files (CSS UA stylesheet etc.).
 # collect_all pulls in modules + datas + binaries in one shot. Native libs (pango/cairo/glib)
@@ -107,6 +115,7 @@ datas = [
     (str(ROOT / "assets"), "assets"),
     (str(ROOT / "scripts" / "telegram" / "templates"), "scripts/telegram/templates"),
     (str(ROOT / "pyproject.toml"), "."),
+    (str(BUILD_SHA_PATH), "."),
 ]
 datas += wp_datas + rembg_datas + ort_datas + heif_datas
 datas += _metadata("rembg")

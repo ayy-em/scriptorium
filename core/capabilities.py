@@ -69,6 +69,9 @@ class Capability:
             needing sudo, a key to configure.
         env_var: For a configure remedy, the environment variable the value
             lives in, so the settings modal can offer a field for it.
+        secret: Whether the value is a credential. A secret is entered masked
+            and never shown again; a plain identifier such as a chat id is
+            shown back, since the user has to be able to check it.
     """
 
     name: str
@@ -80,6 +83,7 @@ class Capability:
     hint: str = ""
     command: tuple[str, ...] = ()
     env_var: str = ""
+    secret: bool = True
 
 
 def _probe_binary(*names: str) -> Callable[[], bool]:
@@ -116,20 +120,27 @@ def _probe_pango() -> bool:
         return False
 
 
-def _probe_openai_key() -> bool:
-    """Report whether an OpenAI key is configured.
+def _probe_env(name: str) -> Callable[[], bool]:
+    """Build a probe that checks an environment variable is set.
 
     Loads ``.env`` first. The webapp happens to do that at import, but a CLI
     caller does not, and a probe whose answer depends on who called it first is
     worse than no probe.
 
-    Returns:
-        True if ``OPENAI_API_KEY`` is set to something non-blank.
-    """
-    from core.env import load_env  # noqa: PLC0415
+    Args:
+        name: The variable that holds the value.
 
-    load_env()
-    return bool(os.environ.get("OPENAI_API_KEY", "").strip())
+    Returns:
+        A probe that is true when the variable is set to something non-blank.
+    """
+
+    def _probe() -> bool:
+        from core.env import load_env  # noqa: PLC0415
+
+        load_env()
+        return bool(os.environ.get(name, "").strip())
+
+    return _probe
 
 
 @dataclass(frozen=True)
@@ -145,6 +156,7 @@ class _Spec:
     hints: dict[str, str]
     commands: dict[str, tuple[str, ...]] = field(default_factory=dict)
     env_var: str = ""
+    secret: bool = True
 
 
 def _hint_for(hints: dict[str, str]) -> str:
@@ -275,9 +287,32 @@ _SPECS: tuple[_Spec, ...] = (
         remedy=REMEDY_CONFIGURE,
         required=True,
         needed_for="Speech transcription",
-        probe=_probe_openai_key,
+        probe=_probe_env("OPENAI_API_KEY"),
         hints={"": "Paste the key under Settings → Keys, or put OPENAI_API_KEY=… in your .env file."},
         env_var="OPENAI_API_KEY",
+    ),
+    # Not required: notifications are opt-in, so an unset bot must not sit in
+    # the sidebar banner of everyone who never asked for them.
+    _Spec(
+        name="telegram-bot-token",
+        label="Telegram bot token",
+        remedy=REMEDY_CONFIGURE,
+        required=False,
+        needed_for="Telegram notifications when a long run finishes, and util.notify",
+        probe=_probe_env("TELEGRAM_BOT_TOKEN"),
+        hints={"": "Create a bot with @BotFather and paste its token under Settings → Keys."},
+        env_var="TELEGRAM_BOT_TOKEN",
+    ),
+    _Spec(
+        name="telegram-chat-id",
+        label="Telegram chat id",
+        remedy=REMEDY_CONFIGURE,
+        required=False,
+        needed_for="Which chat the notifications go to — message your bot first, then read the id from @userinfobot",
+        probe=_probe_env("TELEGRAM_CHAT_ID"),
+        hints={"": "Paste the chat id under Settings → Keys."},
+        env_var="TELEGRAM_CHAT_ID",
+        secret=False,
     ),
 )
 
@@ -298,6 +333,7 @@ _CAPABILITY_BY_KEY: dict[str, str] = {
     "formats.convert_video": "ffmpeg",
     "formats.convert_docs": "pandoc",
     "speech.transcribe": "openai-key",
+    "util.notify": "telegram-bot-token",
     "telegram.chat_analysis": "pango",
     "telegram.group_analysis": "pango",
 }
@@ -360,6 +396,7 @@ def _build(spec: _Spec) -> Capability:
         hint=_hint_for(spec.hints),
         command=_command_for(spec.commands),
         env_var=spec.env_var,
+        secret=spec.secret,
     )
 
 

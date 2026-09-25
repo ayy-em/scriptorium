@@ -44,10 +44,43 @@ def send(message: str) -> bool:
         return False
 
 
+_MINUTE = 60
+_HOUR = 60 * _MINUTE
+
+
+def format_duration(seconds: float) -> str:
+    """Render a run length the way a person would say it.
+
+    Args:
+        seconds: Elapsed wall-clock time.
+
+    Returns:
+        ``"0.8s"`` under a minute, ``"4m 05s"`` under an hour, ``"1h 12m"`` beyond.
+    """
+    if seconds < _MINUTE:
+        return f"{seconds:.1f}s"
+    whole = int(round(seconds))
+    if whole < _HOUR:
+        minutes, secs = divmod(whole, _MINUTE)
+        return f"{minutes}m {secs:02d}s"
+    hours, rest = divmod(whole, _HOUR)
+    return f"{hours}h {rest // _MINUTE:02d}m"
+
+
 def format_run_message(label: str, status: str, duration_s: float) -> str:
-    """Render a one-line summary suitable for a Telegram notification."""
-    emoji = "✅" if status == "done" else "❌"
-    return f"{emoji} {label}: {status} in {duration_s:.3f}s"
+    """Render a one-line run summary suitable for a Telegram notification.
+
+    Args:
+        label: Script key or callable label the runner tracked.
+        status: ``"done"`` or ``"failed"``.
+        duration_s: How long the run took.
+
+    Returns:
+        Script, outcome and duration on one line, led by a status emoji.
+    """
+    if status == "done":
+        return f"✅ {label} finished in {format_duration(duration_s)}"
+    return f"❌ {label} failed after {format_duration(duration_s)}"
 
 
 _EXAMPLES = """

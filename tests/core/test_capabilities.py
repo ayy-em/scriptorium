@@ -265,3 +265,35 @@ class TestModelWeights:
         """The same variable rembg reads, so a relocated cache is followed."""
         monkeypatch.setenv("U2NET_HOME", str(tmp_path / "elsewhere"))
         assert capabilities.model_weights_dir() == Path(tmp_path / "elsewhere")
+
+
+class TestTelegramKeys:
+    """Two keys for one feature: a bot token that is a secret, a chat id that is not."""
+
+    def test_both_are_configure_remedies_with_a_field(self):
+        for name, env_var in (("telegram-bot-token", "TELEGRAM_BOT_TOKEN"), ("telegram-chat-id", "TELEGRAM_CHAT_ID")):
+            cap = probe(name)
+            assert cap is not None, name
+            assert cap.remedy == REMEDY_CONFIGURE
+            assert cap.env_var == env_var
+
+    def test_neither_is_required(self):
+        """Notifications are opt-in, so nobody should see them in the sidebar banner."""
+        assert probe("telegram-bot-token").required is False
+        assert probe("telegram-chat-id").required is False
+
+    def test_the_token_is_a_secret_and_the_chat_id_is_not(self):
+        assert probe("telegram-bot-token").secret is True
+        assert probe("telegram-chat-id").secret is False
+        assert probe("openai-key").secret is True
+
+    def test_util_notify_needs_the_bot(self):
+        assert capability_name_for("util.notify") == "telegram-bot-token"
+
+    def test_probe_reads_the_environment(self, monkeypatch):
+        monkeypatch.setattr("core.env.load_env", lambda: None)
+        monkeypatch.setenv("TELEGRAM_CHAT_ID", "  ")
+        assert probe("telegram-chat-id").present is False
+        invalidate()
+        monkeypatch.setenv("TELEGRAM_CHAT_ID", "12345")
+        assert probe("telegram-chat-id").present is True

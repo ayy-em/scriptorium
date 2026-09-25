@@ -31,9 +31,34 @@ def _log_run(label: str, duration_s: float, status: str) -> None:
         pass
 
 
+def _should_notify(duration_s: float) -> bool:
+    """Decide whether a finished run earns a Telegram message.
+
+    ``SCRIPTORIUM_NOTIFY`` in the environment forces a message for every run,
+    which is what a terminal user wrapping one long command wants. Otherwise
+    the settings modal decides: notifications on, and the run at least as long
+    as the configured threshold, so a two-second run does not ping a phone.
+
+    Args:
+        duration_s: How long the run took.
+
+    Returns:
+        True when a message should be sent.
+    """
+    if os.environ.get(_NOTIFY_ENV_VAR, "").strip() in ("1", "true", "yes"):
+        return True
+    from core.config import load as load_config  # noqa: PLC0415
+
+    cfg = load_config()
+    return cfg.notify_telegram and duration_s >= cfg.notify_min_seconds
+
+
 def _maybe_notify(label: str, duration_s: float, status: str) -> None:
-    """Send a Telegram notification if SCRIPTORIUM_NOTIFY=1. Never raises."""
-    if os.environ.get(_NOTIFY_ENV_VAR, "").strip() not in ("1", "true", "yes"):
+    """Send a Telegram notification when the run qualifies. Never raises."""
+    try:
+        if not _should_notify(duration_s):
+            return
+    except Exception:
         return
     try:
         from scripts.util.notify import format_run_message, send  # noqa: PLC0415

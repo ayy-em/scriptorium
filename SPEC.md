@@ -263,7 +263,7 @@ from an older build indefinitely. ETag revalidation makes the usual cost a 304.
 | `POST /upload/{theme}` | single-file upload |
 | `GET /api/waveform` | peak envelope for a staged media file, for the `av.trim` editor |
 | `POST /api/drop-upload` | multi-file drop; returns matching scripts |
-| `GET`/`POST /api/settings` | read/write `UserConfig` |
+| `GET`/`POST /api/settings` | read/write `UserConfig`, including `notify_telegram` and `notify_min_seconds` |
 | `POST /api/browse-folder` | native folder picker; 501 outside the desktop app |
 | `POST /api/open-outputs` | reveal the outputs root |
 | `POST /api/reveal-output` | reveal one produced file's folder |
@@ -273,7 +273,8 @@ from an older build indefinitely. ETag revalidation makes the usual cost a 304.
 | `GET /api/update-check` | compare against the latest GitHub release |
 | `GET /api/capabilities/{name}/install` | run a missing dependency's install command, output streamed as SSE |
 | `GET /api/model-weights/{theme}/{script_name}` | which model weights the current form state would download; only for scripts exposing `models_for_args` |
-| `GET`/`POST /api/keys` | list the API keys the app manages (set / not set, never the value) and store or clear one in `~/scriptorium/.env` |
+| `GET`/`POST /api/keys` | list the keys the app manages (set / not set; a secret's value is never returned, a plain identifier such as the Telegram chat id is) and store or clear one in `~/scriptorium/.env` |
+| `POST /api/notify-test` | send one test message to the configured Telegram chat, so the settings modal can prove the token and chat id pair up |
 | `GET /api/staged-input` | stream a staged input back to the page, for `av.trim` playback of a prefilled file; same containment rule as `/api/waveform` |
 
 `preview-command` shares `webapp._form.build_argv` with the run endpoint, so the
@@ -541,6 +542,15 @@ without needing a build.
   (rembg → pymatting → scipy) in the built app only. `numpy.testing` is listed
   in `hiddenimports` for the same reason — the lazy import is invisible to
   static analysis.
+- **The commit hash is recorded while the repository is in reach.** The
+  sidebar shows the short git hash next to the version; in development the
+  webapp asks `git rev-parse` at startup, but a bundle has no repository, so
+  every packaged build showed "—". Each spec calls
+  `packaging/build_sha.py:write_build_sha` while it runs — git first, then
+  `GITHUB_SHA` for a source tarball on CI — and bundles the resulting
+  `build_sha.txt` beside `pyproject.toml` for `core.paths.read_build_sha` to
+  read. The file is written even when the hash is unknown, so the `datas`
+  entry always resolves.
 - **rembg's dependency metadata is copied recursively.** `pymatting/__init__.py`
   ends with `importlib.metadata.version(__name__)` and does not guard it, so a
   bundle without its `dist-info` raises `PackageNotFoundError` on import.
@@ -877,7 +887,8 @@ def av_inputs_dir() -> Path:
 
 `core.paths` also provides `templates_dir()`, `static_dir()`, `assets_dir()`,
 `logs_dir()`, `outputs_root()`, `drop_session_dir()`, `resolve_input()`,
-`move_to_past_inputs()`, `read_version()` and the `FROZEN` boolean. It used to
+`move_to_past_inputs()`, `read_version()`, `read_build_sha()` and the `FROZEN`
+boolean. It used to
 carry `has_ffmpeg()`; that moved into
 `core.capabilities` below, which answers the same question for every dependency
 rather than one.
@@ -943,9 +954,13 @@ Rules worth not rediscovering:
   `core.env.set_env_value` into `~/scriptorium/.env` — the install directory
   is read-only for the packaged app, and `config.json` is not a secrets store
   — and into the process, then the probe cache is dropped. `/api/keys` reports
-  set / not set and never returns a value; the field clears itself after
-  saving. `load_env()` reads the repo `.env` first and the user one second,
-  so a developer's file wins.
+  set / not set; a key marked `secret` (the default) never has its value
+  returned and its field clears itself after saving, while a plain
+  identifier — the Telegram chat id — is shown back so the user can check
+  which chat they pointed the bot at. `load_env()` reads the repo `.env`
+  first and the user one second, so a developer's file wins. The two
+  Telegram entries are `required=False`: notifications are opt-in, so their
+  absence must not sit in the sidebar banner of everyone who never asked.
 
 The script→capability map lives here, keyed by dotted key first and theme
 second. It is deliberately *not* merged with `webapp/_badges.py`'s tool map,
@@ -1223,9 +1238,19 @@ All calls through `run()` or `run_fn()` pass through `_timed` in
 `core/runner.py`, which does three things: prints the timing banner to stderr
 (so it does not pollute captured stdout, e.g. JSON piped to another process),
 appends one JSON line per run to `logs/runs.jsonl` (`ts`, `label`,
-`duration_s`, `status`), and — only when `SCRIPTORIUM_NOTIFY` is `1`, `true`
-or `yes` — sends a Telegram message through `scripts.util.notify`. The last
-two never raise; a failure to log or notify must not fail a run.
+`duration_s`, `status`), and sends a Telegram message through
+`scripts.util.notify` when the run qualifies. Two things qualify it:
+`SCRIPTORIUM_NOTIFY` set to `1`, `true` or `yes` in the environment, which
+reports every run and is what a terminal user wrapping one command wants;
+or `notify_telegram` on in `UserConfig` (Settings → Notifications) and the
+run at least `notify_min_seconds` long (default 30), so a two-second run
+does not ping a phone. The message carries the script key, the outcome and
+a human-readable duration (`✅ av.trim finished in 4m 05s`). The bot token
+and chat id are keys, stored in `~/scriptorium/.env` through the settings
+modal like the OpenAI key; `config.json` is not a secrets store. The web UI
+runs every script as a `main.py` subprocess, so this path covers both
+callers. The last two steps never raise; a failure to log or notify must
+not fail a run.
 
 Every CLI script prints a startup banner before doing any work:
 

@@ -120,3 +120,14 @@ def test_bundles_static_and_templates(name):
     spec = _spec(name)
     assert "webapp/static" in spec
     assert "webapp/templates" in spec
+
+
+@pytest.mark.parametrize("name", SPECS)
+class TestBuildSha:
+    """The sidebar hash read "—" in every packaged build: no repository to ask."""
+
+    def test_records_the_commit_while_the_repository_is_in_reach(self, name):
+        assert "write_build_sha(ROOT" in _spec(name)
+
+    def test_bundles_the_recorded_hash_beside_pyproject(self, name):
+        assert '(str(BUILD_SHA_PATH), ".")' in _spec(name)

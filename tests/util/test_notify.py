@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 import httpx
 import pytest
 
-from scripts.util.notify import format_run_message, send
+from scripts.util.notify import format_duration, format_run_message, send
 
 
 @pytest.fixture
@@ -50,14 +50,31 @@ class TestSend:
 
 
 class TestFormatRunMessage:
+    """Script, outcome and duration: everything the phone needs, nothing else."""
+
     def test_done_uses_check_mark(self):
         msg = format_run_message("av.trim", "done", 1.234)
         assert "✅" in msg
         assert "av.trim" in msg
-        assert "done" in msg
-        assert "1.234s" in msg
+        assert "finished" in msg
+        assert "1.2s" in msg
 
     def test_failed_uses_cross(self):
         msg = format_run_message("av.trim", "failed", 0.5)
         assert "❌" in msg
         assert "failed" in msg
+        assert "0.5s" in msg
+
+
+class TestFormatDuration:
+    def test_seconds_keep_one_decimal(self):
+        assert format_duration(0.84) == "0.8s"
+        assert format_duration(59.96) == "60.0s"
+
+    def test_minutes_pad_the_seconds(self):
+        assert format_duration(65) == "1m 05s"
+        assert format_duration(754.4) == "12m 34s"
+
+    def test_hours_drop_the_seconds(self):
+        assert format_duration(3600) == "1h 00m"
+        assert format_duration(4321) == "1h 12m"

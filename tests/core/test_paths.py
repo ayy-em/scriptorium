@@ -216,3 +216,16 @@ class TestResolveInput:
     def test_relative_with_directory_part_anchors_to_cwd_on_the_cli(self, cli: tuple[Path, Path]):
         _, cwd = cli
         assert paths.resolve_input(Path("Music/song.mp3"), "av") == cwd / "Music" / "song.mp3"
+
+
+class TestReadBuildSha:
+    """A frozen build reads the hash its spec recorded; development has none."""
+
+    def test_reads_the_bundled_file(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setattr(paths, "_bundle_dir", lambda: tmp_path)
+        (tmp_path / "build_sha.txt").write_text("abc1234\n", encoding="utf-8")
+        assert paths.read_build_sha() == "abc1234"
+
+    def test_empty_when_the_file_is_missing(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setattr(paths, "_bundle_dir", lambda: tmp_path)
+        assert paths.read_build_sha() == ""

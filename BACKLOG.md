@@ -572,6 +572,45 @@ shared helper, since 18 hand-written copies of the same `parent == Path(".")`
 check is how the inconsistency arose. Document the final rule in SPEC.md and the
 `PATH` setup itself in README.md, which currently only covers double-clicking.
 
+## Hide the system title bar in the Windows desktop app
+
+**Status:** open (2026-09-25). Tracked as GitHub issue #35. Blocked by the
+window host, not by UI work.
+
+The request is a frameless window on Windows: no OS title bar, the app's own
+chrome up to the top edge, with minimise / maximise / close drawn by the UI.
+
+What makes this hard is the entry in this file just below. On Windows the
+desktop app is a Chromium `--app` window (tier 2), because pywebview's
+WinForms backend cannot initialise in a frozen build. A `--app` window's
+title bar belongs to Chromium, and there is no command-line flag that removes
+it; the only web-side mechanism, the Window Controls Overlay
+(`display_override: window-controls-overlay`), applies to an *installed* PWA,
+not to a `--app` launch. Nothing in a page can reach a `--app` window's frame.
+
+**Routes, in order of preference:**
+
+1. **Get a native window on Windows.** pywebview's `create_window(...,
+   frameless=True, easy_drag=False)` plus `window.minimize()` /
+   `window.maximize()` / `window.restore()` / `window.destroy()` exposed
+   through `js_api` is exactly the feature, and `_settings_modal.html`-style
+   Alpine code for a custom title bar is an afternoon. It needs the
+   pythonnet-in-PyInstaller problem below solved first, or a backend that
+   does not need .NET (pywebview's EdgeChromium is still WinForms-hosted).
+2. **Install the page as a PWA** into the dedicated browser profile the
+   Chromium tier already uses (`~/scriptorium/.browser-profile`) and launch
+   it with `--app-id`, with a manifest declaring `window-controls-overlay`
+   and CSS using `env(titlebar-area-*)`. Unverified: whether an install can
+   be scripted without a user gesture, and whether Edge and Chrome behave the
+   same. Worth a spike before route 1's cost is paid.
+3. **Leave the OS title bar** and make the top bar of the UI visually
+   continuous with it. Cheapest, and macOS (tier 1) could get
+   `frameless=True` alone — but the issue was raised about Windows.
+
+Whichever route: the web app and macOS app must not change behaviour, so the
+custom title bar renders only when the host reports it is frameless (a flag
+on `/api/settings`, like `browse_supported`), never on a platform guess.
+
 ## pywebview cannot start in the frozen Windows app
 
 **Status:** resolved 2026-08-01 by dropping tier 1 on Windows (option 2 below).

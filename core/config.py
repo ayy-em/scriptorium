@@ -13,6 +13,7 @@ _CONFIG_PATH = _user_data_dir() / "config.json"
 
 SORT_ORDERS = ("az", "za", "count")
 DEFAULT_SORT_ORDER = "az"
+DEFAULT_NOTIFY_MIN_SECONDS = 30
 
 
 @dataclass
@@ -29,6 +30,10 @@ class UserConfig:
             Server-side rather than in ``localStorage`` because the packaged
             app has three launch tiers and they do not share browser storage.
         sort_order: Category ordering — one of ``SORT_ORDERS``.
+        notify_telegram: Send a Telegram message when a run finishes. Opt-in;
+            the bot token and chat id live in ``~/scriptorium/.env`` (see
+            ``core.env``), not here, because this file is not a secrets store.
+        notify_min_seconds: Runs shorter than this are not worth a message.
     """
 
     theme: str = "light"
@@ -36,6 +41,8 @@ class UserConfig:
     close_behavior: str = "close"
     favourites: list[str] = field(default_factory=list)
     sort_order: str = DEFAULT_SORT_ORDER
+    notify_telegram: bool = False
+    notify_min_seconds: int = DEFAULT_NOTIFY_MIN_SECONDS
 
 
 def load() -> UserConfig:
@@ -54,6 +61,8 @@ def load() -> UserConfig:
             close_behavior=raw.get("close_behavior", "close"),
             favourites=clean_favourites(raw.get("favourites")),
             sort_order=clean_sort_order(raw.get("sort_order")),
+            notify_telegram=raw.get("notify_telegram") is True,
+            notify_min_seconds=clean_notify_min_seconds(raw.get("notify_min_seconds")),
         )
     except Exception:
         logger.warning("Failed to read %s, using defaults", _CONFIG_PATH)
@@ -91,6 +100,25 @@ def clean_sort_order(raw: object) -> str:
         A valid sort order id.
     """
     return raw if raw in SORT_ORDERS else DEFAULT_SORT_ORDER
+
+
+def clean_notify_min_seconds(raw: object) -> int:
+    """Coerce a stored notification threshold into a non-negative whole number.
+
+    Args:
+        raw: Whatever was under ``notify_min_seconds`` in the config file or a
+            settings request.
+
+    Returns:
+        The threshold in seconds, or the default when *raw* is unusable.
+    """
+    if isinstance(raw, bool):
+        return DEFAULT_NOTIFY_MIN_SECONDS
+    if isinstance(raw, (int, float)) and raw >= 0:
+        return int(raw)
+    if isinstance(raw, str) and raw.strip().isdigit():
+        return int(raw.strip())
+    return DEFAULT_NOTIFY_MIN_SECONDS
 
 
 def save(cfg: UserConfig) -> None:

@@ -7,6 +7,7 @@ from unittest.mock import patch
 import pytest
 
 from core import runner
+from core.config import UserConfig, save
 from core.runner import _log_run, _timed, run_fn
 
 
@@ -98,10 +99,53 @@ class TestTimedLogging:
 
 
 class TestNotifyHook:
+    @pytest.fixture(autouse=True)
+    def _own_config(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Decisions read the user's config.json; keep the real one out of it."""
+        monkeypatch.setattr("core.config._CONFIG_PATH", tmp_path / "config.json")
+
     def test_no_notify_when_env_var_unset(self, log_dir: Path, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.delenv("SCRIPTORIUM_NOTIFY", raising=False)
         with patch("scripts.util.notify.send") as mock_send:
             _timed("x", lambda: None)
+        mock_send.assert_not_called()
+
+    def test_settings_opt_in_notifies_a_long_run(self, log_dir: Path, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.delenv("SCRIPTORIUM_NOTIFY", raising=False)
+        save(UserConfig(notify_telegram=True, notify_min_seconds=30))
+        with patch("scripts.util.notify.send") as mock_send:
+            runner._maybe_notify("av.trim", 31.0, "done")
+        mock_send.assert_called_once()
+        assert "av.trim" in mock_send.call_args.args[0]
+
+    def test_settings_opt_in_skips_a_short_run(self, log_dir: Path, monkeypatch: pytest.MonkeyPatch):
+        """A two-second run finishing is not news worth a phone buzz."""
+        monkeypatch.delenv("SCRIPTORIUM_NOTIFY", raising=False)
+        save(UserConfig(notify_telegram=True, notify_min_seconds=30))
+        with patch("scripts.util.notify.send") as mock_send:
+            runner._maybe_notify("av.trim", 2.0, "done")
+        mock_send.assert_not_called()
+
+    def test_settings_opt_out_is_silent_however_long(self, log_dir: Path, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.delenv("SCRIPTORIUM_NOTIFY", raising=False)
+        save(UserConfig(notify_telegram=False, notify_min_seconds=0))
+        with patch("scripts.util.notify.send") as mock_send:
+            runner._maybe_notify("av.trim", 3600.0, "done")
+        mock_send.assert_not_called()
+
+    def test_env_var_overrides_the_threshold(self, log_dir: Path, monkeypatch: pytest.MonkeyPatch):
+        """A terminal user wrapping one command wants every run reported."""
+        monkeypatch.setenv("SCRIPTORIUM_NOTIFY", "1")
+        save(UserConfig(notify_telegram=False, notify_min_seconds=3000))
+        with patch("scripts.util.notify.send") as mock_send:
+            runner._maybe_notify("av.trim", 0.1, "done")
+        mock_send.assert_called_once()
+
+    def test_a_broken_config_read_is_silent(self, log_dir: Path, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.delenv("SCRIPTORIUM_NOTIFY", raising=False)
+        monkeypatch.setattr(runner, "_should_notify", lambda _d: (_ for _ in ()).throw(OSError("disk")))
+        with patch("scripts.util.notify.send") as mock_send:
+            runner._maybe_notify("x", 1.0, "done")
         mock_send.assert_not_called()
 
     def test_notify_on_success_when_env_var_set(self, log_dir: Path, monkeypatch: pytest.MonkeyPatch):
@@ -109,7 +153,7 @@ class TestNotifyHook:
         with patch("scripts.util.notify.send") as mock_send:
             _timed("x", lambda: None)
         mock_send.assert_called_once()
-        assert "done" in mock_send.call_args.args[0]
+        assert "finished" in mock_send.call_args.args[0]
 
     def test_notify_on_failure(self, log_dir: Path, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.setenv("SCRIPTORIUM_NOTIFY", "1")

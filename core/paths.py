@@ -220,3 +220,19 @@ def read_version() -> str:
             return tomllib.load(f)["project"]["version"]
     except Exception:
         return "—"
+
+
+def read_build_sha() -> str:
+    """Read the commit hash a frozen build was made from.
+
+    ``packaging/build_sha.py`` writes the file while the spec runs, since the
+    bundle itself carries no repository to ask. Absent in development, where
+    the webapp asks git directly.
+
+    Returns:
+        The short hash, or an empty string when the file is missing or blank.
+    """
+    try:
+        return (_bundle_dir() / "build_sha.txt").read_text(encoding="utf-8").strip()
+    except OSError:
+        return ""

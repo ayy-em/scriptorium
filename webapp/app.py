@@ -5,6 +5,7 @@ import asyncio
 import html
 import json
 import logging
+import os
 from pathlib import Path
 import shlex
 import subprocess
@@ -20,7 +21,7 @@ from fastapi.templating import Jinja2Templates
 
 from core import capabilities, history
 from core.categories import CATEGORY_EXTS, categorize
-from core.config import UserConfig, clean_favourites, clean_sort_order
+from core.config import UserConfig, clean_favourites, clean_notify_min_seconds, clean_sort_order
 from core.config import load as load_config
 from core.config import save as save_config
 from core.env import load_env, set_env_value
@@ -32,6 +33,7 @@ from core.paths import (
     inputs_dir,
     logs_dir,
     outputs_root,
+    read_build_sha,
     read_version,
     static_dir,
     templates_dir,
@@ -164,11 +166,14 @@ def accept_exts_for(mod) -> str:  # noqa: ANN001
 def _read_git_hash() -> str:
     """Read the short git commit hash of the current HEAD.
 
+    A packaged app has no repository to ask, so it reads the hash the build
+    recorded instead (see ``packaging/build_sha.py``).
+
     Returns:
-        Short hash string, or "—" on any failure (including frozen mode).
+        Short hash string, or "—" on any failure.
     """
     if FROZEN:
-        return "—"
+        return read_build_sha() or "—"
     try:
         result = subprocess.run(
             ["git", "rev-parse", "--short", "HEAD"],
@@ -666,6 +671,8 @@ async def get_settings(request: Request) -> JSONResponse:
             "close_behavior": cfg.close_behavior,
             "favourites": cfg.favourites,
             "sort_order": cfg.sort_order,
+            "notify_telegram": cfg.notify_telegram,
+            "notify_min_seconds": cfg.notify_min_seconds,
             "browse_supported": _webview_window(request) is not None,
         }
     )
@@ -675,9 +682,11 @@ async def get_settings(request: Request) -> JSONResponse:
 async def get_keys() -> JSONResponse:
     """List the keys the app can hold, and whether each is set.
 
-    Values never leave the server: the modal shows "set" or "not set" and a
-    blank field. Driven by the capability registry, so a new configure-remedy
-    capability gets a field without UI work.
+    A secret never leaves the server: the modal shows "set" or "not set" and a
+    blank field. A plain identifier (a Telegram chat id) is returned, since the
+    user has to be able to see which chat they pointed the bot at. Driven by
+    the capability registry, so a new configure-remedy capability gets a field
+    without UI work.
 
     Returns:
         JSON with ``keys``: one entry per configure-remedy capability.
@@ -689,11 +698,30 @@ async def get_keys() -> JSONResponse:
             "env_var": c.env_var,
             "needed_for": c.needed_for,
             "is_set": c.present,
+            "secret": c.secret,
+            "value": "" if c.secret else os.environ.get(c.env_var, "").strip(),
         }
         for c in capabilities.probe_all()
         if c.remedy == capabilities.REMEDY_CONFIGURE and c.env_var
     ]
     return JSONResponse({"keys": keys})
+
+
+@app.post("/api/notify-test")
+async def notify_test() -> JSONResponse:
+    """Send a test message to the configured Telegram chat.
+
+    The only way to find out whether a token and chat id actually pair up is
+    to send something, so the settings modal offers this next to the toggle.
+
+    Returns:
+        JSON with ``ok``; false when credentials are missing or Telegram
+        refused the message.
+    """
+    from scripts.util.notify import send  # noqa: PLC0415
+
+    ok = await asyncio.to_thread(send, "Scriptorium can reach this chat. Long runs will report here.")
+    return JSONResponse({"ok": ok})
 
 
 @app.post("/api/keys")
@@ -705,7 +733,8 @@ async def post_key(request: Request) -> JSONResponse:
             an empty value clears the key.
 
     Returns:
-        JSON with ``is_set`` after the write.
+        JSON with ``is_set`` after the write, and ``value`` for a key that is
+        not a secret.
 
     Raises:
         HTTPException: 404 when the name is not a key the app manages.
@@ -718,7 +747,8 @@ async def post_key(request: Request) -> JSONResponse:
     set_env_value(capability.env_var, str(body.get("value", "")))
     capabilities.invalidate()
     refreshed = capabilities.probe(name)
-    return JSONResponse({"is_set": bool(refreshed and refreshed.present)})
+    visible = "" if capability.secret else os.environ.get(capability.env_var, "").strip()
+    return JSONResponse({"is_set": bool(refreshed and refreshed.present), "value": visible})
 
 
 @app.post("/api/browse-folder")
@@ -788,6 +818,8 @@ async def post_settings(request: Request) -> JSONResponse:
         close_behavior=body.get("close_behavior", "close"),
         favourites=existing.favourites,
         sort_order=existing.sort_order,
+        notify_telegram=body.get("notify_telegram") is True,
+        notify_min_seconds=clean_notify_min_seconds(body.get("notify_min_seconds", existing.notify_min_seconds)),
     )
     save_config(cfg)
     return JSONResponse({"ok": True})

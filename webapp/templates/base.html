@@ -41,6 +41,9 @@
         settingsOpen: false,
         outputsDir: '',
         closeBehavior: 'close',
+        notifyTelegram: false,
+        notifyMinSeconds: 30,
+        notifyTestStatus: '',
         browseSupported: false,
         browseError: '',
         saving: false,
@@ -162,6 +165,8 @@
             var data = await res.json();
             this.outputsDir = data.outputs_dir || '';
             this.closeBehavior = data.close_behavior || 'close';
+            this.notifyTelegram = !!data.notify_telegram;
+            this.notifyMinSeconds = Number.isFinite(data.notify_min_seconds) ? data.notify_min_seconds : 30;
             this.browseSupported = !!data.browse_supported;
             if ((data.theme === 'dark') !== this.dark) {
               this.applyTheme(data.theme === 'dark');
@@ -176,9 +181,12 @@
           this._snapshot = {
             dark: this.dark,
             outputsDir: this.outputsDir,
-            closeBehavior: this.closeBehavior
+            closeBehavior: this.closeBehavior,
+            notifyTelegram: this.notifyTelegram,
+            notifyMinSeconds: this.notifyMinSeconds
           };
           this.browseError = '';
+          this.notifyTestStatus = '';
           this.settingsOpen = true;
           this.loadKeys();
         },
@@ -202,7 +210,10 @@
             });
             var data = await res.json();
             var key = this.keys.find((k) => k.name === name);
-            if (key) key.is_set = !!data.is_set;
+            if (key) {
+              key.is_set = !!data.is_set;
+              key.value = typeof data.value === 'string' ? data.value : '';
+            }
             this.keyDrafts[name] = '';
             this.keyStatus[name] = res.ok ? (value ? 'saved' : 'cleared') : 'error';
           } catch (e) {
@@ -216,6 +227,8 @@
             if (this._snapshot.dark !== this.dark) this.applyTheme(this._snapshot.dark);
             this.outputsDir = this._snapshot.outputsDir;
             this.closeBehavior = this._snapshot.closeBehavior;
+            this.notifyTelegram = this._snapshot.notifyTelegram;
+            this.notifyMinSeconds = this._snapshot.notifyMinSeconds;
           }
           this._snapshot = null;
           this.browseError = '';
@@ -231,7 +244,9 @@
               body: JSON.stringify({
                 theme: this.dark ? 'dark' : 'light',
                 outputs_dir: this.outputsDir,
-                close_behavior: this.closeBehavior
+                close_behavior: this.closeBehavior,
+                notify_telegram: this.notifyTelegram,
+                notify_min_seconds: this.notifyMinSeconds
               })
             });
             this._snapshot = null;
@@ -239,6 +254,19 @@
           } catch (e) { /* silent */ } finally {
             this.saving = false;
           }
+        },
+
+        /* One real message is the only proof a token and chat id pair up. */
+        async testNotify() {
+          this.notifyTestStatus = 'sending';
+          try {
+            var res = await fetch('/api/notify-test', { method: 'POST' });
+            var data = await res.json();
+            this.notifyTestStatus = res.ok && data.ok ? 'sent' : 'error';
+          } catch (e) {
+            this.notifyTestStatus = 'error';
+          }
+          setTimeout(() => { if (this.notifyTestStatus !== 'sending') this.notifyTestStatus = ''; }, 4000);
         },
 
         /* Native folder picker. Only the pywebview desktop wrapper can supply

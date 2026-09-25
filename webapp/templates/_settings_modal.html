@@ -117,23 +117,60 @@
         <p class="settings-error" x-show="$store.ui.browseError" x-text="$store.ui.browseError" x-cloak></p>
       </section>
 
+      <!-- Notifications. The toggle and threshold save with the form; the
+           bot token and chat id are keys, so they sit in the Keys section
+           below and save on their own buttons. -->
+      <section class="settings-group">
+        <h3 class="settings-group-title">Notifications</h3>
+        <p class="settings-group-hint">Get a Telegram message when a long run finishes, so you
+          need not watch the window. Needs the bot token and chat id under Keys.</p>
+        <label class="switch-row">
+          <input type="checkbox" class="switch-input" x-model="$store.ui.notifyTelegram">
+          <span class="switch" aria-hidden="true"></span>
+          <span class="switch-row-text">
+            <span class="switch-row-title">Notify on Telegram</span>
+            <span class="switch-row-sub">Sent when a run finishes or fails</span>
+          </span>
+        </label>
+        <div class="notify-threshold" x-show="$store.ui.notifyTelegram">
+          <label class="notify-threshold-label" for="settings-notify-min">Only for runs longer than</label>
+          <div class="input-group input-group--inline">
+            <input type="number" id="settings-notify-min" class="input input--short"
+                   min="0" step="1" inputmode="numeric"
+                   x-model.number="$store.ui.notifyMinSeconds">
+            <span class="input-unit">seconds</span>
+            <button type="button" class="btn btn--secondary btn--sm"
+                    @click="$store.ui.testNotify()"
+                    :disabled="$store.ui.notifyTestStatus === 'sending'">
+              {{ icon('send', 14) }}
+              <span x-text="$store.ui.notifyTestStatus === 'sending' ? 'Sending…' : 'Send a test'">Send a test</span>
+            </button>
+          </div>
+          <p class="key-row-status" x-show="$store.ui.notifyTestStatus && $store.ui.notifyTestStatus !== 'sending'" x-cloak
+             :class="{ 'is-error': $store.ui.notifyTestStatus === 'error' }"
+             x-text="$store.ui.notifyTestStatus === 'sent'
+                     ? 'Sent — check your Telegram.'
+                     : 'Nothing arrived. Check the bot token and chat id under Keys.'"></p>
+        </div>
+      </section>
+
       <!-- API keys. Saved on their own button, not with the form: the value
            is written to ~/scriptorium/.env the moment it is confirmed, and
            the field is cleared so nothing secret lingers on screen. -->
       <section class="settings-group" x-show="$store.ui.keys.length" x-cloak>
         <h3 class="settings-group-title">Keys</h3>
         <p class="settings-group-hint">Stored in <code>~/scriptorium/.env</code> on this machine only.
-          A key is never shown again once saved.</p>
+          A secret is never shown again once saved.</p>
         <template x-for="key in $store.ui.keys" :key="key.name">
           <div class="key-row">
             <div class="key-row-head">
               <label class="key-row-label" :for="'key-' + key.name" x-text="key.label"></label>
               <span class="key-row-state" :class="{ 'is-set': key.is_set }"
-                    x-text="key.is_set ? 'Set' : 'Not set'"></span>
+                    x-text="key.is_set ? (key.secret || !key.value ? 'Set' : key.value) : 'Not set'"></span>
             </div>
             <p class="key-row-need" x-text="key.needed_for"></p>
             <div class="input-group">
-              <input type="password" class="input input--mono"
+              <input :type="key.secret ? 'password' : 'text'" class="input input--mono"
                      :id="'key-' + key.name"
                      :placeholder="key.is_set ? 'Paste a new value to replace it' : key.env_var + '=…'"
                      x-model="$store.ui.keyDrafts[key.name]"

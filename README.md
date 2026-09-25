@@ -79,9 +79,25 @@ order between A → Z, Z → A and most-scripts-first. Both are stored in
 
 The gear in the top bar opens Settings: light or dark theme, what the window's
 close button does in the desktop app (quit, or minimise to the tray), a default
-outputs directory, and **Keys** — a masked field per API key the app knows
-about. A key is written to `~/scriptorium/.env`, applies at once, and is never
-shown again; the field just reports *Set* or *Not set*.
+outputs directory, **Notifications**, and **Keys** — a field per key the app
+knows about. A key is written to `~/scriptorium/.env` and applies at once. A
+secret such as an API key or bot token is never shown again; the field just
+reports *Set* or *Not set*. A plain identifier such as the Telegram chat id is
+shown back so you can check it.
+
+### Telegram notifications
+
+Long runs can report to your phone instead of making you watch the window.
+Create a bot with [@BotFather](https://t.me/BotFather) and paste its token
+under Settings → Keys, message the bot once, then put your chat id (from
+[@userinfobot](https://t.me/userinfobot)) in the field below it. Turn on
+**Notify on Telegram** under Settings → Notifications and pick the shortest
+run worth a message (30 seconds by default). **Send a test** proves the pair
+works. Every run longer than the threshold then ends with a message like
+`✅ av.trim finished in 4m 05s`, whether it was started from the app or the
+command line. Setting `SCRIPTORIUM_NOTIFY=1` in the environment reports every
+run regardless of the threshold, which suits wrapping one long command in a
+terminal.
 
 ### Cancelling and re-running
 
@@ -363,6 +379,8 @@ run_fn(export, Path("inputs"), Path("outputs/lora/captions.json"))
 - **Model downloads are visible** — the form says which weights a run will fetch and how big they are; the status bar shows the download instead of a run that looks hung
 - **`av.join` respects the output container** — WebM output gets Opus audio, a copied codec the container cannot hold forces a re-encode, and a re-encode that WebM cannot hold is written as MP4 with a note
 - **API keys in Settings** — paste the OpenAI key under Settings → Keys instead of editing a `.env` file; it is stored per user, never shown again, and the sidebar clears at once
+- **Telegram notifications for long runs** — Settings → Notifications turns them on, sets how long a run must be to earn a message, and sends a test; the bot token and chat id go under Settings → Keys
+- **Commit hash in packaged builds** — the sidebar's build identifier is recorded at build time instead of reading "—" in every installed app
 - **HEIC in, PNG/JPEG out** — `formats.convert_image` and `photo.remove_bg` read iPhone and Android HEIC/HEIF photos; a Live Photo converts to its still frame, and EXIF orientation is baked in so portraits stay upright
 - **`av.trim` plays a dropped file** — the play button now works for a file that arrived through the drop overlay, not only one picked on the page
 - **UI** — thin scrollbars that appear only while scrolling, more contrast between dark-mode surfaces, search icon no longer overlaps its placeholder, the shortcut badge reads Ctrl K off macOS, and static assets revalidate so a new build never shows an old stylesheet
