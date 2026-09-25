@@ -4,8 +4,9 @@
 
 A single-entrypoint collection of themed utility scripts. All execution — CLI or
 programmatic — goes through `core/runner.py`, which provides a uniform middleware
-layer (currently: timing). Scripts themselves stay lean: no cross-cutting logic,
-no `sys.exit` outside of `run()`.
+layer (timing, a per-run record in `logs/runs.jsonl`, an optional Telegram
+notification). Scripts themselves stay lean: no cross-cutting logic, no
+`sys.exit` outside of `run()`.
 
 ---
 
@@ -14,13 +15,17 @@ no `sys.exit` outside of `run()`.
 ```
 scriptorium/
 ├── build.sh                 # unified build entrypoint (detects OS, delegates)
+├── build.bat                # Windows entrypoint → packaging/build_installer.bat
 ├── main.py                  # CLI entrypoint
+├── assets/                  # shared images and fonts used across themes
 ├── inputs/                  # drop files here (shared across every theme)
 │   └── processed/           # files auto-archived here after successful runs
 ├── outputs/                 # per-theme outputs land here as <theme>/<file>
+├── logs/                    # runs.jsonl from the runner middleware; what /api/open-logs reveals
 ├── core/
 │   ├── argparse.py          # ScriptoriumParser with ui_label support
 │   ├── capabilities.py      # external dependencies: one probe, one value type
+│   ├── categories.py        # extension → category (video, audio, image, …) for drop matching
 │   ├── config.py            # user settings persistence (UserConfig, load, save)
 │   ├── history.py           # run history persistence (RunRecord, load, append)
 │   ├── downloads.py         # pooch progress → ProgressReporter, for model weights
@@ -44,6 +49,7 @@ scriptorium/
 │   ├── _form.py             # argparse introspection for auto-generated forms
 │   ├── _icons.py            # glyph-name lookup for scripts and file categories
 │   ├── _runs.py             # live run registry + process-tree termination
+│   ├── _waveform.py         # ffmpeg-decoded peak envelope + staged-input containment
 │   ├── static/
 │   │   ├── style.css        # the entire stylesheet, sectioned (see below)
 │   │   ├── fonts/           # self-hosted Inter + JetBrains Mono (OFL 1.1)
@@ -60,7 +66,8 @@ scriptorium/
     ├── build.sh                 # macOS build script
     ├── build_installer.bat      # Windows build script (PyInstaller + Inno Setup)
     ├── build_linux.sh           # Linux build script
-    └── installer.iss            # Inno Setup script for Windows installer
+    ├── installer.iss            # Inno Setup script for Windows installer
+    └── logo.icns, logo.ico      # app icons for the macOS bundle and Windows installer
 ```
 
 Local data lives at the repo root: a single `inputs/` directory shared across
@@ -91,12 +98,12 @@ uv run main.py <theme>.<script> --help  # show usage, arguments, and examples
 ```
 Audio and video processing backed by ffmpeg
 
-Theme 'av' (10 script(s)):
+Theme 'av' (9 script(s)):
 
-  av.convert                                Convert media file to a different format
-                                            Transcode a file (or directory of files) to a target container/codec.
+  av.dump_frames                            Dump all frames from a video clip
+                                            Extract every frame between two timestamps to JPEG files.
 
-  av.trim                                   Trim media file
+  av.trim                                   Trim the media file that's just too damn long
                                             Cut a video or audio file to a start/end timestamp.
   ...
 
@@ -163,6 +170,7 @@ templates/
 ├── _terminal.html         # run status strip + streaming console
 ├── _sidebar.html, _onboarding_modal.html, _howto_modal.html
 ├── _capability_banner.html   # "this script needs X" + Install, shared by script.html and trim.html
+├── _icon_placeholder.html    # stand-in glyph for icons not drawn yet (tracked in _icons.py)
 ├── _drop_{overlay,chooser,runner}.html   # browser-side drop: hint, wheel, runner
 ├── _drop_hint.html        # drop_hover()/drop_reject() macros, shared by both pages
 ├── _script_drop.html      # detail-page window-level drop target
@@ -199,22 +207,26 @@ by `webapp/_icons.py` and `_macros.html` actually resolves.
 
 ### Client-side state
 
-These live in `localStorage` rather than `UserConfig`, because none of them needs
-the server:
+Only two things live in `localStorage`, because only they must be known before
+the first paint or before any request has returned:
 
 | Key | Shape | Notes |
 |---|---|---|
-| `favourites` | array of script keys | `["av.filmstrip", …]` |
-| `sort_order` | `"az"` \| `"za"` \| `"count"` | validated against `SORT_ORDERS` on load |
 | `theme` | `"light"` \| `"dark"` | mirrors `UserConfig.theme` to avoid a dark-mode flash |
 | `onboarding_seen` | `"1"` | |
 
-Consequence: they are **per browser profile**, and the three launch tiers do not
-share storage. See BACKLOG.md — moving favourites into `UserConfig` is the fix
-if that becomes annoying.
+Favourites and sort order used to be here too, and were therefore per browser
+profile — the three launch tiers each kept their own set. They moved into
+`UserConfig` on 2026-08-01 (`favourites`, `sort_order`, validated by
+`clean_favourites` / `clean_sort_order`). `base.html` seeds them into the page
+as `window.__PREFS__` via the `user_preferences_json()` Jinja global, so the
+first paint already has the right stars, and writes changes back through
+`POST /api/preferences`. A one-time migration lifts anything an older build
+left in `localStorage`, then removes those keys.
 
-Because the server never sees favourites, `/favourites` renders every script and
-Alpine hides the rest; `[x-cloak]` covers the pre-init frame. `__THEME_META__`
+`/favourites` still renders every script and lets Alpine hide the rest —
+which rows are shown is a client decision made from the seeded set;
+`[x-cloak]` covers the pre-init frame. `__THEME_META__`
 carries each theme's label, script count and script keys — index-aligned with
 that theme's entry in `__THEMES__` — so the client can filter and reorder
 without a round trip. Sections reorder via the flex `order` property, so no DOM
@@ -244,6 +256,8 @@ from an older build indefinitely. ETag revalidation makes the usual cost a 304.
 | `POST /api/runs/{run_id}/cancel` | kill a running script and its whole process tree |
 | `GET /history` | past runs, newest first, with re-run links |
 | `POST /api/history/clear` | delete every stored run record |
+| `POST /api/preferences` | write favourites and sort order into `UserConfig` |
+| `GET /api/recent-outputs/{theme}/{script_name}?limit=` | files earlier runs of this script wrote and that still exist, for the detail page's recent-outputs panel |
 | `GET /api/script-fields/{theme}/{script_name}` | field specs, minus the file input |
 | `GET /api/preview-command/{theme}/{script_name}` | CLI equivalent of the current form state |
 | `POST /upload/{theme}` | single-file upload |
@@ -375,6 +389,18 @@ codec is muxable by definition. No video encoder is named, for the same reason
 `formats.convert_video` names none — ffmpeg's default for a container is
 muxable into it, which `libx264` is not for every container.
 
+### `av.join` and the output container
+
+`av.join` takes the output extension from the first input and re-encodes audio
+during preprocessing, so the container has a say in three places
+(`_resolve_profile` in `scripts/av/join.py`): the audio codec follows it (Opus
+for `.webm`/`.ogg`/`.opus`, AAC otherwise); a copied video codec the container
+will not hold (`_CONTAINER_VIDEO_CODECS`) forces a re-encode even when the
+inputs agree with each other; and a re-encode — always H.264 + AAC — bound for a
+container that cannot hold that pair is written as `.mp4` instead, with a line on
+stdout saying so. `join()` returns the path actually written. Intermediates go to
+`.mp4` when AAC and an MP4-friendly codec allow it, `.mkv` otherwise.
+
 ### Progress reporting
 
 A script is a subprocess, so its only channel to the UI is its own output. A
@@ -453,8 +479,10 @@ mid-run still lets the script finish. Both are choices, not omissions.
 
 `core/history.py` stores completed runs in `~/scriptorium/history.json`
 alongside `config.json`, newest first, capped at `MAX_ENTRIES` (200). It holds
-no live process state — a `RunRecord` is a plain value: key, argv, params,
-status, exit code, start time, elapsed.
+no live process state — a `RunRecord` is a plain value: run id, key, argv,
+params, status, exit code, start time, elapsed, the output files detected
+(`outputs`, best-effort, from what the script printed) and a `batch_id` that
+groups the runs of one per-file fan-out.
 
 `argv` is what actually ran; `params` is what the user typed. Re-run needs the
 latter, which is why both are stored.
@@ -502,8 +530,10 @@ without needing a build.
 
 - **Scripts and core are collected, never hand-listed.** `collect_submodules`
   in every spec; a literal module list drifts the moment a script is added.
-- **`rembg`, `onnxruntime` and (Windows) `clr_loader`/`pythonnet` need
-  `collect_all`.** Static analysis cannot see them.
+- **`rembg`, `onnxruntime`, `weasyprint` and `pillow_heif` need
+  `collect_all`.** Static analysis cannot see their data files and native
+  libraries. `webview`, `clr`, `clr_loader` and `pythonnet` are the opposite
+  case on Windows — excluded outright, see "Windows app" below.
 - **`unittest` must not be excluded.** scipy imports `array_api_compat`, which
   runs `from numpy import *`; `testing` is in numpy's `__all__`, so that fires
   numpy's lazy `__getattr__` into `numpy/testing/__init__.py` and its
@@ -613,9 +643,11 @@ packaging\build_installer.bat           # → dist\ScriptoriumSetup.exe
 ```
 
 The Windows build uses PyInstaller in folder-bundle mode (no macOS `BUNDLE`
-step). The entry point is the same `packaging/entrypoint.py` with the same
-3-tier window cascade: pywebview, Chromium `--app` mode (Edge/Chrome),
-then default browser fallback.
+step). The entry point is the same `packaging/entrypoint.py`, but Windows
+skips the pywebview tier entirely (its WinForms backend cannot start in the
+frozen build — see "pywebview cannot start in the frozen Windows app" in
+BACKLOG.md's Settled section), so the cascade there is two tiers: Chromium
+`--app` mode (Edge/Chrome), then the default browser.
 
 #### Windows build details
 
@@ -626,7 +658,7 @@ then default browser fallback.
 | Inno Setup script | `packaging/installer.iss` |
 | Output | `dist/ScriptoriumSetup.exe` |
 | Prerequisites | Python 3.14, uv, Inno Setup 6+ (`iscc` on PATH) |
-| Webview backend | pywebview + EdgeChromium (falls back to browser) |
+| Window | Edge or Chrome in `--app` mode; default browser as fallback. pywebview is not used on Windows |
 
 `build_installer.bat` runs the full pipeline: dependency sync, PyInstaller
 folder bundle, and Inno Setup compilation — producing a single
@@ -727,7 +759,7 @@ environment (`core/invocation.py`), and the two resolvers read it:
 
 ```sh
 # from a terminal — reads ./clip.mp4, writes ./<stamp>.mp3
-cd ~/Music && scriptorium av.convert clip.mp4 --to mp3
+cd ~/Music && scriptorium formats.convert_audio clip.mp4 --to mp3
 ```
 
 An **environment variable rather than a flag**, because the two spawn paths do
@@ -806,7 +838,8 @@ to fail a run that already produced its output.
 
 | Archives | Does not archive | Why not |
 |---|---|---|
-| `av.dump_frames`, `av.filmstrip`, `av.join`, `av.split`, `av.to_anim`, `av.trim`, `av.video_crop`, `av.volume` | `downloads.download`, `sitemaps.status_check`, `util.*` | take a URL or a message, not a file |
+| `av.dump_frames`, `av.filmstrip`, `av.join`, `av.split`, `av.to_anim`, `av.trim`, `av.video_crop`, `av.volume` | `downloads.download`, `sitemaps.status_check`, `util.notify` | take a URL or a message, not a file |
+| | `util.cleanup` | manages the archive itself |
 | `av.tag` (only when writing a *new* file) | `av.tag` in read mode and `--in-place` | nothing is consumed; `--in-place` rewrites the input itself |
 | `formats.convert_*` (via `_utils.run_convert`) | `gif.make_gif` | reads a *directory* of frames; flattening a frame set into the archive root collides on every `frame_001.png`, and frames get re-rendered at other settings |
 | `photo.remove_bg` | `lora.*` | operate on a dataset directory in place — archiving it would destroy the dataset |
@@ -842,8 +875,10 @@ def av_inputs_dir() -> Path:
     return inputs_dir("av")
 ```
 
-`core.paths` also provides `templates_dir()`, `static_dir()`, `read_version()`,
-and the `FROZEN` boolean. It used to carry `has_ffmpeg()`; that moved into
+`core.paths` also provides `templates_dir()`, `static_dir()`, `assets_dir()`,
+`logs_dir()`, `outputs_root()`, `drop_session_dir()`, `resolve_input()`,
+`move_to_past_inputs()`, `read_version()` and the `FROZEN` boolean. It used to
+carry `has_ffmpeg()`; that moved into
 `core.capabilities` below, which answers the same question for every dependency
 rather than one.
 
@@ -854,9 +889,10 @@ pango/cairo/glib stack, an OpenAI key, rembg model weights fetched on first use.
 Each used to fail its own way — a bespoke sidebar banner for ffmpeg, a raw
 `CalledProcessError` for pandoc, an `OSError` from inside cffi for pango.
 
-`core.capabilities` makes them one shape. A `Capability` carries `present`,
-`needed_for` (what stops working), `hint` (already resolved for this platform),
-`remedy` and `required`:
+`core.capabilities` makes them one shape. A `Capability` carries `name`,
+`label`, `present`, `needed_for` (what stops working), `hint` (prose, already
+resolved for this platform), `command` (argv the app can run to fix it, or
+empty), `env_var` (for a key the user types in), `remedy` and `required`:
 
 | Capability | Probe | Needed by | Required |
 |---|---|---|---|
@@ -865,12 +901,12 @@ Each used to fail its own way — a bespoke sidebar banner for ffmpeg, a raw
 | `pango` | real `import weasyprint`, after `core.native_libs` | `telegram.{chat,group}_analysis` | yes |
 | `weasyprint-cli` | on PATH | nicer `convert_docs` PDFs | no |
 | `gifsicle` | on PATH | `av.to_anim --optimize` | no |
-| `openai-key` | `OPENAI_API_KEY` after `load_env()` | `speech.transcribe` | yes |
+| `openai-key` | `OPENAI_API_KEY` after `load_env()` — the probe loads `.env` itself, so a CLI caller and the webapp agree | `speech.transcribe` | yes |
 
 `required=False` exists so an optional dependency is reported without being
 alarming: a missing gifsicle costs a larger GIF, not a script.
 
-Four rules worth not rediscovering:
+Rules worth not rediscovering:
 
 - **Probe results expire** (`CACHE_SECONDS`). The old `has_ffmpeg()` was
   evaluated once at import into a Jinja global, so installing ffmpeg and
@@ -920,10 +956,23 @@ Two entries the earlier BACKLOG.md notes got wrong: `gif.make_gif` needs no
 ffmpeg (it assembles frames with Pillow), and the pango dependency belongs to
 the two Telegram scripts that render PDFs, not the whole theme.
 
+### `core.images` — every Pillow script opens the same formats
+
+Pillow does not read HEIC/HEIF, the format every phone camera writes.
+`pillow-heif` adds it by registering an opener, and `core.images.ensure_image_formats()`
+does that registration once, tolerating the package's absence. Any script that
+calls `Image.open` calls it first — `formats.convert_image` and `photo.remove_bg`
+today — so `IMAGE_EXTS` and what actually opens cannot drift apart. Two facts
+about HEIC that belong in the code rather than in a support thread: a Live Photo
+opens as its primary still, and orientation lives in EXIF, so a script writing
+to a format without EXIF must bake it in with `ImageOps.exif_transpose`. Both
+scripts do, for every input format — which also fixed sideways JPEG-to-PNG
+conversions that predate HEIC.
+
 ### `core.outputs` — standardized output path resolution
 
-All scripts use `core.outputs` for output file naming and placement. The module
-provides four functions:
+All scripts use `core.outputs` for output file naming and placement. The four
+a script reaches for:
 
 | Function | Purpose |
 |----------|---------|
@@ -931,6 +980,11 @@ provides four functions:
 | `deduplicate(path)` | Appends `_001`–`_999` suffix if `path` already exists |
 | `resolve_output(output, *, theme, ext)` | Resolves a user-provided `--output` value (or `None`) to a concrete file path |
 | `resolve_output_dir(output, *, theme)` | Same, but resolves to a directory (for multi-file output scripts) |
+
+Alongside them: `resolve_single_output` (one file in, one file out, honouring an
+explicit filename), `names_a_file` (does an `--output` value name a file or a
+directory), `anchor_user_path` and `relative_root` (see "Nothing user-supplied
+stays relative"), and `find_reported_outputs` (see "Output detection").
 
 The value is first made absolute by `anchor_user_path` (see "Nothing
 user-supplied stays relative" above); what is left is a question of shape:
@@ -981,7 +1035,7 @@ declared — `webapp._form.batch_mode_for()` reads it off the argument parser:
 | Batch mode | Inferred from | Behaviour |
 |---|---|---|
 | `directory` | file input has widget `file-multi` (an optional `Path` positional), or its dest is `inputs` | one invocation against the drop session directory |
-| `per_file` | file input has widget `file` | not yet implemented; the card renders dimmed |
+| `per_file` | file input has widget `file` | one invocation per dropped file, in sequence, sharing a `batch_id`; the card says "Runs N times, once per file" |
 
 To make a new script batch-capable, give its source argument `nargs="?"` and
 have it accept a directory, as the `formats.convert_*` scripts do. A `per_file`
@@ -1051,10 +1105,10 @@ inline, so the two stay in sync automatically.
 - Calls the script's public function(s) with resolved arguments
 - Calls `sys.exit(0/1)` to signal success or failure
 - Contains no business logic
-- Any file/directory input whose `Path.parent == Path(".")` (bare name, no directory
-  component) is resolved to `<theme>/inputs/<name>` before being passed to the
-  public function. This lets users type just a filename instead of the full path
-  when the file lives in the conventional inputs directory.
+- Every user-supplied path goes through `core.paths.resolve_input` /
+  `core.outputs.anchor_user_path` (see "Nothing user-supplied stays relative"),
+  which is what lets a bare filename mean "the one in the shared `inputs/`
+  directory". Do not hand-roll a `Path.parent == Path(".")` check.
 - `ArgumentParser` must always be constructed with:
   - `prog="uv run main.py <theme>.<script>"` — fixes the usage line shown in `--help`
   - `formatter_class=argparse.RawDescriptionHelpFormatter` — preserves epilog formatting
@@ -1165,8 +1219,13 @@ def run() -> None:
 
 ## Runner middleware
 
-All calls through `run()` or `run_fn()` are timed. Output goes to stderr so it
-does not pollute captured stdout (e.g. JSON output piped to another process).
+All calls through `run()` or `run_fn()` pass through `_timed` in
+`core/runner.py`, which does three things: prints the timing banner to stderr
+(so it does not pollute captured stdout, e.g. JSON piped to another process),
+appends one JSON line per run to `logs/runs.jsonl` (`ts`, `label`,
+`duration_s`, `status`), and — only when `SCRIPTORIUM_NOTIFY` is `1`, `true`
+or `yes` — sends a Telegram message through `scripts.util.notify`. The last
+two never raise; a failure to log or notify must not fail a run.
 
 Every CLI script prints a startup banner before doing any work:
 
@@ -1199,6 +1258,13 @@ constants or functions within a theme:
 scripts/lora/_dataset.py   # IMAGE_EXTS, find_images(), find_captions()
 scripts/av/_utils.py       # MEDIA_EXTS, run_ffmpeg(), av_inputs_dir(), …
 ```
+
+Two `IMAGE_EXTS` exist on purpose. `scripts/formats/_utils.py`'s is the
+canonical "what is an image" set — it feeds `core.categories`, the drop
+overlay, `formats.convert_image` and `photo.remove_bg`, and includes HEIC/HEIF.
+`scripts/lora/_dataset.py`'s is narrower by design: it lists what a LoRA
+trainer will actually consume, and a `.heic` in a dataset is a mistake to
+flag, not a file to accept.
 
 Import them with an absolute path:
 

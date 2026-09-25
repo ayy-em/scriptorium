@@ -20,8 +20,8 @@
         <path d="M8 2v12M3 5l10 6M3 11l10-6"/>
       </svg>
       <span class="sidebar-link-label">Favourites</span>
-      {# Favourites live in localStorage, so the count can only come from the
-         client once Alpine is up. #}
+      {# The count is derived from the seeded favourites in the Alpine store,
+         so it appears once Alpine is up rather than in the server render. #}
       <span class="category-count sidebar-link-count"
             x-show="$store.ui.favouriteCount"
             x-text="$store.ui.favouriteCount" x-cloak></span>

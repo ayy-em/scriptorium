@@ -9,16 +9,29 @@ Built by coders, for non-coders.
 
 ## Quickstart: Install
 
-1. Clone repo
-2. Run `uv sync`
+Needs Python 3.14 and [uv](https://docs.astral.sh/uv/).
 
-Done.
+1. Clone repo
+2. Run `uv sync --all-extras`
+
+Done. Plain `uv sync` installs only the core and the web UI; each theme's
+libraries (Pillow, pandas, weasyprint, rembg, …) live in an optional extra
+named after it, so `--all-extras` is what you want unless you are deliberately
+keeping the environment small.
 
 ### Prereqs for individual scripts
 
-1. `av.*` scripts require **ffmpeg** (and **ffprobe**) to be on your `PATH` for all platforms.
-**Fix:** Install via your package manager (e.g. `winget install Gyan.FFmpeg`, `brew install ffmpeg`),
-or click **Install** where the web UI reports it missing — sidebar, script page, or first-run tour.
+Some scripts need tools Python cannot install. Each is detected and, when
+missing, named in the sidebar and on the page of every script that needs it,
+with an **Install** button where one command does the job (winget on Windows,
+brew on macOS) and the command to run otherwise. The first-run tour ends on an
+ffmpeg slide if it is missing. The full table is under
+[What the built app needs to run](#what-the-built-app-needs-to-run).
+
+1. `av.*` and `formats.convert_{audio,video}` require **ffmpeg** (and **ffprobe**) on `PATH`.
+   `winget install Gyan.FFmpeg` / `brew install ffmpeg`, or click Install.
+2. `formats.convert_docs` requires **pandoc**. Same story.
+3. `speech.transcribe` needs an OpenAI API key — paste it under **Settings → Keys**.
 
 ## Quickstart: Run the Web UI
 
@@ -52,11 +65,23 @@ Fonts and the JS runtime are served locally, so the UI works with no internet
 connection. Light and dark themes are both fully supported; switch from the top
 bar or in Settings.
 
+While a script runs, the status strip shows real progress wherever the script
+reports it — position within a transcode, files done in a batch, bytes of a
+model download — and an indeterminate bar otherwise. When the run finishes, the
+files it wrote are listed under the console with a button to reveal each one.
+
 **Favourites** — click the heart on any script row to pin it. The sidebar's
 Favourites view shows just those, with a live count. **Sort** cycles the category
-order between A → Z, Z → A and most-scripts-first. Both are remembered per
-browser profile; the three launch tiers each keep their own set (see
-[BACKLOG.md](BACKLOG.md)).
+order between A → Z, Z → A and most-scripts-first. Both are stored in
+`~/scriptorium/config.json`, so every way of opening the app sees the same set.
+
+### Settings
+
+The gear in the top bar opens Settings: light or dark theme, what the window's
+close button does in the desktop app (quit, or minimise to the tray), a default
+outputs directory, and **Keys** — a masked field per API key the app knows
+about. A key is written to `~/scriptorium/.env`, applies at once, and is never
+shown again; the field just reports *Set* or *Not set*.
 
 ### Cancelling and re-running
 
@@ -90,8 +115,8 @@ to `inputs/drop/<session>/` under a generated name and staged for use.
 same kind — `.mp4` alongside `.mov` is fine, `.docx` alongside `.avi` is
 rejected. Scripts that accept a directory (`av.join`, the `formats.convert_*`
 family, `photo.remove_bg`) run once over the whole batch. Scripts that take a
-single file are shown dimmed and marked *single file only*; running those across
-a batch is tracked in [BACKLOG.md](BACKLOG.md).
+single file run once per file, in sequence; the card says how many runs that
+will be, and one failure does not stop the rest.
 
 ## Building Apps
 
@@ -112,8 +137,8 @@ and runs the full build pipeline. No manual setup required.
 
 | Platform | Output | Prerequisites to *build* |
 |----------|--------|---------------|
-| macOS | `dist/Scriptorium.app` | None (tools are auto-installed) |
-| Windows | `dist/ScriptoriumSetup.exe` | Git Bash, [Inno Setup 6+](https://jrsoftware.org/issetup.php) on PATH |
+| macOS | `dist/Scriptorium.app` (CI also wraps it in `Scriptorium-macOS.dmg`) | None (tools are auto-installed) |
+| Windows | `dist/ScriptoriumSetup.exe` | [Inno Setup 6+](https://jrsoftware.org/issetup.php) on PATH; `build.bat` is plain cmd, Git Bash only if you prefer `bash build.sh` |
 | Linux | `dist/scriptorium-linux-x86_64.tar.gz` | None (tools are auto-installed) |
 
 ### What the built app needs to run
@@ -126,9 +151,10 @@ listed here.
 Each of these is **detected**, and any that is missing is named in the sidebar
 and at the top of every script page that needs it. Where one unattended command
 does the job (winget on Windows, brew on macOS) there is an **Install** button
-that runs it for you and shows the installer's output; otherwise you get the
-command to run. The check re-runs as you use the app, so installing something
-and reloading the page clears it without a restart.
+that runs it for you and shows the installer's output; a key gets a **Set key**
+button that opens Settings; otherwise you get the command to run. The check
+re-runs as you use the app, so installing something and reloading the page
+clears it without a restart.
 
 | Needed for | Requirement | Without it |
 |---|---|---|
@@ -249,28 +275,37 @@ settings.
 
 ## Scripts Available
 
-| Script     | Description                     |
-|------------|---------------------------------|
-| av.dump_frames | Dump all frames from a video clip |
-| av.filmstrip | Video filmstrip sheet |
-| av.join    | Join multiple media files |
-| av.split   | Split media file in multiple segments |
-| av.tag     | Read/write media metadata tags |
-| av.to_anim | Turn a video segment into an animated GIF/WebP |
-| av.trim    | Trim a media file |
-| av.video_crop | Crop a video by trimming its edges |
-| av.volume  | Adjust audio volume, normalize, or apply fade-in/out |
-| downloads.download | Download media from a URL (YouTube, Vimeo, etc.) |
-| formats.convert_audio | Convert audio |
-| formats.convert_image | Convert image |
-| formats.convert_tabular | Convert tabular |
-| formats.convert_video | Convert video |
-| sitemaps.status_check | Check HTTP status and response times for every URL in a sitemap |
-| lora.export_captions | Export captions to JSON |
-| lora.import_captions | Import captions from JSON |
-| lora.renumber | Renumber LoRA dataset images |
-| lora.validate | Validate a LoRA training dataset |
-| telegram.chat_analysis | Generate a descriptive-analytics report (JSON + PDF + charts) from a Telegram personal-chat export |
+27 scripts across 9 categories. Titles are the scripts' own `TITLE` values.
+
+| Script | What it does |
+|--------|--------------|
+| `av.dump_frames` | Dump all frames from a video clip |
+| `av.filmstrip` | Video filmstrip sheet |
+| `av.join` | Join multiple media files |
+| `av.split` | Split media file in multiple segments |
+| `av.tag` | Read/write media metadata tags |
+| `av.to_anim` | Turn a video segment into an animated GIF/WebP |
+| `av.trim` | Trim the media file that's just too damn long |
+| `av.video_crop` | Crop a video by trimming its edges |
+| `av.volume` | Adjust audio volume, normalize, or apply fade-in/out |
+| `downloads.download` | Download media from a URL (YouTube, Vimeo, etc.) |
+| `formats.convert_audio` | Convert audio |
+| `formats.convert_docs` | Convert documents |
+| `formats.convert_image` | Convert image (HEIC/HEIF in, PNG/JPEG/WebP out) |
+| `formats.convert_tabular` | Tabular Data: .csv, .json, .xlsx, .ods, .tsv |
+| `formats.convert_video` | Convert video |
+| `gif.make_gif` | Make a gif |
+| `lora.export_captions` | Export captions to JSON |
+| `lora.import_captions` | Import captions from JSON |
+| `lora.renumber` | Renumber LoRA dataset images |
+| `lora.validate` | Validate a LoRA training dataset |
+| `photo.remove_bg` | Remove background |
+| `sitemaps.status_check` | Sitemap Status Check |
+| `speech.transcribe` | Transcribe audio to text |
+| `telegram.chat_analysis` | Analyze your Telegram chat history and generate a report full of insights |
+| `telegram.embed_messages` | Embed preprocessed Telegram messages |
+| `telegram.group_analysis` | Analyze a Telegram group chat and generate a visual analytics report |
+| `telegram.preprocess` | Preprocess Telegram export for embeddings |
 
 
 ## How To Use: CLI Examples
@@ -290,7 +325,19 @@ uv run main.py av.trim input.mp4 1:03 5:04 --output cut.mp4
 
 # Accept a keyframe-snapped cut rather than re-encoding for an exact one
 uv run main.py av.trim input.mp4 00:03 --mode fast
+
+# Remove a background with the default preset, or the slow high-quality one
+uv run main.py photo.remove_bg portrait.heic
+uv run main.py photo.remove_bg portrait.jpg --preset hq
+
+# Not sure which model suits the photo? Run all three and compare the outputs
+uv run main.py photo.remove_bg photos/ --all-presets
 ```
+
+`photo.remove_bg` presets are named for cost, not quality — `fast` (u2net),
+`balanced` (isnet-general-use with mask clean-up) and `hq` (birefnet-general-lite
+with alpha matting) — because no model wins on every image. `--all-presets`
+writes `fast_…`, `balanced_…` and `hq_…` side by side so you can pick by eye.
 
 `av.trim` cuts where you asked. A stream copy can only start at a keyframe, so
 when the nearest one is not close enough to your start time, the video is

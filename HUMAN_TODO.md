@@ -56,7 +56,7 @@ renders a single icon in a lavender rounded square, which is fine — this is
 polish, not a gap.
 
 - [ ] No search results
-- [ ] No favourites (once favourites exist)
+- [ ] No favourites
 - [ ] No compatible scripts after a file drop
 - [ ] Generic "file dropped" mark
 
@@ -70,7 +70,8 @@ could not be verified there and need a human with the app actually open.
 - [ ] **The 20 new glyphs.** The PNG sweep replaced every raster icon with
       inline SVG drawn to the 16×16 house spec, but no renderer was available to
       look at them. Structure is checked by `tests/webapp/test_icons.py`;
-      *appearance* is not. Worth one pass down the sidebar (all 16 themes) and
+      *appearance* is not. Worth one pass down the sidebar (the 9 themes that
+      have scripts; empty theme folders are not listed) and
       one file drop of each category, in both light and dark. The three sizes to
       judge are 14px (sidebar), 24px (wheel card) and 72px (file chip) — the
       last uses a lighter stroke and is the most likely to look wrong.
@@ -89,7 +90,9 @@ could not be verified there and need a human with the app actually open.
       pywebview desktop wrapper, where `app.state.webview_window` is set. In dev
       and in Chromium `--app` mode it returns 501 and the button renders
       disabled with an explanatory tooltip — that path is verified. The actual
-      native folder dialog is not.
+      native folder dialog is not, and it can only be checked on macOS or
+      Linux: pywebview is not used on Windows at all, so there the button is
+      always disabled.
 - [ ] **macOS and Linux.** All verification was on Windows. Font rendering,
       the tray icon, the folder dialog, and run cancellation are the likely
       divergences.
@@ -100,8 +103,9 @@ could not be verified there and need a human with the app actually open.
       in the frozen build. What could not be verified without a
       human at the machine is the actual interaction — close the window and
       confirm the app stays resident, then use the tray's "Show Scriptorium" to
-      bring it back and "Quit" to exit. pywebview's native window still fails to
-      start in the frozen build; see BACKLOG.md.
+      bring it back and "Quit" to exit. pywebview is not used on Windows (see
+      "pywebview cannot start in the frozen Windows app" in BACKLOG.md's Settled
+      section), so this is always the Chromium tier there.
 - [ ] **POSIX run cancellation.** The Windows path is verified end to end — a
       real ffmpeg transcode was started through the UI and cancelled, and the
       ffmpeg process count went from 1 to 0 rather than being orphaned. The
