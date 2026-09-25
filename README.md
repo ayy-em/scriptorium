@@ -135,7 +135,7 @@ and reloading the page clears it without a restart.
 | `av.*`, `formats.convert_{audio,video}` | **ffmpeg** and **ffprobe** on `PATH` | Those scripts fail; everything else is unaffected |
 | `formats.convert_docs` | **pandoc** on `PATH` | Document conversion fails |
 | Telegram PDF reports | **pango, cairo, glib** — Homebrew on macOS, MSYS2 or the GTK3 runtime on Windows | PDF output fails; the other Telegram scripts are unaffected |
-| `speech.transcribe` | `OPENAI_API_KEY` in a `.env` file | The script errors out |
+| `speech.transcribe` | An OpenAI API key — paste it under **Settings → Keys** (stored in `~/scriptorium/.env`), or set `OPENAI_API_KEY` in a `.env` file | The script errors out |
 | `photo.remove_bg` | Model weights, ~170MB per model (~215MB for the `hq` preset's `birefnet-general-lite`, ~950MB for `birefnet-general`) | Downloaded to `~/.u2net/` on first use of each model; the form says so before you run, and the status bar shows the download |
 
 Two more are optional — reported, but nothing breaks without them: **gifsicle**
@@ -315,6 +315,9 @@ run_fn(export, Path("inputs"), Path("outputs/lora/captions.json"))
 - **`photo.remove_bg` presets** — `--quality` is now `--preset fast|balanced|hq`, named for cost rather than quality because no model wins on every image; `--all-presets` runs all three over the same inputs for side-by-side comparison
 - **Model downloads are visible** — the form says which weights a run will fetch and how big they are; the status bar shows the download instead of a run that looks hung
 - **`av.join` respects the output container** — WebM output gets Opus audio, a copied codec the container cannot hold forces a re-encode, and a re-encode that WebM cannot hold is written as MP4 with a note
+- **API keys in Settings** — paste the OpenAI key under Settings → Keys instead of editing a `.env` file; it is stored per user, never shown again, and the sidebar clears at once
+- **HEIC in, PNG/JPEG out** — `formats.convert_image` and `photo.remove_bg` read iPhone and Android HEIC/HEIF photos; a Live Photo converts to its still frame, and EXIF orientation is baked in so portraits stay upright
+- **`av.trim` plays a dropped file** — the play button now works for a file that arrived through the drop overlay, not only one picked on the page
 - **UI** — thin scrollbars that appear only while scrolling, more contrast between dark-mode surfaces, search icon no longer overlaps its placeholder, the shortcut badge reads Ctrl K off macOS, and static assets revalidate so a new build never shows an old stylesheet
 
 ### v0.5.3

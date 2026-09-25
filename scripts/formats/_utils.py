@@ -10,7 +10,7 @@ _ARCHIVE_THEME = "formats"
 
 VIDEO_EXTS = frozenset({".mp4", ".mkv", ".mov", ".avi", ".webm", ".m4v", ".flv"})
 AUDIO_EXTS = frozenset({".mp3", ".wav", ".aac", ".flac", ".ogg", ".m4a", ".wma", ".opus"})
-IMAGE_EXTS = frozenset({".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp", ".tiff", ".tif"})
+IMAGE_EXTS = frozenset({".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp", ".tiff", ".tif", ".heic", ".heif"})
 TABULAR_EXTS = frozenset({".csv", ".tsv", ".xlsx", ".ods", ".json"})
 
 QUALITY_PRESETS: dict[str, dict[str, str]] = {

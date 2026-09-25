@@ -14,7 +14,7 @@ import urllib.request
 import uuid
 
 from fastapi import FastAPI, HTTPException, Request, UploadFile
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -23,7 +23,7 @@ from core.categories import CATEGORY_EXTS, categorize
 from core.config import UserConfig, clean_favourites, clean_sort_order
 from core.config import load as load_config
 from core.config import save as save_config
-from core.env import load_env
+from core.env import load_env, set_env_value
 from core.invocation import webapp_spawn_env
 from core.outputs import find_reported_outputs
 from core.paths import (
@@ -613,6 +613,32 @@ async def waveform(path: str, buckets: int = 900) -> JSONResponse:
     return JSONResponse(result.as_dict())
 
 
+@app.get("/api/staged-input")
+async def staged_input(path: str) -> FileResponse:
+    """Hand a staged input file back to the page that staged it.
+
+    Exists for ``av.trim``'s play button on a file that arrived by drop
+    prefill: the page never held a ``File`` for it, so the only way to decode
+    it for playback is to fetch it. Same containment rule as the waveform
+    endpoint — only files under the shared inputs root are served, so a page
+    that can reach localhost cannot read the rest of the disk through this.
+
+    Args:
+        path: Server-side path of a staged input file.
+
+    Returns:
+        The file, for the browser to decode.
+
+    Raises:
+        HTTPException: 400/403/404 when the path is not a staged input.
+    """
+    try:
+        target = _waveform.resolve_staged_input(path, inputs_dir("av"))
+    except _waveform.StagedInputError as e:
+        raise HTTPException(status_code=e.status, detail=str(e))
+    return FileResponse(target, headers={"Cache-Control": "no-store"})
+
+
 def _webview_window(request: Request):  # noqa: ANN201
     """Return the pywebview window backing this app, if there is one.
 
@@ -643,6 +669,56 @@ async def get_settings(request: Request) -> JSONResponse:
             "browse_supported": _webview_window(request) is not None,
         }
     )
+
+
+@app.get("/api/keys")
+async def get_keys() -> JSONResponse:
+    """List the keys the app can hold, and whether each is set.
+
+    Values never leave the server: the modal shows "set" or "not set" and a
+    blank field. Driven by the capability registry, so a new configure-remedy
+    capability gets a field without UI work.
+
+    Returns:
+        JSON with ``keys``: one entry per configure-remedy capability.
+    """
+    keys = [
+        {
+            "name": c.name,
+            "label": c.label,
+            "env_var": c.env_var,
+            "needed_for": c.needed_for,
+            "is_set": c.present,
+        }
+        for c in capabilities.probe_all()
+        if c.remedy == capabilities.REMEDY_CONFIGURE and c.env_var
+    ]
+    return JSONResponse({"keys": keys})
+
+
+@app.post("/api/keys")
+async def post_key(request: Request) -> JSONResponse:
+    """Store or clear one key in the user ``.env``.
+
+    Args:
+        request: JSON body with ``name`` (a capability name) and ``value``;
+            an empty value clears the key.
+
+    Returns:
+        JSON with ``is_set`` after the write.
+
+    Raises:
+        HTTPException: 404 when the name is not a key the app manages.
+    """
+    body = await request.json()
+    name = str(body.get("name", ""))
+    capability = capabilities.probe(name)
+    if capability is None or capability.remedy != capabilities.REMEDY_CONFIGURE or not capability.env_var:
+        raise HTTPException(status_code=404, detail=f"No such key {name!r}")
+    set_env_value(capability.env_var, str(body.get("value", "")))
+    capabilities.invalidate()
+    refreshed = capabilities.probe(name)
+    return JSONResponse({"is_set": bool(refreshed and refreshed.present)})
 
 
 @app.post("/api/browse-folder")

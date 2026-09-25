@@ -11,7 +11,7 @@
     {{ icon('info', 16) }}
     <div class="capability-banner-text">
       <strong>This script needs {{ need.label }}</strong>, which is not installed.
-      {% if need.command %}Install it here, then run as normal.{% else %}<code>{{ need.hint }}</code>{% endif %}
+      {% if need.command %}Install it here, then run as normal.{% elif need.env_var %}Paste it under Settings → Keys, then run as normal.{% else %}<code>{{ need.hint }}</code>{% endif %}
     </div>
     {% if need.command %}
     <button type="button"
@@ -20,6 +20,9 @@
             :disabled="state === 'running' || state === 'done'"
             @click="start()"
             x-text="buttonLabel()">Install</button>
+    {% elif need.env_var %}
+    <button type="button" class="btn btn--primary btn--sm dependency-install"
+            @click="$store.ui.openSettings()">Set key</button>
     {% else %}
     {{ soon_button('Install', cls='btn-soon--sm') }}
     {% endif %}

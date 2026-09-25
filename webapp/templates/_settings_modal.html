@@ -117,6 +117,48 @@
         <p class="settings-error" x-show="$store.ui.browseError" x-text="$store.ui.browseError" x-cloak></p>
       </section>
 
+      <!-- API keys. Saved on their own button, not with the form: the value
+           is written to ~/scriptorium/.env the moment it is confirmed, and
+           the field is cleared so nothing secret lingers on screen. -->
+      <section class="settings-group" x-show="$store.ui.keys.length" x-cloak>
+        <h3 class="settings-group-title">Keys</h3>
+        <p class="settings-group-hint">Stored in <code>~/scriptorium/.env</code> on this machine only.
+          A key is never shown again once saved.</p>
+        <template x-for="key in $store.ui.keys" :key="key.name">
+          <div class="key-row">
+            <div class="key-row-head">
+              <label class="key-row-label" :for="'key-' + key.name" x-text="key.label"></label>
+              <span class="key-row-state" :class="{ 'is-set': key.is_set }"
+                    x-text="key.is_set ? 'Set' : 'Not set'"></span>
+            </div>
+            <p class="key-row-need" x-text="key.needed_for"></p>
+            <div class="input-group">
+              <input type="password" class="input input--mono"
+                     :id="'key-' + key.name"
+                     :placeholder="key.is_set ? 'Paste a new value to replace it' : key.env_var + '=…'"
+                     x-model="$store.ui.keyDrafts[key.name]"
+                     autocomplete="off" spellcheck="false"
+                     @keydown.enter.prevent="$store.ui.saveKey(key.name)">
+              <button type="button" class="btn btn--secondary"
+                      @click="$store.ui.saveKey(key.name)"
+                      :disabled="$store.ui.keyStatus[key.name] === 'saving' || !($store.ui.keyDrafts[key.name] || '').trim()">
+                {{ icon('save', 15) }}
+                <span>Save</span>
+              </button>
+              <button type="button" class="btn btn--ghost"
+                      x-show="key.is_set"
+                      @click="$store.ui.keyDrafts[key.name] = ''; $store.ui.saveKey(key.name)"
+                      :disabled="$store.ui.keyStatus[key.name] === 'saving'">
+                <span>Clear</span>
+              </button>
+            </div>
+            <p class="key-row-status" x-show="$store.ui.keyStatus[key.name]" x-cloak
+               :class="{ 'is-error': $store.ui.keyStatus[key.name] === 'error' }"
+               x-text="{ saving: 'Saving…', saved: 'Saved.', cleared: 'Cleared.', error: 'Could not save the key.' }[$store.ui.keyStatus[key.name]]"></p>
+          </div>
+        </template>
+      </section>
+
       <hr class="settings-divider">
 
       <!-- Support / about -->

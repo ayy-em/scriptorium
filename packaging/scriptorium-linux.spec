@@ -46,6 +46,9 @@ def _metadata(package):
 # is reachable by static analysis, and core.registry silently skips any script
 # whose imports fail — so without these, remove_bg vanishes with no error.
 rembg_datas, rembg_binaries, rembg_hidden = _collect("rembg")
+# pillow-heif carries libheif and its codecs as binaries in the wheel; without
+# collecting them a .heic opens in development and fails in the bundle.
+heif_datas, heif_binaries, heif_hidden = _collect("pillow_heif")
 ort_datas, ort_binaries, ort_hidden = _collect("onnxruntime")
 
 
@@ -92,7 +95,7 @@ hidden_imports = collect_submodules("scripts") + collect_submodules("core") + [
     # Reached only through numpy's lazy __getattr__, so static analysis misses it.
     "numpy.testing",
 ]
-hidden_imports += wp_hidden + rembg_hidden + ort_hidden
+hidden_imports += wp_hidden + rembg_hidden + ort_hidden + heif_hidden
 
 datas = [
     (str(ROOT / "webapp" / "templates"), "webapp/templates"),
@@ -101,13 +104,13 @@ datas = [
     (str(ROOT / "scripts" / "telegram" / "templates"), "scripts/telegram/templates"),
     (str(ROOT / "pyproject.toml"), "."),
 ]
-datas += wp_datas + rembg_datas + ort_datas
+datas += wp_datas + rembg_datas + ort_datas + heif_datas
 datas += _metadata("rembg")
 
 a = Analysis(
     [str(ROOT / "packaging" / "entrypoint.py")],
     pathex=[str(ROOT)],
-    binaries=wp_binaries + rembg_binaries + ort_binaries,
+    binaries=wp_binaries + rembg_binaries + ort_binaries + heif_binaries,
     datas=datas,
     hiddenimports=hidden_imports,
     hookspath=[],

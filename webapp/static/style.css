@@ -2556,6 +2556,23 @@ html.dark .dependency-banner-title {
   color: var(--text-muted);
 }
 
+/* Settings → Keys -------------------------------------------------------- */
+.key-row { display: flex; flex-direction: column; gap: 0.35rem; margin-top: 0.75rem; }
+.key-row-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+.key-row-label { font-size: var(--fs-body); font-weight: 600; color: var(--text); }
+.key-row-state {
+  font-size: var(--fs-badge);
+  font-weight: 600;
+  padding: 0.1rem 0.5rem;
+  border-radius: var(--r-pill);
+  background: var(--bg-hover);
+  color: var(--text-faint);
+}
+.key-row-state.is-set { background: var(--green-bg); color: var(--green); }
+.key-row-need { font-size: var(--fs-helper); color: var(--text-muted); }
+.key-row-status { font-size: var(--fs-helper); color: var(--green); }
+.key-row-status.is-error { color: var(--red); }
+
 /* Missing-dependency banner on a detail page ------------------------------ */
 .capability-banner {
   display: flex;

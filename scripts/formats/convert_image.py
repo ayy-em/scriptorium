@@ -4,9 +4,10 @@ import argparse
 from pathlib import Path
 import sys
 
-from PIL import Image
+from PIL import Image, ImageOps
 
 from core.argparse import ScriptoriumParser
+from core.images import ensure_image_formats
 from core.outputs import resolve_output_dir, resolve_single_output
 from scripts.formats._utils import (
     IMAGE_EXTS,
@@ -18,6 +19,9 @@ from scripts.formats._utils import (
 TITLE = "Convert image"
 DESCRIPTION = "Convert images to a different format using Pillow."
 ACCEPTS: set[str] = {"image"}
+
+# Read-only for HEIC: iPhone and Android photos come in, PNG/JPEG go out.
+# A Live Photo converts to its still frame; the motion track is dropped.
 
 _IMAGE_OUT_FORMATS = ["jpg", "png", "webp", "gif", "bmp", "tiff"]
 _QUALITY_EXTS = frozenset({".jpg", ".jpeg", ".webp"})
@@ -32,7 +36,12 @@ def _convert(input_path: Path, output: Path, quality: int) -> None:
         output: Destination image file.
         quality: JPEG/WebP quality (1–100). Ignored for lossless formats.
     """
+    ensure_image_formats()
     img = Image.open(input_path)
+    # Bake the EXIF orientation into the pixels. The target may carry no EXIF
+    # at all (PNG, BMP), and HEIC in particular relies on the tag for every
+    # portrait shot — without this an upright photo comes out on its side.
+    img = ImageOps.exif_transpose(img)
     if output.suffix.lower() in _NEEDS_RGB and img.mode in {"RGBA", "LA", "P"}:
         img = img.convert("RGB")
     kwargs = {"quality": quality} if output.suffix.lower() in _QUALITY_EXTS else {}

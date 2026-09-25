@@ -23,7 +23,9 @@ scriptorium/
 │   ├── capabilities.py      # external dependencies: one probe, one value type
 │   ├── config.py            # user settings persistence (UserConfig, load, save)
 │   ├── history.py           # run history persistence (RunRecord, load, append)
-│   ├── env.py               # centralized .env loading
+│   ├── downloads.py         # pooch progress → ProgressReporter, for model weights
+│   ├── env.py               # .env loading, plus the user .env the app writes keys to
+│   ├── images.py            # registers the HEIF opener so Pillow reads .heic
 │   ├── invocation.py        # who started this run — webapp or a human
 │   ├── native_libs.py       # cffi dlopen fallback for pango/cairo/glib
 │   ├── outputs.py           # standardized output path resolution
@@ -257,6 +259,8 @@ from an older build indefinitely. ETag revalidation makes the usual cost a 304.
 | `GET /api/update-check` | compare against the latest GitHub release |
 | `GET /api/capabilities/{name}/install` | run a missing dependency's install command, output streamed as SSE |
 | `GET /api/model-weights/{theme}/{script_name}` | which model weights the current form state would download; only for scripts exposing `models_for_args` |
+| `GET`/`POST /api/keys` | list the API keys the app manages (set / not set, never the value) and store or clear one in `~/scriptorium/.env` |
+| `GET /api/staged-input` | stream a staged input back to the page, for `av.trim` playback of a prefilled file; same containment rule as `/api/waveform` |
 
 `preview-command` shares `webapp._form.build_argv` with the run endpoint, so the
 previewed command cannot drift from what actually executes. It quotes with
@@ -897,6 +901,15 @@ Four rules worth not rediscovering:
   (`capability_for_script`), and a fourth onboarding slide rendered only while
   ffmpeg is missing. ffmpeg is deliberately **not bundled** — see HUMAN_TODO.md
   item 1 and the Settled backlog entry for why.
+- **A configure remedy is a key, and keys are typed in, not installed.** A
+  capability with `env_var` set (`openai-key` → `OPENAI_API_KEY`) renders a
+  "Set key" button that opens Settings → Keys. The value goes through
+  `core.env.set_env_value` into `~/scriptorium/.env` — the install directory
+  is read-only for the packaged app, and `config.json` is not a secrets store
+  — and into the process, then the probe cache is dropped. `/api/keys` reports
+  set / not set and never returns a value; the field clears itself after
+  saving. `load_env()` reads the repo `.env` first and the user one second,
+  so a developer's file wins.
 
 The script→capability map lives here, keyed by dotted key first and theme
 second. It is deliberately *not* merged with `webapp/_badges.py`'s tool map,

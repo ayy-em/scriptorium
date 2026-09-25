@@ -2,17 +2,51 @@
 
 from unittest.mock import MagicMock, patch
 
+from PIL import Image
 import pytest
 
-from scripts.formats._utils import BatchConvertError
-from scripts.formats.convert_image import convert
+from core.images import ensure_image_formats
+from scripts.formats._utils import IMAGE_EXTS, BatchConvertError
+from scripts.formats.convert_image import _convert, convert
 
 
 def _mock_image(mode="RGB"):
     img = MagicMock()
+    # exif_transpose hands back a copy when there is nothing to rotate.
+    img.copy.return_value = img
     img.mode = mode
     img.convert.return_value = img
     return img
+
+
+def test_heic_is_an_accepted_input():
+    assert {".heic", ".heif"} <= IMAGE_EXTS
+
+
+def test_heic_opens_through_pillow(tmp_path):
+    """pillow-heif registers an opener; a real .heic then round-trips to PNG."""
+    pillow_heif = pytest.importorskip("pillow_heif")
+    ensure_image_formats()
+    src = tmp_path / "photo.heic"
+    heif = pillow_heif.from_pillow(Image.new("RGB", (8, 4), (200, 30, 30)))
+    heif.save(src)
+    out = tmp_path / "photo.png"
+    _convert(src, out, quality=90)
+    with Image.open(out) as img:
+        assert img.size == (8, 4)
+
+
+def test_exif_orientation_is_baked_in(tmp_path):
+    """A portrait shot stored sideways with an orientation tag must come out upright."""
+    src = tmp_path / "rotated.jpg"
+    img = Image.new("RGB", (8, 4))
+    exif = img.getexif()
+    exif[0x0112] = 6  # rotate 90° clockwise to display
+    img.save(src, exif=exif.tobytes())
+    out = tmp_path / "upright.png"
+    _convert(src, out, quality=90)
+    with Image.open(out) as result:
+        assert result.size == (4, 8)
 
 
 def test_convert_single_file(tmp_path):

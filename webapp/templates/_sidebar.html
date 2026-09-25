@@ -83,12 +83,15 @@
                   :disabled="state === 'running' || state === 'done'"
                   @click="start()"
                   x-text="buttonLabel()">Install</button>
+          {% elif capability.env_var %}
+          <button type="button" class="btn btn--secondary btn--sm dependency-install"
+                  @click="$store.ui.openSettings()">Set key</button>
           {% else %}
           {{ soon_button('Install', cls='btn-soon--sm') }}
           {% endif %}
         </div>
         <span class="dependency-need">{{ capability.needed_for }}</span>
-        {% if capability.hint and not capability.command %}<code>{{ capability.hint }}</code>{% endif %}
+        {% if capability.hint and not capability.command and not capability.env_var %}<code>{{ capability.hint }}</code>{% endif %}
         <pre class="dependency-log" x-show="log" x-ref="log" x-text="log" x-cloak></pre>
         <span class="dependency-note" x-show="note" x-text="note" x-cloak></span>
       </li>

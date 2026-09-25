@@ -49,6 +49,14 @@
         updateAvailable: false,
         updateUrl: '',
         latestVersion: '',
+        /* API keys the app manages, from /api/keys. Values never come back
+           from the server; each entry carries only whether it is set. Saved
+           immediately per key, outside the settings snapshot, because a
+           secret should not sit in a form waiting for a Save button. */
+        keys: [],
+        keyDrafts: {},
+        keyStatus: {},
+
         onboardingOpen: false,
         onboardingStep: 0,
         /* Set by the modal at render: 3, or 4 while ffmpeg is missing. */
@@ -172,6 +180,35 @@
           };
           this.browseError = '';
           this.settingsOpen = true;
+          this.loadKeys();
+        },
+
+        async loadKeys() {
+          try {
+            var res = await fetch('/api/keys');
+            var data = await res.json();
+            this.keys = Array.isArray(data.keys) ? data.keys : [];
+          } catch (e) { this.keys = []; }
+        },
+
+        async saveKey(name) {
+          var value = (this.keyDrafts[name] || '').trim();
+          this.keyStatus[name] = 'saving';
+          try {
+            var res = await fetch('/api/keys', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ name: name, value: value })
+            });
+            var data = await res.json();
+            var key = this.keys.find((k) => k.name === name);
+            if (key) key.is_set = !!data.is_set;
+            this.keyDrafts[name] = '';
+            this.keyStatus[name] = res.ok ? (value ? 'saved' : 'cleared') : 'error';
+          } catch (e) {
+            this.keyStatus[name] = 'error';
+          }
+          setTimeout(() => { if (this.keyStatus[name] !== 'saving') this.keyStatus[name] = ''; }, 2500);
         },
 
         cancelSettings() {

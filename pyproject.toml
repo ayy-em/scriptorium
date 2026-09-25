@@ -28,7 +28,11 @@ webapp = "webapp.app:run"
 [project.optional-dependencies]
 av        = ["ffmpeg-python>=0.2", "Pillow>=11.0"]
 downloads = ["yt-dlp>=2024.1.0"]
-photo     = ["Pillow>=11.0", "rembg>=2.0"]
+photo     = [
+    "Pillow>=11.0",
+ "pillow-heif>=1.8.0",
+ "rembg>=2.0",
+]
 sitemaps  = ["requests>=2.32"]
 tabular   = ["pandas>=2.2", "openpyxl>=3.1"]
 telegram  = [

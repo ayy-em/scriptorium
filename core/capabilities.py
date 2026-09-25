@@ -67,6 +67,8 @@ class Capability:
             argv, already resolved for this platform. Empty when the fix is
             not a single unattended command — pango on Windows, anything
             needing sudo, a key to configure.
+        env_var: For a configure remedy, the environment variable the value
+            lives in, so the settings modal can offer a field for it.
     """
 
     name: str
@@ -77,6 +79,7 @@ class Capability:
     needed_for: str
     hint: str = ""
     command: tuple[str, ...] = ()
+    env_var: str = ""
 
 
 def _probe_binary(*names: str) -> Callable[[], bool]:
@@ -141,6 +144,7 @@ class _Spec:
     probe: Callable[[], bool]
     hints: dict[str, str]
     commands: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    env_var: str = ""
 
 
 def _hint_for(hints: dict[str, str]) -> str:
@@ -272,7 +276,8 @@ _SPECS: tuple[_Spec, ...] = (
         required=True,
         needed_for="Speech transcription",
         probe=_probe_openai_key,
-        hints={"": "Put OPENAI_API_KEY=… in your .env file."},
+        hints={"": "Paste the key under Settings → Keys, or put OPENAI_API_KEY=… in your .env file."},
+        env_var="OPENAI_API_KEY",
     ),
 )
 
@@ -354,6 +359,7 @@ def _build(spec: _Spec) -> Capability:
         needed_for=spec.needed_for,
         hint=_hint_for(spec.hints),
         command=_command_for(spec.commands),
+        env_var=spec.env_var,
     )
 
 

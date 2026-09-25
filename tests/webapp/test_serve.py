@@ -327,6 +327,93 @@ class TestDetailCapabilityBanner:
         assert 'data-soon="Coming soon!"' in body
 
 
+class TestKeysEndpoints:
+    """Keys are written to the user .env and never read back out."""
+
+    @pytest.fixture(autouse=True)
+    def _isolate_env(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("core.env.user_env_path", lambda: tmp_path / ".env")
+        monkeypatch.setattr("core.env._repo_root", lambda: tmp_path)
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        capabilities.invalidate()
+        yield
+        capabilities.invalidate()
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+
+    def test_lists_configure_capabilities_without_values(self, monkeypatch):
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-secret")
+        data = client.get("/api/keys").json()
+        names = [k["name"] for k in data["keys"]]
+        assert "openai-key" in names
+        assert "ffmpeg" not in names
+        entry = next(k for k in data["keys"] if k["name"] == "openai-key")
+        assert entry["env_var"] == "OPENAI_API_KEY"
+        assert entry["is_set"] is True
+        assert "sk-secret" not in json.dumps(data)
+
+    def test_saving_a_key_makes_the_capability_present(self, tmp_path):
+        assert client.get("/api/keys").json()["keys"][0]["is_set"] is False
+        response = client.post("/api/keys", json={"name": "openai-key", "value": "sk-new"})
+        assert response.json() == {"is_set": True}
+        assert "OPENAI_API_KEY=sk-new" in (tmp_path / ".env").read_text(encoding="utf-8")
+        assert capabilities.probe("openai-key").present is True
+
+    def test_clearing_a_key(self, tmp_path):
+        client.post("/api/keys", json={"name": "openai-key", "value": "sk-new"})
+        response = client.post("/api/keys", json={"name": "openai-key", "value": ""})
+        assert response.json() == {"is_set": False}
+        assert "OPENAI_API_KEY" not in (tmp_path / ".env").read_text(encoding="utf-8")
+
+    def test_only_managed_keys_can_be_written(self):
+        assert client.post("/api/keys", json={"name": "ffmpeg", "value": "x"}).status_code == 404
+        assert client.post("/api/keys", json={"name": "nope", "value": "x"}).status_code == 404
+
+    def test_sidebar_offers_the_settings_modal_for_a_key(self):
+        absent = capabilities.Capability(
+            name="openai-key",
+            label="OpenAI API key",
+            present=False,
+            remedy=capabilities.REMEDY_CONFIGURE,
+            required=True,
+            needed_for="Speech transcription",
+            hint="hint",
+            env_var="OPENAI_API_KEY",
+        )
+        with patch.object(capabilities, "missing", return_value=(absent,)):
+            body = client.get("/").text
+        assert "Set key" in body
+        assert 'data-soon="Coming soon!"' not in body.split('class="dependency-banner"')[1].split("</ul>")[0]
+
+
+class TestStagedInputEndpoint:
+    """Serves a staged file back for playback; refuses everything else."""
+
+    def test_serves_a_file_under_the_inputs_root(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("webapp.app.inputs_dir", lambda theme: tmp_path)
+        staged = tmp_path / "clip.wav"
+        staged.write_bytes(b"RIFF....")
+        response = client.get("/api/staged-input", params={"path": str(staged)})
+        assert response.status_code == 200
+        assert response.content == b"RIFF...."
+        assert response.headers["cache-control"] == "no-store"
+
+    def test_refuses_a_path_outside_the_inputs_root(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("webapp.app.inputs_dir", lambda theme: tmp_path / "inputs")
+        (tmp_path / "inputs").mkdir()
+        secret = tmp_path / "secret.txt"
+        secret.write_text("no")
+        assert client.get("/api/staged-input", params={"path": str(secret)}).status_code == 403
+
+    def test_missing_file_is_404(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("webapp.app.inputs_dir", lambda theme: tmp_path)
+        assert client.get("/api/staged-input", params={"path": str(tmp_path / "gone.wav")}).status_code == 404
+
+    def test_trim_page_fetches_playback_for_a_prefilled_file(self):
+        body = client.get("/scripts/av/trim").text
+        assert "/api/staged-input?path=" in body
+        assert "this._loadPlayback(filePath)" in body
+
+
 class TestInstallEndpoint:
     def _capability(self, command):
         return capabilities.Capability(

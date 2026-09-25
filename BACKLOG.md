@@ -5,108 +5,7 @@ Deferred work with enough context to pick up cold.
 Everything above the **Settled** heading is open work. Below it are closed
 entries, kept because the reasoning is worth not having to reconstruct.
 
-## Install buttons for dependencies without an unattended command
-
-**Status:** open (2026-09-24).
-
-The sidebar's dependency banner runs `capability.command` when the user clicks
-Install (`GET /api/capabilities/{name}/install`, see SPEC.md). Three cases have
-no command and render the disabled "Coming soon!" button instead:
-
-- **pango on Windows.** Needs MSYS2 then `pacman`, or the GTK3 runtime; neither
-  is one unattended command. Bundling the stack was considered and dropped on
-  2026-09-24 (three native dependency graphs to lay out, dylib re-signing on
-  macOS, for an audience of one who already has MSYS2). HUMAN_TODO.md carries
-  the exact command that installs it where the packaged app looks.
-- **OpenAI API key.** A configure remedy, not an install — see "API keys from
-  the settings modal" below.
-- **Linux.** `apt` needs sudo, which a background process cannot supply. Options
-  are a `pkexec` prompt or just keeping the hint.
-
-## API keys from the settings modal
-
-**Status:** open (2026-09-24).
-
-`speech.transcribe` needs `OPENAI_API_KEY`, and today the only way to provide
-it is a `.env` file — which means a user of the packaged app has to find the
-right directory and edit a dotfile by hand. That is the one remaining
-dependency with no in-app remedy.
-
-**What to build:** a "Keys" section in the settings modal with one masked
-field per key the capability registry knows about (`remedy=REMEDY_CONFIGURE`,
-so new keys appear without UI work). Saving writes the value through
-`core.env` into the same `.env` the app already loads, then calls
-`capabilities.invalidate()` so the sidebar clears on the next render. Show
-"set" / "not set", never the value. The sidebar entry and the script-page
-banner for a configure-remedy capability should open this section instead of
-the disabled "Coming soon!" button they render now.
-
-**Constraints:** the key must never reach the browser after saving, never be
-logged, and never be echoed in the CLI command preview. Keep it out of
-`UserConfig` — that file is not a secrets store — and write `.env` with
-user-only permissions where the platform supports it.
-
-## HEIC support in formats.convert_image
-
-**Status:** open (2026-09-20). Requested, not yet built.
-
-`formats.convert_image` handles `.jpg .jpeg .png .webp .gif .bmp .tiff .tif` and
-nothing else, which means the format every iPhone and every modern Android
-camera actually writes — HEIC/HEIF — cannot be converted to a PNG or JPEG here
-at all. It is the single most likely thing to be dropped on the app and
-bounced.
-
-**What it needs:**
-
-- A decoder. Pillow does not read HEIC out of the box; the usual answer is
-  [`pillow-heif`](https://pypi.org/project/pillow-heif/), which registers an
-  opener with Pillow so the existing `convert_image` code path works unchanged
-  once `register_heif_opener()` has been called. The alternative is shelling
-  out to ffmpeg or `libheif`'s `heif-convert`, which avoids a dependency but
-  loses EXIF handling and adds a second conversion mechanism for one format.
-- `.heic` and `.heif` added to `IMAGE_EXTS` in `scripts/formats/_utils.py`,
-  which also puts them in `core.categories.CATEGORY_EXTS["image"]` and so into
-  Drop-to-Discover and every image script's `accept` attribute for free.
-- A `core.capabilities` entry if the ffmpeg route is taken, or an optional
-  dependency group if `pillow-heif` is. Prefer the dependency: HEIC decoding
-  that works only when a system library happens to be installed is the failure
-  mode `core.capabilities` exists to make visible, and a wheel avoids it
-  entirely.
-
-**Decisions to make first:**
-
-- **Direction.** Read-only (HEIC in, PNG/JPEG out) covers the actual complaint.
-  Writing HEIC is possible with the same library but nobody has asked for it,
-  and it would need a target-format entry in the UI.
-- **Live Photos.** A HEIC from an iPhone can hold multiple images plus a motion
-  track. Converting silently yields the primary image, which is almost always
-  what is wanted — but it should be *stated*, not discovered.
-- **Rotation.** HEIC leans on EXIF orientation more than JPEG does. Whatever
-  lands has to check that a portrait photo stays portrait, which is the classic
-  way this goes wrong.
-- **`photo.remove_bg`** gets HEIC support for free via `IMAGE_EXTS`, and should
-  be checked rather than assumed.
-
-Worth doing: it is a small, well-bounded change with an obvious user, and the
-extension set is already centralised in one place.
-
-## Playback for a prefilled file in av.trim
-
-**Status:** open (2026-09-20). Cosmetic gap left by the waveform move.
-
-The `av.trim` waveform now comes from `GET /api/waveform`, so it draws for any
-file ffmpeg can read, including one arriving from the global drop overlay. The
-**play button** did not make the same trip: it still needs a browser-decodable
-`AudioBuffer`, which only exists on the upload path where the page holds a
-`File`. A prefilled file therefore gets a full waveform, working time fields
-and no play button.
-
-Closing this needs an endpoint that streams a staged input back to the page so
-it can be decoded (or fed to an `<audio>` element, which would also fix the
-MP3-in-Chromium case for playback). That is a second "server hands a local file
-to the page" surface, and it wants the same `resolve_staged_input` containment
-check the waveform endpoint uses — worth doing deliberately rather than as a
-footnote to this one.
+Nothing is open as of 2026-09-25.
 
 # Settled
 
@@ -238,6 +137,131 @@ Options, in rough order of preference:
 Not urgent, and not a regression: before the common-format work the same set
 wrote `.mp4` intermediates for a VP9 stream and failed one step earlier. The
 common case is MP4 in, MP4 out.
+
+## Install buttons for dependencies without an unattended command
+
+**Status:** settled (2026-09-25). The API key case is closed by "API keys
+from the settings modal" below: a configure-remedy capability now renders a
+"Set key" button that opens Settings → Keys. pango on Windows and Linux `apt`
+stay as text hints by decision — the exact pango lines are in HUMAN_TODO.md,
+and a sudo prompt is not something a background process should be driving.
+Original entry follows.
+
+The sidebar's dependency banner runs `capability.command` when the user clicks
+Install (`GET /api/capabilities/{name}/install`, see SPEC.md). Three cases have
+no command and render the disabled "Coming soon!" button instead:
+
+- **pango on Windows.** Needs MSYS2 then `pacman`, or the GTK3 runtime; neither
+  is one unattended command. Bundling the stack was considered and dropped on
+  2026-09-24 (three native dependency graphs to lay out, dylib re-signing on
+  macOS, for an audience of one who already has MSYS2). HUMAN_TODO.md carries
+  the exact command that installs it where the packaged app looks.
+- **OpenAI API key.** A configure remedy, not an install — see "API keys from
+  the settings modal" below.
+- **Linux.** `apt` needs sudo, which a background process cannot supply. Options
+  are a `pkexec` prompt or just keeping the hint.
+
+## API keys from the settings modal
+
+**Status:** settled (2026-09-25), built as described below. `core.env` gained
+`user_env_path()` (`~/scriptorium/.env`) and `set_env_value()`; `GET`/`POST
+/api/keys` are driven by capabilities with `env_var` set, so a new key needs
+only a registry entry. The modal saves per key on its own button and clears the
+field afterwards. Original entry follows.
+
+`speech.transcribe` needs `OPENAI_API_KEY`, and today the only way to provide
+it is a `.env` file — which means a user of the packaged app has to find the
+right directory and edit a dotfile by hand. That is the one remaining
+dependency with no in-app remedy.
+
+**What to build:** a "Keys" section in the settings modal with one masked
+field per key the capability registry knows about (`remedy=REMEDY_CONFIGURE`,
+so new keys appear without UI work). Saving writes the value through
+`core.env` into the same `.env` the app already loads, then calls
+`capabilities.invalidate()` so the sidebar clears on the next render. Show
+"set" / "not set", never the value. The sidebar entry and the script-page
+banner for a configure-remedy capability should open this section instead of
+the disabled "Coming soon!" button they render now.
+
+**Constraints:** the key must never reach the browser after saving, never be
+logged, and never be echoed in the CLI command preview. Keep it out of
+`UserConfig` — that file is not a secrets store — and write `.env` with
+user-only permissions where the platform supports it.
+
+## HEIC support in formats.convert_image
+
+**Status:** settled (2026-09-25). Read-only, via `pillow-heif` in the `photo`
+extra and `core/images.py`'s `ensure_image_formats()`, called by both
+`formats.convert_image` and `photo.remove_bg`. `.heic`/`.heif` joined
+`IMAGE_EXTS`, so Drop-to-Discover and every image script's `accept` list took
+them for free. EXIF orientation is baked in with `ImageOps.exif_transpose` on
+every input, which also fixes sideways JPEG-to-PNG conversions that predate
+HEIC. A Live Photo converts to its primary still; the three PyInstaller specs
+collect `pillow_heif` so the bundled libheif travels with the app. Not verified
+on a real iPhone file yet — the test round-trips a HEIC that pillow-heif
+itself wrote. Original entry follows.
+
+`formats.convert_image` handles `.jpg .jpeg .png .webp .gif .bmp .tiff .tif` and
+nothing else, which means the format every iPhone and every modern Android
+camera actually writes — HEIC/HEIF — cannot be converted to a PNG or JPEG here
+at all. It is the single most likely thing to be dropped on the app and
+bounced.
+
+**What it needs:**
+
+- A decoder. Pillow does not read HEIC out of the box; the usual answer is
+  [`pillow-heif`](https://pypi.org/project/pillow-heif/), which registers an
+  opener with Pillow so the existing `convert_image` code path works unchanged
+  once `register_heif_opener()` has been called. The alternative is shelling
+  out to ffmpeg or `libheif`'s `heif-convert`, which avoids a dependency but
+  loses EXIF handling and adds a second conversion mechanism for one format.
+- `.heic` and `.heif` added to `IMAGE_EXTS` in `scripts/formats/_utils.py`,
+  which also puts them in `core.categories.CATEGORY_EXTS["image"]` and so into
+  Drop-to-Discover and every image script's `accept` attribute for free.
+- A `core.capabilities` entry if the ffmpeg route is taken, or an optional
+  dependency group if `pillow-heif` is. Prefer the dependency: HEIC decoding
+  that works only when a system library happens to be installed is the failure
+  mode `core.capabilities` exists to make visible, and a wheel avoids it
+  entirely.
+
+**Decisions to make first:**
+
+- **Direction.** Read-only (HEIC in, PNG/JPEG out) covers the actual complaint.
+  Writing HEIC is possible with the same library but nobody has asked for it,
+  and it would need a target-format entry in the UI.
+- **Live Photos.** A HEIC from an iPhone can hold multiple images plus a motion
+  track. Converting silently yields the primary image, which is almost always
+  what is wanted — but it should be *stated*, not discovered.
+- **Rotation.** HEIC leans on EXIF orientation more than JPEG does. Whatever
+  lands has to check that a portrait photo stays portrait, which is the classic
+  way this goes wrong.
+- **`photo.remove_bg`** gets HEIC support for free via `IMAGE_EXTS`, and should
+  be checked rather than assumed.
+
+Worth doing: it is a small, well-bounded change with an obvious user, and the
+extension set is already centralised in one place.
+
+## Playback for a prefilled file in av.trim
+
+**Status:** settled (2026-09-25). `GET /api/staged-input?path=…` streams a
+staged file back under the same `resolve_staged_input` containment as the
+waveform endpoint, and the trim page's `_loadPlayback` takes either a `File`
+or a server path. MP3-in-Chromium is unchanged: the browser still has to be
+able to decode the bytes. Original entry follows.
+
+The `av.trim` waveform now comes from `GET /api/waveform`, so it draws for any
+file ffmpeg can read, including one arriving from the global drop overlay. The
+**play button** did not make the same trip: it still needs a browser-decodable
+`AudioBuffer`, which only exists on the upload path where the page holds a
+`File`. A prefilled file therefore gets a full waveform, working time fields
+and no play button.
+
+Closing this needs an endpoint that streams a staged input back to the page so
+it can be decoded (or fed to an `<audio>` element, which would also fix the
+MP3-in-Chromium case for playback). That is a second "server hands a local file
+to the page" surface, and it wants the same `resolve_staged_input` containment
+check the waveform endpoint uses — worth doing deliberately rather than as a
+footnote to this one.
 
 ## Runtime dependencies needed one coherent story
 

@@ -6,10 +6,11 @@ from pathlib import Path
 import sys
 from typing import Any
 
-from PIL import Image
+from PIL import Image, ImageOps
 
 from core.argparse import ScriptoriumParser
 from core.downloads import reporting_downloads
+from core.images import ensure_image_formats
 from core.outputs import deduplicate, default_stem, resolve_output, resolve_output_dir
 from core.paths import inputs_dir, move_to_past_inputs
 from scripts.formats._utils import IMAGE_EXTS, find_files, single_source
@@ -248,7 +249,8 @@ def remove_bg(  # noqa: PLR0913
     if session is None:
         session = _load_session(model)
 
-    img = Image.open(source)
+    ensure_image_formats()
+    img = ImageOps.exif_transpose(Image.open(source))
     result = remove(
         img,
         session=session,

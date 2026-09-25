@@ -306,8 +306,8 @@ function trimApp(theme) {
           window.history.replaceState({}, '', window.location.pathname);
         }
         /* A prefilled file never passed through this page, so there is no File
-           object to decode — but the server can still read its peaks. Before
-           this, arriving by drop meant no waveform at all. */
+           object to decode — but the server can still read its peaks, and
+           hand the bytes back for the play button. */
         var prefilledStart = this.startInput;
         var prefilledEnd = this.endInput;
         this._loadWaveform(filePath).then(function() {
@@ -316,6 +316,7 @@ function trimApp(theme) {
           if (prefilledStart) self.onStartInputChange();
           if (prefilledEnd) self.onEndInputChange();
         });
+        this._loadPlayback(filePath);
       }
     },
 
@@ -390,14 +391,23 @@ function trimApp(theme) {
     /* Best-effort browser decode, for the play button alone. Failure is
        expected and silent: plenty of files the trimmer handles cannot be
        decoded by the Web Audio API, and none of the editor except playback
-       depends on this succeeding. */
-    async _loadPlayback(file) {
+       depends on this succeeding. Takes either the File the user picked or
+       the server path of a prefilled one, which is fetched back through
+       /api/staged-input. */
+    async _loadPlayback(source) {
       this.audioBuffer = null;
       try {
         if (!this.audioCtx) {
           this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         }
-        var arrayBuffer = await file.arrayBuffer();
+        var arrayBuffer;
+        if (typeof source === 'string') {
+          var res = await fetch('/api/staged-input?path=' + encodeURIComponent(source));
+          if (!res.ok) throw new Error('staged input request failed: ' + res.status);
+          arrayBuffer = await res.arrayBuffer();
+        } else {
+          arrayBuffer = await source.arrayBuffer();
+        }
         var self = this;
         this.audioBuffer = await new Promise(function(resolve, reject) {
           self.audioCtx.decodeAudioData(arrayBuffer, resolve, reject);
