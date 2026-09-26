@@ -6,6 +6,7 @@ import logging
 from pathlib import Path
 
 from core.paths import _user_data_dir
+from core.providers import DEFAULT_PROVIDER_ID, PROVIDERS
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +35,9 @@ class UserConfig:
             the bot token and chat id live in ``~/scriptorium/.env`` (see
             ``core.env``), not here, because this file is not a secrets store.
         notify_min_seconds: Runs shorter than this are not worth a message.
+        preferred_provider: The LLM provider a script uses when its
+            ``--provider`` flag is left on ``auto``. Validated against
+            ``core.providers``; the key itself lives in ``.env``.
     """
 
     theme: str = "light"
@@ -43,6 +47,7 @@ class UserConfig:
     sort_order: str = DEFAULT_SORT_ORDER
     notify_telegram: bool = False
     notify_min_seconds: int = DEFAULT_NOTIFY_MIN_SECONDS
+    preferred_provider: str = DEFAULT_PROVIDER_ID
 
 
 def load() -> UserConfig:
@@ -63,6 +68,7 @@ def load() -> UserConfig:
             sort_order=clean_sort_order(raw.get("sort_order")),
             notify_telegram=raw.get("notify_telegram") is True,
             notify_min_seconds=clean_notify_min_seconds(raw.get("notify_min_seconds")),
+            preferred_provider=clean_provider(raw.get("preferred_provider")),
         )
     except Exception:
         logger.warning("Failed to read %s, using defaults", _CONFIG_PATH)
@@ -119,6 +125,21 @@ def clean_notify_min_seconds(raw: object) -> int:
     if isinstance(raw, str) and raw.strip().isdigit():
         return int(raw.strip())
     return DEFAULT_NOTIFY_MIN_SECONDS
+
+
+def clean_provider(raw: object) -> str:
+    """Return *raw* if it names a registered provider, else the default.
+
+    Args:
+        raw: Whatever was under ``preferred_provider`` in the config file or a
+            settings request.
+
+    Returns:
+        A provider id that exists in ``core.providers``.
+    """
+    if isinstance(raw, str) and any(provider.id == raw for provider in PROVIDERS):
+        return raw
+    return DEFAULT_PROVIDER_ID
 
 
 def save(cfg: UserConfig) -> None:

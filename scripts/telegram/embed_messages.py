@@ -3,14 +3,15 @@
 import argparse
 import hashlib
 import json
-import os
 from pathlib import Path
 import sys
 import zipfile
 
+from core import providers
 from core.argparse import ScriptoriumParser
 from core.outputs import resolve_output_dir
 from core.paths import inputs_dir, resolve_input
+from core.providers import MissingCredentialsError
 
 TITLE = "Embed preprocessed Telegram messages"
 DESCRIPTION = "Embed every message with sliding-window context; write embeddings.jsonl + manifest."
@@ -18,11 +19,6 @@ DESCRIPTION = "Embed every message with sliding-window context; write embeddings
 DEFAULT_MODEL = "text-embedding-3-small"
 DEFAULT_WINDOW = 4
 DEFAULT_BATCH = 256
-_OPENAI_API_KEY = "OPENAI_API_KEY"
-
-
-class MissingCredentialsError(RuntimeError):
-    """Raised when an embedding client is needed but no API key is configured."""
 
 
 def _inputs() -> Path:
@@ -90,14 +86,9 @@ def _content_hash(text: str) -> str:
 
 
 def _default_client():
-    api_key = os.environ.get(_OPENAI_API_KEY, "").strip()
-    if not api_key:
-        raise MissingCredentialsError(
-            f"OpenAI embeddings require {_OPENAI_API_KEY} to be set. Export your key before running."
-        )
     from openai import OpenAI  # noqa: PLC0415
 
-    return OpenAI(api_key=api_key)
+    return OpenAI(api_key=providers.api_key("openai"))
 
 
 def _embed_batch(client, model: str, texts: list[str]) -> list[list[float]]:
@@ -138,7 +129,7 @@ def embed_messages(  # noqa: PLR0913
         window: Number of preceding messages to include as context per unit.
         batch_size: Number of texts per embedding API call.
         client: Optional pre-built client (mock in tests). When ``None``, builds
-            an OpenAI client from ``OPENAI_API_KEY``.
+            an OpenAI client with the key from ``core.providers``.
 
     Returns:
         Path to ``output_dir/manifest.json`` on success.
@@ -146,7 +137,7 @@ def embed_messages(  # noqa: PLR0913
     Raises:
         FileNotFoundError: If ``source`` does not exist.
         ValueError: If ``window`` or ``batch_size`` are non-positive.
-        MissingCredentialsError: If no client is provided and the env var is unset.
+        MissingCredentialsError: If no client is provided and no OpenAI key is configured.
     """
     if not source.is_file():
         raise FileNotFoundError(f"source not found: {source}")

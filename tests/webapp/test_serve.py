@@ -334,12 +334,12 @@ class TestKeysEndpoints:
     def _isolate_env(self, tmp_path, monkeypatch):
         monkeypatch.setattr("core.env.user_env_path", lambda: tmp_path / ".env")
         monkeypatch.setattr("core.env._repo_root", lambda: tmp_path)
-        for var in ("OPENAI_API_KEY", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID"):
+        for var in ("OPENAI_API_KEY", "ANTHROPIC_API_KEY", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID"):
             monkeypatch.delenv(var, raising=False)
         capabilities.invalidate()
         yield
         capabilities.invalidate()
-        for var in ("OPENAI_API_KEY", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID"):
+        for var in ("OPENAI_API_KEY", "ANTHROPIC_API_KEY", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID"):
             monkeypatch.delenv(var, raising=False)
 
     def test_lists_configure_capabilities_without_values(self, monkeypatch):
@@ -695,6 +695,25 @@ class TestSettingsAPI:
         data = client.get("/api/settings").json()
         assert data["notify_telegram"] is True
         assert data["notify_min_seconds"] == 120
+
+    def test_preferred_provider_roundtrip(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("core.config._CONFIG_PATH", tmp_path / "config.json")
+        client.post("/api/settings", json={"theme": "light", "outputs_dir": "", "preferred_provider": "anthropic"})
+        data = client.get("/api/settings").json()
+        assert data["preferred_provider"] == "anthropic"
+        assert [p["id"] for p in data["providers"]] == ["openai", "anthropic"]
+        assert all(set(p) == {"id", "label", "is_set"} for p in data["providers"])
+
+    def test_preferred_provider_survives_a_save_that_omits_it(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("core.config._CONFIG_PATH", tmp_path / "config.json")
+        client.post("/api/settings", json={"theme": "light", "outputs_dir": "", "preferred_provider": "anthropic"})
+        client.post("/api/settings", json={"theme": "dark", "outputs_dir": ""})
+        assert client.get("/api/settings").json()["preferred_provider"] == "anthropic"
+
+    def test_unknown_preferred_provider_falls_back(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("core.config._CONFIG_PATH", tmp_path / "config.json")
+        client.post("/api/settings", json={"theme": "light", "outputs_dir": "", "preferred_provider": "skynet"})
+        assert client.get("/api/settings").json()["preferred_provider"] == "openai"
 
     def test_notification_settings_default_off(self, tmp_path, monkeypatch):
         monkeypatch.setattr("core.config._CONFIG_PATH", tmp_path / "config.json")

@@ -44,6 +44,10 @@
         notifyTelegram: false,
         notifyMinSeconds: 30,
         notifyTestStatus: '',
+        /* From /api/settings: the registered providers with whether each has
+           a key, and the one scripts use for "auto". */
+        providers: [],
+        preferredProvider: 'openai',
         browseSupported: false,
         browseError: '',
         saving: false,
@@ -167,6 +171,8 @@
             this.closeBehavior = data.close_behavior || 'close';
             this.notifyTelegram = !!data.notify_telegram;
             this.notifyMinSeconds = Number.isFinite(data.notify_min_seconds) ? data.notify_min_seconds : 30;
+            this.providers = Array.isArray(data.providers) ? data.providers : [];
+            this.preferredProvider = data.preferred_provider || 'openai';
             this.browseSupported = !!data.browse_supported;
             if ((data.theme === 'dark') !== this.dark) {
               this.applyTheme(data.theme === 'dark');
@@ -183,7 +189,8 @@
             outputsDir: this.outputsDir,
             closeBehavior: this.closeBehavior,
             notifyTelegram: this.notifyTelegram,
-            notifyMinSeconds: this.notifyMinSeconds
+            notifyMinSeconds: this.notifyMinSeconds,
+            preferredProvider: this.preferredProvider
           };
           this.browseError = '';
           this.notifyTestStatus = '';
@@ -229,6 +236,7 @@
             this.closeBehavior = this._snapshot.closeBehavior;
             this.notifyTelegram = this._snapshot.notifyTelegram;
             this.notifyMinSeconds = this._snapshot.notifyMinSeconds;
+            this.preferredProvider = this._snapshot.preferredProvider;
           }
           this._snapshot = null;
           this.browseError = '';
@@ -246,7 +254,8 @@
                 outputs_dir: this.outputsDir,
                 close_behavior: this.closeBehavior,
                 notify_telegram: this.notifyTelegram,
-                notify_min_seconds: this.notifyMinSeconds
+                notify_min_seconds: this.notifyMinSeconds,
+                preferred_provider: this.preferredProvider
               })
             });
             this._snapshot = null;

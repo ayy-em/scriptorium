@@ -34,6 +34,8 @@ import shutil
 import sys
 import time
 
+from core.providers import PROVIDERS, Provider
+
 # How long a probe result is trusted. Long enough that one page render does not
 # re-import weasyprint several times, short enough that installing a dependency
 # and reloading reflects it without a restart.
@@ -207,6 +209,31 @@ def _winget(package_id: str) -> tuple[str, ...]:
     )
 
 
+def _provider_key_spec(provider: Provider) -> _Spec:
+    """Describe an LLM provider's API key as a configure-remedy capability.
+
+    Derived rather than hand-written so that registering a provider in
+    ``core.providers`` is the whole job: the Settings → Keys field, the sidebar
+    entry and the script-page banner all follow from this one spec.
+
+    Args:
+        provider: A registry entry.
+
+    Returns:
+        The spec, named ``"<id>-key"``.
+    """
+    return _Spec(
+        name=provider.capability_name,
+        label=f"{provider.label} API key",
+        remedy=REMEDY_CONFIGURE,
+        required=provider.key_required,
+        needed_for=provider.key_needed_for,
+        probe=_probe_env(provider.env_var),
+        hints={"": f"Paste the key under Settings → Keys, or put {provider.env_var}=… in your .env file."},
+        env_var=provider.env_var,
+    )
+
+
 _SPECS: tuple[_Spec, ...] = (
     _Spec(
         name="ffmpeg",
@@ -281,16 +308,7 @@ _SPECS: tuple[_Spec, ...] = (
         },
         commands={"darwin": ("brew", "install", "gifsicle")},
     ),
-    _Spec(
-        name="openai-key",
-        label="OpenAI API key",
-        remedy=REMEDY_CONFIGURE,
-        required=True,
-        needed_for="Speech transcription",
-        probe=_probe_env("OPENAI_API_KEY"),
-        hints={"": "Paste the key under Settings → Keys, or put OPENAI_API_KEY=… in your .env file."},
-        env_var="OPENAI_API_KEY",
-    ),
+    *(_provider_key_spec(provider) for provider in PROVIDERS),
     # Not required: notifications are opt-in, so an unset bot must not sit in
     # the sidebar banner of everyone who never asked for them.
     _Spec(

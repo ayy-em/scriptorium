@@ -179,6 +179,8 @@ class TestEmbedMessages:
             embed_messages(source, tmp_path / "out", batch_size=0, client=_stub_client())
 
     def test_no_client_no_api_key_raises_helpfully(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setattr("core.env.user_env_path", lambda: tmp_path / "user.env")
+        monkeypatch.setattr("core.env._repo_root", lambda: tmp_path)
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
         source = _write_zip(tmp_path, {2020: [_msg(2020, "Alice", "x")]})
         with pytest.raises(MissingCredentialsError, match="OPENAI_API_KEY"):

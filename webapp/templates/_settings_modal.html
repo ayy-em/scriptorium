@@ -154,6 +154,27 @@
         </div>
       </section>
 
+      <!-- AI provider. Which provider a script uses when its Provider field
+           is left on "auto". Saves with the form; the keys are below. -->
+      <section class="settings-group" x-show="$store.ui.providers.length" x-cloak>
+        <h3 class="settings-group-title">AI provider</h3>
+        <p class="settings-group-hint">Used by scripts that call an AI model when their Provider
+          field is left on <code>auto</code>. A provider without a key is skipped.</p>
+        <div class="option-cards" role="radiogroup" aria-label="Preferred AI provider">
+          <template x-for="provider in $store.ui.providers" :key="provider.id">
+            <label class="option-card" :class="{ 'is-selected': $store.ui.preferredProvider === provider.id }">
+              <input type="radio" name="preferred-provider" :value="provider.id" x-model="$store.ui.preferredProvider">
+              <span class="option-card-icon">{{ icon('sparkles', 16) }}</span>
+              <span class="option-card-text">
+                <span class="option-card-title" x-text="provider.label"></span>
+                <span class="option-card-sub" x-text="provider.is_set ? 'Key set' : 'No key yet — add one under Keys'"></span>
+              </span>
+              <span class="option-card-check" aria-hidden="true">{{ icon('check', 12) }}</span>
+            </label>
+          </template>
+        </div>
+      </section>
+
       <!-- API keys. Saved on their own button, not with the form: the value
            is written to ~/scriptorium/.env the moment it is confirmed, and
            the field is cleared so nothing secret lingers on screen. -->

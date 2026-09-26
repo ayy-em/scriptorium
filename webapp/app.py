@@ -19,9 +19,9 @@ from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from core import capabilities, history
+from core import capabilities, history, providers
 from core.categories import CATEGORY_EXTS, categorize
-from core.config import UserConfig, clean_favourites, clean_notify_min_seconds, clean_sort_order
+from core.config import UserConfig, clean_favourites, clean_notify_min_seconds, clean_provider, clean_sort_order
 from core.config import load as load_config
 from core.config import save as save_config
 from core.env import load_env, set_env_value
@@ -673,6 +673,11 @@ async def get_settings(request: Request) -> JSONResponse:
             "sort_order": cfg.sort_order,
             "notify_telegram": cfg.notify_telegram,
             "notify_min_seconds": cfg.notify_min_seconds,
+            "preferred_provider": cfg.preferred_provider,
+            "providers": [
+                {"id": provider.id, "label": provider.label, "is_set": providers.is_configured(provider.id)}
+                for provider in providers.PROVIDERS
+            ],
             "browse_supported": _webview_window(request) is not None,
         }
     )
@@ -820,6 +825,7 @@ async def post_settings(request: Request) -> JSONResponse:
         sort_order=existing.sort_order,
         notify_telegram=body.get("notify_telegram") is True,
         notify_min_seconds=clean_notify_min_seconds(body.get("notify_min_seconds", existing.notify_min_seconds)),
+        preferred_provider=clean_provider(body.get("preferred_provider", existing.preferred_provider)),
     )
     save_config(cfg)
     return JSONResponse({"ok": True})

@@ -79,11 +79,16 @@ order between A → Z, Z → A and most-scripts-first. Both are stored in
 
 The gear in the top bar opens Settings: light or dark theme, what the window's
 close button does in the desktop app (quit, or minimise to the tray), a default
-outputs directory, **Notifications**, and **Keys** — a field per key the app
-knows about. A key is written to `~/scriptorium/.env` and applies at once. A
+outputs directory, **Notifications**, **AI provider**, and **Keys** — a field
+per key the app knows about. A key is written to `~/scriptorium/.env` and applies at once. A
 secret such as an API key or bot token is never shown again; the field just
 reports *Set* or *Not set*. A plain identifier such as the Telegram chat id is
 shown back so you can check it.
+
+**AI provider** picks which vendor a script calls when its Provider field is
+left on `auto`: OpenAI or Anthropic today. A provider without a key is skipped,
+so the choice only matters once more than one key is set. A script's own
+`--provider` flag overrides it for one run.
 
 ### Telegram notifications
 
@@ -177,7 +182,7 @@ clears it without a restart.
 | `av.*`, `formats.convert_{audio,video}` | **ffmpeg** and **ffprobe** on `PATH` | Those scripts fail; everything else is unaffected |
 | `formats.convert_docs` | **pandoc** on `PATH` | Document conversion fails |
 | Telegram PDF reports | **pango, cairo, glib** — Homebrew on macOS, MSYS2 or the GTK3 runtime on Windows | PDF output fails; the other Telegram scripts are unaffected |
-| `speech.transcribe` | An OpenAI API key — paste it under **Settings → Keys** (stored in `~/scriptorium/.env`), or set `OPENAI_API_KEY` in a `.env` file | The script errors out |
+| `speech.transcribe`, `telegram.embed_messages` | An OpenAI API key — paste it under **Settings → Keys** (stored in `~/scriptorium/.env`), or set `OPENAI_API_KEY` in a `.env` file | The script errors out with the same hint |
 | `photo.remove_bg` | Model weights, ~170MB per model (~215MB for the `hq` preset's `birefnet-general-lite`, ~950MB for `birefnet-general`) | Downloaded to `~/.u2net/` on first use of each model; the form says so before you run, and the status bar shows the download |
 
 Two more are optional — reported, but nothing breaks without them: **gifsicle**
@@ -380,6 +385,7 @@ run_fn(export, Path("inputs"), Path("outputs/lora/captions.json"))
 - **`av.join` respects the output container** — WebM output gets Opus audio, a copied codec the container cannot hold forces a re-encode, and a re-encode that WebM cannot hold is written as MP4 with a note
 - **API keys in Settings** — paste the OpenAI key under Settings → Keys instead of editing a `.env` file; it is stored per user, never shown again, and the sidebar clears at once
 - **Telegram notifications for long runs** — Settings → Notifications turns them on, sets how long a run must be to earn a message, and sends a test; the bot token and chat id go under Settings → Keys
+- **One provider registry** — `core.providers` declares OpenAI and Anthropic once; Settings → Keys gains a field per provider, Settings → AI provider picks the default, and `speech.transcribe` takes `--provider auto|openai` (the old `--tts-provider` still works)
 - **Commit hash in packaged builds** — the sidebar's build identifier is recorded at build time instead of reading "—" in every installed app
 - **HEIC in, PNG/JPEG out** — `formats.convert_image` and `photo.remove_bg` read iPhone and Android HEIC/HEIF photos; a Live Photo converts to its still frame, and EXIF orientation is baked in so portraits stay upright
 - **`av.trim` plays a dropped file** — the play button now works for a file that arrived through the drop overlay, not only one picked on the page

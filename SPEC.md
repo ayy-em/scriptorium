@@ -34,6 +34,7 @@ scriptorium/
 │   ├── invocation.py        # who started this run — webapp or a human
 │   ├── native_libs.py       # cffi dlopen fallback for pango/cairo/glib
 │   ├── outputs.py           # standardized output path resolution
+│   ├── providers.py         # LLM provider registry: ids, keys, features, resolve()
 │   ├── paths.py             # centralized path resolution (frozen vs dev)
 │   ├── progress.py          # the ::progress:: reporting contract
 │   ├── registry.py          # auto-discovers scripts and themes
@@ -273,6 +274,7 @@ from an older build indefinitely. ETag revalidation makes the usual cost a 304.
 | `GET /api/update-check` | compare against the latest GitHub release |
 | `GET /api/capabilities/{name}/install` | run a missing dependency's install command, output streamed as SSE |
 | `GET /api/model-weights/{theme}/{script_name}` | which model weights the current form state would download; only for scripts exposing `models_for_args` |
+| `GET`/`POST /api/settings` | user settings; the response also carries `providers` (id, label, whether its key is set) and `preferred_provider` for the AI provider picker |
 | `GET`/`POST /api/keys` | list the keys the app manages (set / not set; a secret's value is never returned, a plain identifier such as the Telegram chat id is) and store or clear one in `~/scriptorium/.env` |
 | `POST /api/notify-test` | send one test message to the configured Telegram chat, so the settings modal can prove the token and chat id pair up |
 | `GET /api/staged-input` | stream a staged input back to the page, for `av.trim` playback of a prefilled file; same containment rule as `/api/waveform` |
@@ -912,7 +914,13 @@ empty), `env_var` (for a key the user types in), `remedy` and `required`:
 | `pango` | real `import weasyprint`, after `core.native_libs` | `telegram.{chat,group}_analysis` | yes |
 | `weasyprint-cli` | on PATH | nicer `convert_docs` PDFs | no |
 | `gifsicle` | on PATH | `av.to_anim --optimize` | no |
-| `openai-key` | `OPENAI_API_KEY` after `load_env()` — the probe loads `.env` itself, so a CLI caller and the webapp agree | `speech.transcribe` | yes |
+| `openai-key` | `OPENAI_API_KEY` after `load_env()` — the probe loads `.env` itself, so a CLI caller and the webapp agree | `speech.transcribe`, `telegram.embed_messages` | yes |
+| `anthropic-key` | `ANTHROPIC_API_KEY`, same probe | nothing shipped yet; `photo.ocr` will be first | no |
+
+The two `*-key` rows are not written by hand. `core.providers` declares each
+LLM provider once (id, label, env var, features, what the key unlocks) and
+`core.capabilities` derives a configure-remedy spec per entry, so registering
+a provider is what puts its field in Settings → Keys.
 
 `required=False` exists so an optional dependency is reported without being
 alarming: a missing gifsicle costs a larger GIF, not a script.
@@ -961,6 +969,8 @@ Rules worth not rediscovering:
   first and the user one second, so a developer's file wins. The two
   Telegram entries are `required=False`: notifications are opt-in, so their
   absence must not sit in the sidebar banner of everyone who never asked.
+  A provider key with no shipped consumer is `required=False` for the same
+  reason.
 
 The script→capability map lives here, keyed by dotted key first and theme
 second. It is deliberately *not* merged with `webapp/_badges.py`'s tool map,
@@ -970,6 +980,42 @@ yt-dlp, which ships in the bundle and so is never missing.
 Two entries the earlier BACKLOG.md notes got wrong: `gif.make_gif` needs no
 ffmpeg (it assembles frames with Pillow), and the pango dependency belongs to
 the two Telegram scripts that render PDFs, not the whole theme.
+
+### `core.providers` — one registry for every LLM provider
+
+A script that calls an AI API never reads an environment variable itself.
+`core.providers` holds a `Provider` per vendor — `id`, `label`, `env_var`, the
+`features` it serves (`chat`, `vision`, `stt`, `tts`, `embeddings`) and what
+its key unlocks — and three things hang off that one declaration: the key
+field in Settings → Keys (through `core.capabilities`), the **AI provider**
+picker in Settings (`UserConfig.preferred_provider`, validated by
+`clean_provider`), and a script's `--provider` choices.
+
+How a script uses it:
+
+- `--provider` takes `auto` (the default) or a provider id. The choices are
+  `auto` plus `supporting(feature)`, so a provider that cannot do the job is
+  never offered.
+- `resolve(feature, requested)` returns a provider that serves the feature
+  **and** has a key. `auto` means the preferred provider when it qualifies,
+  else the first capable provider with a key, else `MissingCredentialsError`
+  naming the providers that would do. A named provider that lacks the
+  feature raises `UnsupportedFeatureError`; one that lacks a key raises
+  `MissingCredentialsError` with the Settings → Keys remedy in the message.
+- `api_key(id)` is the only way to a credential. It loads `.env` first so a
+  CLI caller and the webapp agree.
+
+The module stores nothing: keys stay in `.env` via `core.env`, and
+`preferred_provider` stays in `config.json`. `core.config` imports the
+registry to validate that field; `core.providers` reaches back to
+`core.config` lazily inside `preferred_provider_id()`, which is why the two
+must not import each other at module level.
+
+Registered today: `openai` (every feature) and `anthropic` (`chat`,
+`vision`, no consumer yet). Gemini is in BACKLOG.md's deferred section.
+`speech.transcribe` and `telegram.embed_messages` are the consumers;
+`scripts/speech/_providers.py` keeps only the audio-in-text-out contract and
+the Whisper implementation.
 
 ### `core.images` — every Pillow script opens the same formats
 
@@ -1247,7 +1293,7 @@ run at least `notify_min_seconds` long (default 30), so a two-second run
 does not ping a phone. The message carries the script key, the outcome and
 a human-readable duration (`✅ av.trim finished in 4m 05s`). The bot token
 and chat id are keys, stored in `~/scriptorium/.env` through the settings
-modal like the OpenAI key; `config.json` is not a secrets store. The web UI
+modal like the provider keys; `config.json` is not a secrets store. The web UI
 runs every script as a `main.py` subprocess, so this path covers both
 callers. The last two steps never raise; a failure to log or notify must
 not fail a run.

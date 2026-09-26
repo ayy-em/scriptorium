@@ -1,11 +1,15 @@
 """Tests for user settings persistence."""
 
 import json
+from pathlib import Path
+
+import pytest
 
 from core.config import (
     UserConfig,
     clean_favourites,
     clean_notify_min_seconds,
+    clean_provider,
     clean_sort_order,
     load,
     save,
@@ -171,3 +175,24 @@ class TestCleanNotifyMinSeconds:
     def test_anything_else_falls_back(self):
         for raw in (-1, "soon", None, True, [], "1.5"):
             assert clean_notify_min_seconds(raw) == 30, raw
+
+
+class TestPreferredProvider:
+    def test_defaults_to_openai(self):
+        assert UserConfig().preferred_provider == "openai"
+
+    def test_roundtrips(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setattr("core.config._CONFIG_PATH", tmp_path / "config.json")
+        save(UserConfig(preferred_provider="anthropic"))
+        assert load().preferred_provider == "anthropic"
+
+    def test_unknown_stored_value_falls_back(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        path = tmp_path / "config.json"
+        monkeypatch.setattr("core.config._CONFIG_PATH", path)
+        path.write_text('{"preferred_provider": "skynet"}', encoding="utf-8")
+        assert load().preferred_provider == "openai"
+
+    def test_clean_provider(self):
+        assert clean_provider("anthropic") == "anthropic"
+        assert clean_provider("skynet") == "openai"
+        assert clean_provider(None) == "openai"

@@ -7,6 +7,7 @@ import sys
 from core.argparse import ScriptoriumParser
 from core.outputs import resolve_output
 from core.paths import inputs_dir, move_to_past_inputs, resolve_input
+from core.providers import UnsupportedFeatureError
 from scripts.speech._providers import (
     DEFAULT_PROVIDER,
     SUPPORTED_PROVIDERS,
@@ -69,7 +70,7 @@ _EXAMPLES = """
 examples:
   uv run main.py speech.transcribe meeting.m4a
   uv run main.py speech.transcribe meeting.m4a --output transcript --format md
-  uv run main.py speech.transcribe interview.mp3 --tts-provider openai --format rtf
+  uv run main.py speech.transcribe interview.mp3 --provider openai --format rtf
 """
 
 
@@ -101,11 +102,13 @@ def get_parser() -> argparse.ArgumentParser:
         help=f"output format (default: {_DEFAULT_FORMAT})",
     )
     parser.add_argument(
+        "--provider",
         "--tts-provider",
+        dest="provider",
         choices=SUPPORTED_PROVIDERS,
         default=DEFAULT_PROVIDER,
         ui_label="Provider",
-        help=f"speech-to-text provider (default: {DEFAULT_PROVIDER})",
+        help="speech-to-text provider; auto follows the preferred provider in Settings",
     )
     return parser
 
@@ -120,9 +123,9 @@ def run() -> None:
     output_path = resolve_output(args.output, theme="speech", ext=f".{args.format}")
 
     try:
-        provider = get_provider(args.tts_provider)
+        provider = get_provider(args.provider)
         result = transcribe(audio, output_path, provider=provider, fmt=args.format)
-    except MissingCredentialsError as exc:
+    except (MissingCredentialsError, UnsupportedFeatureError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         sys.exit(2)
     except FileNotFoundError as exc:

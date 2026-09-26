@@ -5,12 +5,223 @@ Deferred work with enough context to pick up cold.
 Everything above the **Settled** heading is open work. Below it are closed
 entries, kept because the reasoning is worth not having to reconstruct.
 
-Nothing is open as of 2026-09-25.
+Open entries are in dependency order: the mechanism first, the scripts that
+need it after. They come from a scoping session on 2026-09-17 against a
+hand-written list; the decisions recorded in each entry were made then and
+are not up for re-litigation unless something has changed.
+
+## UI-only scripts
+
+**Status:** open (2026-09-26). Foundation for `photo.crop` below.
+
+`photo.crop` is an interactive editor — drag a box over a picture — and the
+decision on 2026-09-17 was that it is **UI-only**, with no CLI equivalent.
+That breaks the "anything the UI does, the CLI can too" line in PRODUCT.md,
+deliberately, and needs a mechanism rather than a special case:
+
+- A module flag, `UI_ONLY = True`, next to `TITLE` and `DESCRIPTION`.
+  Discovery in `core.registry` is unchanged.
+- `uv run main.py <theme>` lists the script with a "(web UI only)" marker,
+  so a CLI user learns it exists. `uv run main.py <theme>.<script>` and
+  `--help` print one line saying it is available in the web UI only, exit 2,
+  and run nothing.
+- The web UI renders it through a custom `TEMPLATE`, the way `av/trim.html`
+  already replaces the generated form for `av.trim`. Look at how
+  `webapp/app.py` picks that template before inventing a second way.
+- The sidebar, wheel and search treat it as any other script. The CLI
+  command preview on the detail page is hidden, since there is none.
+
+Tests: registry discovers it, `main.py` refuses it politely, the detail page
+renders the custom template, and the preview-command endpoint returns
+nothing for it.
+
+## docs theme: pdf_merge and pdf_separate
+
+**Status:** open (2026-09-26). No dependency on anything else here.
+
+A new `docs` theme (`LABEL = "Documents"`), distinct from `formats`, which is
+about conversion. Both scripts use `pypdf`, already in the `documents` extra
+in `pyproject.toml`, so no new dependency.
+
+- `docs.pdf_merge`: several PDFs in, one out. Directory-native batch: a
+  directory argument merges every `*.pdf` in it in name order; explicit
+  files merge in the order given. `--output` follows `core.outputs`. Archive
+  inputs through `move_to_past_inputs` like every other file-input script
+  (SPEC "Post-processing: archiving input files").
+- `docs.pdf_separate`: one PDF in, a `.zip` out with one PDF per page, named
+  `<stem>_p001.pdf` and so on. `--pages` accepts a range (`1-3,7`) to limit
+  what is split, defaulting to all.
+- `ACCEPTS = {"document"}` for both so a dropped PDF finds them; check
+  `core.categories` maps `.pdf` to that category first.
+- Follow the SPEC checklists for a new theme and a new script, including
+  the theme icon in `webapp/_icons.py`.
+
+## photo.tiny
+
+**Status:** open (2026-09-26). No dependency on anything else here.
+
+tinypng.com at home: shrink an image's file size. Decided on 2026-09-17 to be
+**pure Pillow** — a quality slider, no `pngquant` or `mozjpeg`, because a
+native optimiser is a third dependency graph to bundle for a marginal gain.
+
+- `--quality 1..100` (default 80) for lossy formats; PNG gets
+  `optimize=True` plus palette quantisation when the image has no alpha or
+  when `--quantize` is given.
+- `--format` optionally converts on the way out (JPEG, PNG, WebP), reusing
+  `core.images` so HEIC input works.
+- `--max-size WIDTHxHEIGHT` downscales if the image exceeds it, keeping
+  aspect. Optional; the default touches no pixels.
+- Print the before and after size per file, and the total, so the user can
+  see whether it was worth it. `photo.remove_bg` shows the tone.
+- Batch: file or directory, per-file output naming from `core.outputs`.
+
+## photo.crop
+
+**Status:** open (2026-09-26). Needs "UI-only scripts" above.
+
+An interactive crop: the page shows the picture, the user drags a box, picks
+an output format and presses Run. UI-only, by the 2026-09-17 decision.
+
+- The template is the work. Start from `av/trim.html` for the pattern of a
+  custom page that still posts to the ordinary run endpoint, and from
+  `_script_drop.html` for the prefilled-file path. Draw the crop box in CSS
+  on top of an `<img>` served through `/api/staged-input`; keep it in image
+  pixels, not screen pixels, so a zoomed page still crops correctly.
+- The page posts `--x --y --width --height --format` to a normal Pillow
+  crop. Those flags exist so the run is reproducible from History; they are
+  not a CLI promise, because the script is `UI_ONLY`.
+- Aspect presets (free, 1:1, 4:3, 16:9) are a nice-to-have; ship free-form
+  first.
+- EXIF orientation must be applied before the box is drawn, or a portrait
+  phone photo crops the wrong region. `core.images` already bakes it in for
+  the other Pillow scripts.
+
+## photo.ocr
+
+**Status:** open (2026-09-26). Needs `core.providers` (delivered
+2026-09-26, see Settled) and an Anthropic client, which is the first new
+dependency in this list.
+
+Text out of a picture, through a vision model. Decided on 2026-09-17:
+**Anthropic and OpenAI** in the first version, Gemini deferred (see the
+bottom of this file); output `.md` by default or `.txt` on request.
+
+- `--provider auto|openai|anthropic`, choices from
+  `providers.supporting("vision")`, resolved with `providers.resolve`.
+  `speech.transcribe` is the reference for the flag and the error handling.
+- Add `anthropic` to a new `llm` extra in `pyproject.toml` (the `llm` theme
+  folder exists and is empty; the extra can carry the SDKs for every
+  provider-backed script). The OpenAI SDK is already in `speech`.
+- The prompt asks for a faithful transcription, preserving line breaks and
+  tables as Markdown, with no commentary. Keep it in one constant so the two
+  providers get the same instruction.
+- Input through `core.images` so HEIC works; downscale to the provider's
+  documented pixel limit before sending, never after an error.
+- Register the script against a capability so the detail page banner offers
+  the key: today `_CAPABILITY_BY_KEY` takes one capability per script, and a
+  two-provider script wants "any vision provider with a key". Extend the
+  mapping to accept a tuple, or add a derived capability — decide when
+  building, and record it in SPEC.
+- Cost note on the form like `photo.remove_bg`'s download note: an API call
+  per image.
+
+## speech.tts
+
+**Status:** open (2026-09-26). Needs `core.providers` (delivered).
+
+Text to speech, OpenAI only at first; the `speech` theme becomes
+**"Speech / Voice"** (`LABEL` in `scripts/speech/__init__.py`) so the
+sidebar reads as both directions.
+
+- Input: a text file or `--text`. Output: `--format mp3|wav|opus|flac|aac`
+  served natively by the API, and `ogg`, which is a transcode — gate it
+  behind the `ffmpeg` capability exactly as `av.*` is, with the same banner.
+- `--voice` and `--model` as choices in the parser, so the form gets
+  dropdowns; one voice per run (the 2026-09-17 decision: one-off export, no
+  multi-voice batch).
+- `--provider auto|openai` from `providers.supporting("tts")`. Anthropic
+  has no TTS, so it never appears.
+- Long text: the API caps input length; chunk on sentence boundaries and
+  concatenate with ffmpeg when present, else refuse over the cap with a
+  clear message rather than truncating.
+- Capability: `openai-key`, via `_CAPABILITY_BY_KEY`.
+
+## App updates on Windows
+
+**Status:** open (2026-09-26). Last, and the only one that may not be worth
+it; macOS is deferred (bottom of this file).
+
+Today `/api/update-check` compares against the latest GitHub release and the
+sidebar shows a banner with a link. The ask is: open the app, notice a newer
+version, download it in the background, apply it on the next launch.
+
+The crux is **which install** the app is. The Inno Setup installer offers
+"just me" (`%LOCALAPPDATA%`, no elevation) and "all users" (Program Files,
+UAC on every write). Background replacement is only realistic for the first.
+Scope it as:
+
+1. Detect the install kind at runtime from the executable's path.
+2. "Just me": download the installer to `~/scriptorium/updates/`, verify its
+   size against the release asset, and on the next launch — before the
+   server starts — run it with `/SILENT /SUPPRESSMSGBOXES` and exit. Inno
+   Setup can replace a running app only if it is not running, hence "next
+   launch".
+3. "All users": keep the banner and link. Do not attempt elevation.
+4. A Settings toggle for the background download, default on, and a line in
+   the banner saying "Downloaded — restarts to install" when one is waiting.
+
+Verify the download against the GitHub asset's `size` field at minimum;
+signing is a separate question (HUMAN_TODO). If step 2 proves fragile in a
+real install, stop at the banner and say so here.
+
+# Deferred
+
+Considered on 2026-09-17 and put down on purpose. Pick up only if a reason
+appears.
+
+- **Gemini as a provider.** `core.providers` takes a new entry in a minute;
+  the cost is the `google-genai` SDK in the bundle and a third vision code
+  path in `photo.ocr`. Add it when someone has a Gemini key and a reason.
+- **App updates on macOS.** The `.app` is a zip on the release page; a
+  background update means replacing a bundle the user may have dragged
+  anywhere, plus Gatekeeper on the new copy. Do Windows first and see
+  whether anyone asks.
 
 # Settled
 
 Closed, and kept only for the reasoning — either delivered, or considered and
 deliberately not built. Nothing here is queued work.
+
+## One provider registry for every LLM call
+
+**Status:** delivered 2026-09-26. See SPEC.md "`core.providers`".
+
+Three scripts read `OPENAI_API_KEY` from `os.environ` on their own, with three
+error messages, and the OCR and TTS scripts above would have been five. The
+2026-09-17 decisions: one shared `core` module for the registry; keys stay in
+`.env` through `core.env` (the earlier idea of the OS keyring was dropped once
+Settings → Keys landed on `.env`, which the packaged app can already write);
+a preferred provider in Settings; `speech.transcribe` retrofitted rather than
+left as the odd one out.
+
+What was decided while building:
+
+- **Key capabilities derive from the registry.** `core.capabilities` used to
+  carry a hand-written `openai-key` spec; it now builds one per `Provider`.
+  A provider with no shipped consumer is `required=False` so its absence
+  does not sit in the sidebar banner.
+- **Anthropic is registered now, consumer-less**, so the AI provider picker
+  has two entries and the mechanism is exercised. Its key field says so.
+- **`--provider` replaces `--tts-provider`** on `speech.transcribe`, which
+  was misnamed for a speech-to-text script. The old spelling stays as a
+  hidden alias so a History re-run still works.
+- **The form lists capable providers, not configured ones.** Filtering the
+  dropdown to providers with a key would need the form builder to ask the
+  registry per render; an unconfigured choice fails at run time with the
+  Settings → Keys hint instead, and the detail-page banner already covers the
+  script's primary key.
+- `util.notify` was left alone: Telegram is not an LLM provider, and its
+  keys already go through Settings → Keys.
 
 ## Input archiving was three behaviours pretending to be one
 
