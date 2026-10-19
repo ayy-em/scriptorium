@@ -128,3 +128,27 @@ def test_no_script_moves_an_input_by_hand(key):
     assert '"processed"' not in source and "'processed'" not in source, (
         f"{key} builds its own processed/ directory; use {HELPER} so paths outside inputs/ are left alone"
     )
+
+
+# ``av.join`` is the exception: it is handed a *directory* of clips and reads
+# every media file in it, so there is no single input path to follow.
+_RESOLVES_ITS_OWN_DIRECTORY = {"av.join"}
+
+
+@pytest.mark.parametrize("key", sorted(ARCHIVING - _RESOLVES_ITS_OWN_DIRECTORY))
+def test_archiving_scripts_resolve_through_resolve_input(key):
+    """Archiving an input obliges a script to be able to find it again.
+
+    These two have to travel together. A script that archives its input but
+    reads ``args.source`` directly works exactly once per file: the second run
+    is handed a path the first run moved, and fails on a file sitting in
+    ``processed/``. ``core.paths.resolve_input`` is what follows it there, so
+    archiving without it is the bug, not a style preference.
+
+    This is how ``formats.*`` and ``photo.remove_bg`` were broken — the five
+    scripts that had been archiving the longest were the five that never called
+    the resolver.
+    """
+    assert _calls(_source_of(key), "resolve_input"), (
+        f"{key} archives its input but does not resolve_input() it, so a second run on the same file cannot find it"
+    )

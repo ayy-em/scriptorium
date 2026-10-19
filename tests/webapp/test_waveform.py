@@ -11,6 +11,7 @@ from unittest.mock import patch
 
 import pytest
 
+from core import paths
 from webapp import _waveform
 
 
@@ -218,3 +219,39 @@ class TestResolveStagedInput:
         with pytest.raises(_waveform.StagedInputError) as excinfo:
             _waveform.resolve_staged_input(str(tmp_path / "gone.mp4"), tmp_path)
         assert excinfo.value.status == 404
+
+
+class TestStagedInputFollowsTheArchive:
+    """The trim page holds one path all session; a run archives it mid-session."""
+
+    def test_follows_a_staged_file_into_the_archive(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(paths, "inputs_dir", lambda _theme: tmp_path)
+        archived = tmp_path / "processed" / "clip.mp4"
+        archived.parent.mkdir()
+        archived.write_text("x")
+
+        resolved = _waveform.resolve_staged_input(str(tmp_path / "clip.mp4"), tmp_path)
+
+        assert resolved == archived.resolve()
+
+    def test_prefers_the_staged_file_when_it_is_still_there(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(paths, "inputs_dir", lambda _theme: tmp_path)
+        staged = tmp_path / "clip.mp4"
+        staged.write_text("current")
+        (tmp_path / "processed").mkdir()
+        (tmp_path / "processed" / "clip.mp4").write_text("archived")
+
+        resolved = _waveform.resolve_staged_input(str(staged), tmp_path)
+
+        assert resolved.read_text() == "current"
+
+    def test_containment_is_still_checked_before_the_archive(self, tmp_path, monkeypatch):
+        """Following the archive must not become a way around the 403."""
+        inputs = tmp_path / "inputs"
+        (inputs / "processed").mkdir(parents=True)
+        (inputs / "processed" / "secret.mp4").write_text("x")
+        monkeypatch.setattr(paths, "inputs_dir", lambda _theme: inputs)
+
+        with pytest.raises(_waveform.StagedInputError) as excinfo:
+            _waveform.resolve_staged_input(str(tmp_path / "secret.mp4"), inputs)
+        assert excinfo.value.status == 403

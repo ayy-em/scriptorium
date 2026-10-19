@@ -21,6 +21,7 @@ from pathlib import Path
 import subprocess
 import sys
 
+from core.paths import archived_copy
 from scripts.av._utils import probe_duration_or_none
 
 _CREATION_FLAGS = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
@@ -80,6 +81,12 @@ def resolve_staged_input(raw: str, root: Path) -> Path:
     symlinks are collapsed first — checking the unresolved path would accept
     ``inputs/../../.ssh/id_rsa``.
 
+    A path whose file has since been archived is followed into
+    ``processed/``, for the same reason the scripts themselves follow it: the
+    trim page holds one path for the whole of a session, and a run archives the
+    file out from under it. The containment check runs first and the archive is
+    inside the inputs root, so following it widens nothing.
+
     Args:
         raw: Path as the client sent it.
         root: The inputs directory paths must be contained by.
@@ -99,6 +106,7 @@ def resolve_staged_input(raw: str, root: Path) -> Path:
         raise StagedInputError("Unusable path", 400)
     if not target.is_relative_to(root):
         raise StagedInputError("Path is outside the inputs directory", 403)
+    target = archived_copy("av", target) or target
     if not target.is_file():
         raise StagedInputError("No such file", 404)
     return target

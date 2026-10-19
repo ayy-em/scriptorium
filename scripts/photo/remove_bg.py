@@ -12,7 +12,7 @@ from core.argparse import ScriptoriumParser
 from core.downloads import reporting_downloads
 from core.images import ensure_image_formats
 from core.outputs import deduplicate, default_stem, resolve_output, resolve_output_dir
-from core.paths import inputs_dir, move_to_past_inputs
+from core.paths import inputs_dir, move_to_past_inputs, resolve_input
 from scripts.formats._utils import IMAGE_EXTS, find_files, single_source
 
 TITLE = "Remove background"
@@ -573,7 +573,7 @@ def run() -> None:
     """CLI entrypoint. Parse arguments and run each requested preset in turn."""
     args = get_parser().parse_args()
 
-    source = args.source if args.source is not None else inputs_dir(_THEME)
+    source = resolve_input(args.source, _THEME) if args.source is not None else inputs_dir(_THEME)
 
     # The web UI uploads even a single file into a per-batch directory, so a
     # directory holding exactly one image is a one-file job. Collapsing it here

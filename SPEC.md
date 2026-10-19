@@ -839,12 +839,67 @@ inputs/
         holiday.mp4
 ```
 
-A name collision inside `processed/` appends `_YYYYMMDDTHHMMSS` to the stem, so
-an earlier archived copy is never overwritten. Files already inside
-`processed/` are skipped, so re-running against the archive does not shuffle it.
+On a name collision the **newer** copy takes the plain name and the older one
+is moved aside to `<stem>_YYYYMMDDTHHMMSS<ext>`, stamped with its own mtime so
+the suffix says when that copy is from rather than when it was bumped. Nothing
+is overwritten. Files already inside `processed/` are skipped, so re-running
+against the archive does not shuffle it.
+
+That ordering is load-bearing, not a detail — see below.
 
 The return value is ignored by every caller: failing to tidy up is not a reason
 to fail a run that already produced its output.
+
+#### Following an input that has been archived
+
+Archiving creates a problem it has to solve: the path the caller is holding
+stops existing the moment the file is used once. The web form holds one path
+for the whole session and is not cleared after a run; a history record holds
+the path the run was given; a shell history entry holds whatever was typed.
+So pressing Run twice — the normal way of finding the right `--crf`, or the
+right cut — failed on a file sitting in plain sight in `processed/`.
+
+`core.paths.resolve_input` therefore follows a missing staged path into the
+archive, and `core.paths.archived_copy(theme, candidate)` is the lookup:
+
+- It only fires when the path **does not exist**. A staged file always wins
+  over an archived one of the same name.
+- It only follows paths **inside the inputs tree**. A missing
+  `~/Movies/holiday.mp4` stays missing rather than silently resolving to an
+  unrelated `inputs/processed/holiday.mp4` that happens to share a name.
+- Only files are archived, so only files come back. A directory-native script
+  pointed at a missing folder gets nothing from the archive to be confused by.
+- The substitution is **announced on stdout**, because reading a different file
+  than the caller named is not something to do quietly.
+
+This is why the collision policy puts the newest copy at the plain name. The
+lookup is a plain path check, so whichever copy holds `processed/<name>` is the
+one a re-run gets. The original policy had it the other way round: a second
+`report.csv` archived under a timestamped name and left January's sitting at
+`processed/report.csv`, so re-running October's file would have quietly fed the
+script January's data. The fallback and the collision order have to agree, and
+this is the direction that makes them agree.
+
+One interaction worth knowing about: the announcement names a real existing
+file, and `core.outputs.find_reported_outputs` detects results by reading
+stdout. It is not credited as a result because archiving preserves mtime, so an
+archived input always predates the run that mentions it.
+`tests/core/test_paths.py` pins that.
+
+`webapp._waveform.resolve_staged_input` follows the archive the same way, so
+the `av.trim` waveform still draws after the file it is editing has been filed
+away. Containment is checked **before** the archive is consulted, so following
+it widens nothing.
+
+**Archiving an input obliges a script to resolve through `resolve_input`.** The
+two travel together: a script that archives but reads `args.source` directly
+works exactly once per file, because the second run is handed a path the first
+run moved. This is not hypothetical — `formats.convert_*` and
+`photo.remove_bg`, the scripts that had been archiving the longest, were the
+ones that had never called the resolver, so every one of them failed on a
+second run. `tests/test_input_archiving.py` now asserts the pairing.
+`av.join` is the one exception, since it is given a directory of clips rather
+than a single input path to follow.
 
 #### Which scripts archive
 

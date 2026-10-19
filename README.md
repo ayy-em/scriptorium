@@ -286,8 +286,20 @@ finished with it, so the inputs folder shows what is still waiting to be done.
 **This only ever applies to files inside `inputs/`.** Point a script at
 `~/Movies/holiday.mp4` and it is read and left exactly where it is — nothing is
 moved, and no `processed/` folder appears next to your media. If a file of the
-same name is already archived, the new one gets a timestamp suffix rather than
-overwriting it.
+same name is already archived, the older copy is renamed with a timestamp
+rather than overwritten; the name you know stays pointing at the newest one.
+
+**You do not have to re-add a file to run it again.** Archiving happens behind
+your back, so the file field in the UI keeps working after a run: press Run a
+second time with different settings and the script follows the file into
+`inputs/processed/` by itself. The same goes for re-running from History and
+for repeating a command in your terminal. The run output says when it has done
+this, so a path that reads `inputs/clip.mp4` producing a result from
+`inputs/processed/clip.mp4` is not a mystery.
+
+This only applies to files that were staged in `inputs/` — a missing file
+somewhere else on your disk stays missing rather than being quietly swapped for
+something in the archive with the same name.
 
 A few scripts deliberately do not archive: the `lora.*` tools work on a dataset
 folder in place, the `telegram.*` chain needs its export again at the next step,

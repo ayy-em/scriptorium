@@ -69,6 +69,13 @@ def resolve_input(source: Path, theme: str) -> Path:
     endpoint returns one), so its bare-filename branch only ever serves a human
     who put a file in ``inputs/`` and typed its name.
 
+    Finally, a staged path that no longer exists is followed into
+    ``inputs/processed/``. A successful run archives its own input, so the path
+    the caller is holding — a form field, a history record, a command in shell
+    history — stops existing the moment it is used once. Following it is what
+    lets the same file be run twice in a row, which is the normal way of
+    finding the right ``--crf`` or the right cut.
+
     Args:
         source: Path exactly as the caller supplied it.
         theme: Script theme slug, for the inputs directory lookup.
@@ -80,12 +87,23 @@ def resolve_input(source: Path, theme: str) -> Path:
 
     source = source.expanduser()
     if source.is_absolute():
-        return source
-    if source.parent != Path("."):
-        return relative_root() / source
-    if is_webapp_run():
-        return inputs_dir(theme) / source.name
-    return source
+        resolved = source
+    elif source.parent != Path("."):
+        resolved = relative_root() / source
+    elif is_webapp_run():
+        resolved = inputs_dir(theme) / source.name
+    else:
+        resolved = source
+
+    # Every branch is offered the archive, but ``archived_copy`` only follows a
+    # path that lands inside the staging area. A bare name on the command line
+    # means a file in the current directory, so it is followed only when that
+    # directory is itself inside ``inputs/`` — never from somewhere unrelated.
+    archived = archived_copy(theme, resolved)
+    if archived is None:
+        return resolved
+    print(f"{resolved.name} was archived by an earlier run; reading {archived}")
+    return archived
 
 
 def drop_session_dir(session_id: str) -> Path:
@@ -131,6 +149,15 @@ def move_to_past_inputs(theme: str, source: Path) -> Path | None:
     Files already inside ``processed/`` are skipped, so re-running against the
     archive does not shuffle it.
 
+    **The archived file keeps its own name**, and on a name collision it is the
+    *older* copy that is moved aside, not the new one. That ordering is what
+    makes ``archived_copy`` able to answer "where did the file I was just
+    using go?" with a plain path lookup: ``processed/<name>`` is always the
+    most recently archived file of that name. The other way round — which is
+    how this worked at first — a second ``report.csv`` archived under a
+    timestamped name and left the first sitting at ``processed/report.csv``,
+    so looking the name up found the wrong month's data.
+
     Args:
         theme: Script theme slug, for the inputs directory lookup.
         source: File the run has finished with.
@@ -141,30 +168,100 @@ def move_to_past_inputs(theme: str, source: Path) -> Path | None:
         Callers ignore the return value: failing to tidy up is never a reason
         to fail a run that already produced its output.
     """
-    if not source.is_file():
-        return None
-    try:
-        source_resolved = source.resolve()
-        inputs_root = inputs_dir(theme).resolve()
-        past_root = past_inputs_dir(theme).resolve()
-    except OSError:
-        return None
-    try:
-        source_resolved.relative_to(inputs_root)
-    except ValueError:
-        return None
-    if source_resolved.is_relative_to(past_root):
+    if not _is_archivable(theme, source):
         return None
 
-    dest = past_root / source.name
-    if dest.exists():
-        stamp = datetime.now().strftime("%Y%m%dT%H%M%S")
-        dest = past_root / f"{source.stem}_{stamp}{source.suffix}"
+    dest = past_inputs_dir(theme).resolve() / source.name
+    if dest.exists() and not _displace(dest):
+        return None
     try:
         shutil.move(str(source), str(dest))
     except OSError:
         return None
     return dest
+
+
+def _is_archivable(theme: str, source: Path) -> bool:
+    """Report whether *source* is a staged input this app may file away.
+
+    Args:
+        theme: Script theme slug, for the inputs directory lookup.
+        source: Candidate file.
+
+    Returns:
+        True for an existing file inside the inputs tree but not already
+        inside ``processed/``.
+    """
+    if not source.is_file():
+        return False
+    try:
+        source_resolved = source.resolve()
+        inputs_root = inputs_dir(theme).resolve()
+        past_root = past_inputs_dir(theme).resolve()
+    except OSError:
+        return False
+    if not source_resolved.is_relative_to(inputs_root):
+        return False
+    return not source_resolved.is_relative_to(past_root)
+
+
+def _displace(archived: Path) -> bool:
+    """Move an already-archived file aside so a newer one can take its name.
+
+    The timestamp comes from the displaced file's own modification time rather
+    than from now, so the suffix says when that copy is from instead of when it
+    happened to be bumped.
+
+    Args:
+        archived: Existing file inside ``processed/`` whose name is wanted.
+
+    Returns:
+        True when the name is free afterwards, False when it could not be
+        vacated — in which case the caller leaves the archive alone rather
+        than overwriting a file it cannot preserve.
+    """
+    from core.outputs import deduplicate  # noqa: PLC0415
+
+    try:
+        stamp = datetime.fromtimestamp(archived.stat().st_mtime).strftime("%Y%m%dT%H%M%S")
+        aside = deduplicate(archived.with_stem(f"{archived.stem}_{stamp}"))
+        archived.rename(aside)
+    except OSError, FileExistsError:
+        return False
+    return True
+
+
+def archived_copy(theme: str, candidate: Path) -> Path | None:
+    """Return where *candidate* was archived to, if that is where it now lives.
+
+    Archiving an input after a successful run means the path the caller is
+    holding stops existing. That is correct housekeeping and a miserable
+    experience: pressing Run twice, or re-running from history, fails on a file
+    that is sitting right there in ``processed/``. This answers "the thing I
+    was pointed at has moved — where to?" so callers can follow it.
+
+    Only paths inside the shared inputs tree are followed. A missing
+    ``~/Movies/holiday.mp4`` stays missing rather than silently resolving to an
+    unrelated ``inputs/processed/holiday.mp4`` that happens to share a name.
+
+    Args:
+        theme: Script theme slug, for the inputs directory lookup.
+        candidate: The path that was expected to exist.
+
+    Returns:
+        The archived file, or None when *candidate* still exists, sits outside
+        the inputs tree, or has no archived counterpart.
+    """
+    if candidate.exists():
+        return None
+    try:
+        inputs_root = inputs_dir(theme).resolve()
+        if not candidate.resolve().is_relative_to(inputs_root):
+            return None
+        archived = past_inputs_dir(theme) / candidate.name
+    except OSError:
+        return None
+    return archived if archived.is_file() else None
 
 
 def logs_dir() -> Path:
