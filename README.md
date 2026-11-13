@@ -275,7 +275,12 @@ On a Mac that did not build it, clear the quarantine flag first:
 The installer supports two modes: "Install for all users" (requires admin, installs
 to `C:\Program Files\Scriptorium`) or "Install just for me" (no admin rights,
 installs to `%LOCALAPPDATA%\Programs\Scriptorium`). It creates a Start Menu shortcut
-and optionally adds the install directory to PATH for CLI usage.
+and optionally adds the install directory to PATH for CLI usage. If Scriptorium
+is running, setup and uninstall ask you to close it first.
+
+Only one Scriptorium runs at a time. Launching it again — from the Start menu,
+a shortcut, or the Dock — brings the open window forward, or reopens it from
+the tray, instead of starting a second copy.
 
 ### Linux binary
 
@@ -441,6 +446,7 @@ run_fn(export, Path("inputs"), Path("outputs/lora/captions.json"))
 ## Version History
 
 ### Unreleased
+- **One app, one window** — launching Scriptorium while it is already running brings its window forward instead of starting another copy with its own tray icon; the Windows installer asks you to close a running app before upgrading
 - **Homebrew works from the macOS app** — an app opened from Finder or the Dock never saw Homebrew, so every Install button failed and brew-installed ffmpeg or pandoc read as missing; the app now looks where a Terminal would, and says to install Homebrew first when it is not there
 - **`av.join` audio joins fixed** — joining `.wav`, `.mp3` or `.flac` files reported success but wrote AAC into the container, which nothing could play; each now gets its own codec (PCM, MP3, FLAC)
 - **No source means the current folder** — run a script from a terminal without a source argument and it reads the folder you are in, on Windows, macOS and Linux; the web UI and the repo root of a checkout still read `inputs/`

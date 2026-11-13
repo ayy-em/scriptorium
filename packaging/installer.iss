@@ -29,6 +29,8 @@ PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog commandline
 OutputDir=..\dist
 OutputBaseFilename=ScriptoriumSetup
+; Held by the running app (core/instance.py MUTEX_NAME): setup and uninstall ask the user to close it first.
+AppMutex=Scriptorium.SingleInstance
 SetupIconFile=logo.ico
 UninstallDisplayIcon={app}\{#MyAppExeName}
 Compression=lzma2/ultra64
