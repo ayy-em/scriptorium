@@ -238,7 +238,7 @@ clears it without a restart.
 | `formats.convert_docs` | **pandoc** on `PATH` | Document conversion fails |
 | Telegram PDF reports | **pango, cairo, glib** — Homebrew on macOS, MSYS2 or the GTK3 runtime on Windows | PDF output fails; the other Telegram scripts are unaffected |
 | `speech.transcribe`, `telegram.embed_messages` | An OpenAI API key — paste it under **Settings → Keys** (stored in `~/scriptorium/.env`), or set `OPENAI_API_KEY` in a `.env` file | The script errors out with the same hint |
-| `photo.remove_bg` | Model weights, ~170MB per model (~215MB for the `hq` preset's `birefnet-general-lite`, ~950MB for `birefnet-general`) | Downloaded to `~/.u2net/` on first use of each model; the form says so before you run, and the status bar shows the download |
+| `photo.remove_bg` | Model weights, ~170MB per model (~950MB for the `hq` preset's `birefnet-general`, ~215MB for `birefnet-general-lite`) | Downloaded to `~/.u2net/` on first use of each model; the form says so before you run, and the status bar shows the download |
 
 Two more are optional — reported, but nothing breaks without them: **gifsicle**
 makes `av.to_anim --optimize` more effective, and the **weasyprint** CLI gives
@@ -329,9 +329,10 @@ cd ~/Movies/holiday
 scriptorium av.trim thing.mp4 00:12 01:07   # reads ./thing.mp4, writes ./<stamp>.mp4
 ```
 
-Run it with no source argument and it falls back to the shared `inputs/` folder
-instead, which is what the web UI uses. Pass `--output` at any time to be
-explicit.
+Run it with no source argument and it reads the folder you are standing in,
+like any other command-line tool. The one exception is the repo root of a source
+checkout, where `uv run main.py …` keeps reading the shared `inputs/` folder the
+web UI uses. Pass `--output` at any time to be explicit.
 
 ### What happens to your input file
 
@@ -411,15 +412,20 @@ uv run main.py photo.remove_bg photos/ --all-presets
 ```
 
 `photo.remove_bg` presets are named for cost, not quality — `fast` (u2net),
-`balanced` (isnet-general-use with mask clean-up) and `hq` (birefnet-general-lite
-with alpha matting) — because no model wins on every image. `--all-presets`
-writes `fast_…`, `balanced_…` and `hq_…` side by side so you can pick by eye.
+`balanced` (isnet-general-use with mask clean-up) and `hq` (birefnet-general
+with alpha matting, a ~950MB download on first use) — because no model wins on
+every image. `--all-presets`, or `--multi` for short, writes `fast_…`,
+`balanced_…` and `hq_…` side by side so you can pick by eye.
 
 `av.trim` cuts where you asked. A stream copy can only start at a keyframe, so
-when the nearest one is not close enough to your start time, the video is
-re-encoded instead of quietly rounding the cut backwards — which on a
-low-frame-rate or long-GOP source used to mean getting most of the original
-file back and being told it worked. `--mode fast` opts out and keeps the copy.
+when the nearest one is not close enough to your start time, the default `auto`
+mode makes a **smart cut**: for H.264 and HEVC it re-encodes only the stretch up
+to the next keyframe and copies the rest, so the cut is frame-exact and the bulk
+of the file keeps its original quality. Every smart cut is decoded once before
+it is kept; for other codecs, or if anything about the splice looks wrong, the
+whole range is re-encoded instead and the console says why. `--mode fast` keeps
+a pure copy, snapping to the keyframe, and `--mode precise` always re-encodes
+everything.
 
 ## How To Use: Programmatic Examples
 
@@ -434,6 +440,10 @@ run_fn(export, Path("inputs"), Path("outputs/lora/captions.json"))
 ## Version History
 
 ### Unreleased
+- **`av.join` audio joins fixed** — joining `.wav`, `.mp3` or `.flac` files reported success but wrote AAC into the container, which nothing could play; each now gets its own codec (PCM, MP3, FLAC)
+- **No source means the current folder** — run a script from a terminal without a source argument and it reads the folder you are in, on Windows, macOS and Linux; the web UI and the repo root of a checkout still read `inputs/`
+- **`av.trim` smart cut** — when a plain copy would miss the start, H.264 and HEVC cuts re-encode only up to the next keyframe and copy the rest, and are decoded once before they are kept
+- **`photo.remove_bg` `hq` uses the full BiRefNet** — `birefnet-general` (~950MB) replaces the lite model; `--multi` is the short spelling of `--all-presets`
 - **Install missing dependencies from the app** — ffmpeg and pandoc get an Install button in the sidebar, on the script pages that need them, and on a first-run tour slide; winget or brew runs with output streamed into the UI, no restart needed
 - **`photo.remove_bg` presets** — `--quality` is now `--preset fast|balanced|hq`, named for cost rather than quality because no model wins on every image; `--all-presets` runs all three over the same inputs for side-by-side comparison
 - **Model downloads are visible** — the form says which weights a run will fetch and how big they are; the status bar shows the download instead of a run that looks hung
