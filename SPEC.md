@@ -18,6 +18,7 @@ scriptorium/
 ├── build.bat                # Windows entrypoint → packaging/build_installer.bat
 ├── main.py                  # CLI entrypoint
 ├── assets/                  # shared images and fonts used across themes
+├── docs/screenshots/        # README carousels (light + dark), from packaging/screenshots.py
 ├── inputs/                  # drop files here (shared across every theme)
 │   └── processed/           # files auto-archived here after successful runs
 ├── outputs/                 # per-theme outputs land here as <theme>/<file>
@@ -68,6 +69,7 @@ scriptorium/
     ├── build_installer.bat      # Windows build script (PyInstaller + Inno Setup)
     ├── build_linux.sh           # Linux build script
     ├── installer.iss            # Inno Setup script for Windows installer
+    ├── screenshots.py           # captures the README carousels: uv run --with playwright packaging/screenshots.py
     └── logo.icns, logo.ico      # app icons for the macOS bundle and Windows installer
 ```
 
