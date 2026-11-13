@@ -45,10 +45,25 @@ _TARGET_CHANNELS = "2"
 _X264_PRESET = "medium"
 
 # Which audio codec the output container can hold. Preprocessing always
-# re-encodes audio, so the choice is free — but WebM refuses AAC, and a VP9
-# stream copied into .webm next to AAC audio failed at the very last step.
-_CONTAINER_AUDIO_CODEC = {".webm": "libopus", ".ogg": "libopus", ".opus": "libopus"}
+# re-encodes audio, so the choice is free — but it has to be one the container
+# actually carries. WebM refuses AAC, and a VP9 stream copied into .webm next to
+# AAC audio failed at the very last step. WAV, by contrast, *accepts* AAC: the
+# muxer writes it without complaint and the result is a file nothing can decode,
+# so a join of .wav files reported success and handed back noise. Audio-only
+# containers therefore get the codec they are named for.
+_CONTAINER_AUDIO_CODEC = {
+    ".webm": "libopus",
+    ".ogg": "libopus",
+    ".opus": "libopus",
+    ".wav": "pcm_s16le",
+    ".flac": "flac",
+    ".mp3": "libmp3lame",
+}
 _DEFAULT_AUDIO_CODEC = "aac"
+
+# Lossless codecs have no bitrate to choose; passing -b:a to them only earns a
+# warning.
+_LOSSLESS_AUDIO_CODECS = frozenset({"pcm_s16le", "flac"})
 
 # Containers that cannot hold the H.264 + AAC pair every re-encode produces.
 # A join that has to re-encode into one of these moves to MP4 instead.
@@ -181,7 +196,7 @@ def join(
                 cf.write(f"file '{f.resolve()}'\n")
 
         reporter.update(len(files) / (len(files) + 1), "joining", force=True)
-        run_ffmpeg(["-f", "concat", "-safe", "0", "-i", str(concat_list), "-c", "copy", str(output)])
+        run_ffmpeg(["-f", "concat", "-safe", "0", "-i", str(concat_list), *_concat_codec_args(profile), str(output)])
         reporter.finish()
 
     for f in files:
@@ -352,6 +367,26 @@ def _resolve_profile(
         audio_codec=_CONTAINER_AUDIO_CODEC.get(output_suffix, _DEFAULT_AUDIO_CODEC),
         output_suffix=output_suffix,
     )
+
+
+def _concat_codec_args(profile: _JoinProfile) -> list[str]:
+    """Return the codec arguments for the final concat step.
+
+    Everything is stream-copied except FLAC audio. A FLAC file carries one
+    STREAMINFO header describing the whole stream; copying packets from several
+    files under the first one's header yields a file that decodes only as far
+    as the first segment and errors after it. Re-encoding at this step is cheap
+    — it is audio, already at the target rate — and lossless.
+
+    Args:
+        profile: The resolved join profile.
+
+    Returns:
+        ffmpeg arguments naming the output codecs.
+    """
+    if profile.audio_codec == "flac":
+        return ["-c:v", "copy", "-c:a", "flac"] if profile.has_video else ["-c:a", "flac"]
+    return ["-c", "copy"]
 
 
 def _video_filter(profile: _JoinProfile) -> str:
@@ -606,16 +641,10 @@ def _preprocess_file(
         # is an invitation for the filter to do something surprising.
         if audio:
             args += ["-af", f"loudnorm=I={_LUFS_TARGET}:TP={_TRUE_PEAK}:LRA={_LRA}"]
-        args += [
-            "-c:a",
-            profile.audio_codec,
-            "-b:a",
-            preset["audio_bitrate"],
-            "-ar",
-            _TARGET_SAMPLE_RATE,
-            "-ac",
-            _TARGET_CHANNELS,
-        ]
+        args += ["-c:a", profile.audio_codec]
+        if profile.audio_codec not in _LOSSLESS_AUDIO_CODECS:
+            args += ["-b:a", preset["audio_bitrate"]]
+        args += ["-ar", _TARGET_SAMPLE_RATE, "-ac", _TARGET_CHANNELS]
     else:
         args += ["-an"]
     args.append(str(temp_file))

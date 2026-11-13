@@ -1,6 +1,8 @@
 """Tests for scripts.av.join."""
 
 from pathlib import Path
+import shutil
+import subprocess
 import time
 from unittest.mock import patch
 
@@ -326,6 +328,70 @@ def test_join_moves_a_reencoded_webm_to_mp4(tmp_path, capsys):
     assert result == out.with_suffix(".mp4")
     assert str(result) in mock_ff.call_args_list[-1][0][0]
     assert "writing .mp4 instead" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    ("suffix", "codec"),
+    [(".wav", "pcm_s16le"), (".flac", "flac"), (".mp3", "libmp3lame"), (".m4a", "aac"), (".ogg", "libopus")],
+)
+def test_audio_only_output_gets_the_codec_its_container_is_named_for(tmp_path, suffix, codec):
+    """WAV accepts AAC without complaint and nothing can decode the result — the original bug."""
+    files = _make_files(tmp_path, 2, suffix=suffix)
+    streams = {f: [_AUDIO] for f in files}
+    profile = _resolve_profile(files, streams, "high", output_suffix=suffix)
+    assert profile.audio_codec == codec
+
+
+def test_lossless_audio_is_not_given_a_bitrate(tmp_path):
+    source = tmp_path / "a.wav"
+    source.touch()
+    profile = _profile(has_video=False, width=None, height=None, frame_rate=None, audio_codec="pcm_s16le")
+    with patch("scripts.av.join.run_ffmpeg") as mock_ff:
+        _preprocess_file(source, [_AUDIO], tmp_path, 0, profile)
+    argv = mock_ff.call_args[0][0]
+    assert argv[argv.index("-c:a") + 1] == "pcm_s16le"
+    assert "-b:a" not in argv
+
+
+def test_flac_is_reencoded_at_the_concat_step(tmp_path):
+    """Copied FLAC packets under the first file's STREAMINFO decode only as far as the first segment."""
+    _make_files(tmp_path, 2, suffix=".flac")
+    out = tmp_path / "out" / "joined.flac"
+    with (
+        patch("scripts.av.join.probe_streams", side_effect=[[_AUDIO], [_AUDIO]]),
+        patch("scripts.av.join.run_ffmpeg") as mock_ff,
+    ):
+        join(tmp_path, out)
+    concat = mock_ff.call_args_list[-1][0][0]
+    assert concat[concat.index("-c:a") + 1] == "flac"
+    assert "copy" not in concat
+
+
+@pytest.mark.skipif(not shutil.which("ffmpeg") or not shutil.which("ffprobe"), reason="needs ffmpeg")
+@pytest.mark.parametrize("suffix", [".wav", ".mp3", ".flac"])
+def test_joined_audio_decodes_end_to_end(tmp_path, suffix):
+    """Real ffmpeg: three tones in, one file out that decodes cleanly for its full length."""
+    src = tmp_path / "src"
+    src.mkdir()
+    for freq in (220, 330, 440):
+        subprocess.run(
+            ["ffmpeg", "-y", "-loglevel", "error", "-f", "lavfi", "-i", f"sine=frequency={freq}:duration=1",
+             str(src / f"tone{freq}{suffix}")],
+            check=True,
+        )  # fmt: skip
+    out = join(src, tmp_path / f"joined{suffix}")
+
+    decode = subprocess.run(
+        ["ffmpeg", "-v", "error", "-i", str(out), "-f", "null", "-"], capture_output=True, text=True, check=False
+    )
+    assert decode.stderr == ""
+    duration = subprocess.run(
+        ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", str(out)],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+    assert float(duration) == pytest.approx(3.0, abs=0.1)
 
 
 # ---------------------------------------------------------------------------
