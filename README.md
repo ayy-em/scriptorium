@@ -1,11 +1,66 @@
-# Scriptorium
+<p align="center">
+  <img src="https://github.com/ayy-em/scriptorium/raw/main/webapp/static/logo.webp?raw=true" alt="Scriptorium logo" width="160"/>
+</p>
 
-Themed utility toolkit, running as platform-native apps, a webapp with browser-based UI, or a CLI tool. 
-Built by coders, for non-coders.
+<h1 align="center">Scriptorium</h1>
 
 <p align="center">
-  <img src="https://github.com/ayy-em/scriptorium/raw/main/webapp/static/logo.webp?raw=true" alt="Scriptorium logo"/>
+  <b>Your everyday file chores, done in one drop.</b><br/>
+  Trim video, strip photo backgrounds, convert almost anything, download clips and turn your Telegram chats into reports.<br/>
+  27 tools in one tidy desktop app. Private, mostly offline, and no Python or terminal required.
 </p>
+
+<p align="center">
+  <a href="https://github.com/ayy-em/scriptorium/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/ayy-em/scriptorium?color=7c5cdb&label=release"/></a>
+  <img alt="Windows, macOS and Linux" src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-5b5675"/>
+  <img alt="Python 3.14" src="https://img.shields.io/badge/python-3.14-3776ab?logo=python&logoColor=white"/>
+  <a href="LICENSE"><img alt="License: PolyForm Noncommercial 1.0.0" src="https://img.shields.io/badge/license-PolyForm%20Noncommercial-8a63d2"/></a>
+</p>
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/showcase-dark.webp"/>
+    <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/showcase-light.webp"/>
+    <img alt="Scriptorium in action: the script list, drop-to-discover, a script form, a finished run, the trim editor, history and settings" src="docs/screenshots/showcase-light.webp" width="900"/>
+  </picture>
+</p>
+
+<p align="center">
+  <a href="https://github.com/ayy-em/scriptorium/releases/latest"><b>⬇️ Download for Windows, macOS or Linux</b></a>
+  &nbsp;·&nbsp;
+  <a href="#quickstart-install">🛠️ Run from source</a>
+  &nbsp;·&nbsp;
+  <a href="#scripts-available">🧰 See every script</a>
+</p>
+
+## ✨ Why Scriptorium
+
+- 🎯 **Drop a file, get the right tools.** Drag a file onto the window and Scriptorium shows only the tools that can handle it. Drop a whole batch, or paste an image straight from the clipboard.
+- 🧾 **Forms, not flags.** Every option comes with a plain-language explanation and sensible defaults. Fill in a form, press Run, done.
+- 🔒 **Your files stay yours.** Files are processed on your own machine: no account, no uploads, no cloud. Only the tools whose whole job is online (downloads, AI transcription) talk to the internet, and your API keys stay in your local settings.
+- 📦 **Install and go.** Native installers for Windows, macOS and Linux bundle everything Python needs. Missing ffmpeg or pandoc? A one-click **Install** button sorts it out.
+- 📊 **Progress you can trust.** Live output, a real progress bar wherever a job can measure one, and a **Cancel** button that stops the whole job, including any ffmpeg or downloader running underneath it.
+- 🔁 **Never retype a command.** Every run is logged. **Re-run** reopens the form with the exact settings you used last time.
+- 📲 **Walk away from long jobs.** Get a Telegram message the moment a long run finishes or fails.
+- 🧑‍💻 **A real CLI underneath.** Every form shows the exact command it runs, so anything you click once you can script forever.
+- 🌗 **Pleasant to live in.** Light and dark themes, keyboard-first navigation, favourites and instant search (<kbd>Ctrl</kbd>+<kbd>K</kbd>).
+- 🧩 **Easy to extend.** Drop a Python module into `scripts/<theme>/` and it appears in the app with its own auto-generated form. No UI code to write.
+
+## 🧰 What's in the box
+
+| | Theme | Highlights |
+|---|---|---|
+| 🎬 | **Video & audio** | Trim on a waveform, join, split, crop, fix volume and fades, filmstrip contact sheets, video-to-GIF/WebP, frame dumps, metadata tags |
+| 🖼️ | **Photos** | AI background removal with fast, balanced and high-quality presets; HEIC/HEIF from iPhones and Android phones |
+| 🔄 | **File formats** | Convert audio, video, images, documents (docx, md, html, pdf) and spreadsheets (csv, json, xlsx, ods, tsv) |
+| ⬇️ | **Downloads** | Save media from YouTube, Vimeo and hundreds of other sites |
+| 🗣️ | **Speech** | Transcribe recordings to text |
+| 💬 | **Telegram** | Turn a chat or group export into a visual analytics report, or prepare it for semantic search |
+| 🎨 | **LoRA datasets** | Validate, renumber and round-trip captions for image-model training sets |
+| 🗺️ | **Sitemaps** | Check every URL in a sitemap for broken links |
+| 🎞️ | **GIF** | Assemble a folder of frames into an animated GIF |
+
+---
 
 ## Quickstart: Install
 
@@ -432,3 +487,14 @@ run_fn(export, Path("inputs"), Path("outputs/lora/captions.json"))
 ## More Information
 
 See [SPEC.md](SPEC.md) for the full design.
+
+## License
+
+Scriptorium is released under the [PolyForm Noncommercial License 1.0.0](LICENSE).
+
+- ✅ Free to use, copy, modify and share for any **noncommercial** purpose: personal projects, study, research, hobby work, charities and public institutions.
+- ✍️ Keep the copyright notice: anyone you pass it on to must get the licence and its `Required Notice:` line.
+- 🚫 No commercial use without separate permission from the author.
+- ⚠️ Provided as is, with no warranty and no liability for anything it does or fails to do.
+
+Third-party libraries, fonts and tools that Scriptorium bundles or calls remain under their own licences.
