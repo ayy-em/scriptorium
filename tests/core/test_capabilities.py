@@ -203,7 +203,22 @@ class TestInstallCommands:
 
     def test_macos_uses_brew(self, monkeypatch):
         monkeypatch.setattr(sys, "platform", "darwin")
+        monkeypatch.setattr(capabilities, "_brew_available", lambda: True)
         assert probe("ffmpeg").command == ("brew", "install", "ffmpeg")
+
+    def test_macos_without_homebrew_offers_no_button_and_says_why(self, monkeypatch):
+        """A button that runs a brew which is not there can only fail."""
+        monkeypatch.setattr(sys, "platform", "darwin")
+        monkeypatch.setattr(capabilities, "_brew_available", lambda: False)
+        cap = probe("ffmpeg")
+        assert cap.command == ()
+        assert cap.hint.startswith("Install Homebrew first")
+        assert cap.hint.endswith("brew install ffmpeg")
+
+    def test_homebrew_check_does_not_touch_other_platforms(self, monkeypatch):
+        monkeypatch.setattr(sys, "platform", "win32")
+        monkeypatch.setattr(capabilities, "_brew_available", lambda: False)
+        assert probe("ffmpeg").command[0] == "winget"
 
     def test_linux_has_no_command(self, monkeypatch):
         """Apt needs sudo, which a background process cannot supply."""
@@ -297,3 +312,59 @@ class TestTelegramKeys:
         invalidate()
         monkeypatch.setenv("TELEGRAM_CHAT_ID", "12345")
         assert probe("telegram-chat-id").present is True
+
+
+class TestEnsureSearchPath:
+    """A Finder-launched macOS app gets launchd's bare PATH, without Homebrew."""
+
+    @pytest.fixture
+    def mac(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+        """A macOS host with a fake /etc and every candidate directory existing."""
+        monkeypatch.setattr(sys, "platform", "darwin")
+        etc = tmp_path / "etc"
+        (etc / "paths.d").mkdir(parents=True)
+        (etc / "paths").write_text("/usr/local/bin\n/usr/bin\n/bin\n", encoding="utf-8")
+        (etc / "paths.d" / "10-cryptex").write_text("/System/Cryptexes/App/usr/bin\n", encoding="utf-8")
+        real = capabilities._macos_search_dirs
+        monkeypatch.setattr(capabilities, "_macos_search_dirs", lambda: real(etc))
+        monkeypatch.setattr(capabilities.os.path, "isdir", lambda _d: True)
+        return etc
+
+    def test_adds_homebrew_and_system_paths_after_what_is_there(self, mac, monkeypatch):
+        monkeypatch.setenv("PATH", "/usr/bin:/bin:/usr/sbin:/sbin")
+        monkeypatch.setattr(capabilities.os, "pathsep", ":")
+        capabilities.ensure_search_path()
+        entries = os.environ["PATH"].split(":")
+        assert entries[:4] == ["/usr/bin", "/bin", "/usr/sbin", "/sbin"]
+        assert "/opt/homebrew/bin" in entries
+        assert "/usr/local/bin" in entries
+        assert "/System/Cryptexes/App/usr/bin" in entries
+
+    def test_never_duplicates_an_entry(self, mac, monkeypatch):
+        monkeypatch.setenv("PATH", "/opt/homebrew/bin:/usr/bin")
+        monkeypatch.setattr(capabilities.os, "pathsep", ":")
+        capabilities.ensure_search_path()
+        capabilities.ensure_search_path()
+        entries = os.environ["PATH"].split(":")
+        assert len(entries) == len(set(entries))
+        assert entries[0] == "/opt/homebrew/bin"
+
+    def test_skips_directories_that_do_not_exist(self, mac, monkeypatch):
+        monkeypatch.setattr(capabilities.os.path, "isdir", lambda d: d == "/usr/local/bin")
+        monkeypatch.setenv("PATH", "/usr/bin")
+        monkeypatch.setattr(capabilities.os, "pathsep", ":")
+        capabilities.ensure_search_path()
+        assert os.environ["PATH"] == "/usr/bin:/usr/local/bin"
+
+    def test_other_platforms_are_untouched(self, monkeypatch):
+        monkeypatch.setattr(sys, "platform", "linux")
+        monkeypatch.setenv("PATH", "/usr/bin")
+        capabilities.ensure_search_path()
+        assert os.environ["PATH"] == "/usr/bin"
+
+    def test_refresh_environment_rechecks_on_macos(self, mac, monkeypatch):
+        """Homebrew's own installer is what creates /opt/homebrew/bin."""
+        monkeypatch.setenv("PATH", "/usr/bin")
+        monkeypatch.setattr(capabilities.os, "pathsep", ":")
+        capabilities.refresh_environment()
+        assert "/opt/homebrew/bin" in os.environ["PATH"].split(":")

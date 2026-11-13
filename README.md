@@ -227,7 +227,8 @@ listed here.
 Each of these is **detected**, and any that is missing is named in the sidebar
 and at the top of every script page that needs it. Where one unattended command
 does the job (winget on Windows, brew on macOS) there is an **Install** button
-that runs it for you and shows the installer's output; a key gets a **Set key**
+that runs it for you and shows the installer's output — on a Mac without
+Homebrew the button is replaced by a note to install Homebrew first; a key gets a **Set key**
 button that opens Settings; otherwise you get the command to run. The check
 re-runs as you use the app, so installing something and reloading the page
 clears it without a restart.
@@ -440,6 +441,7 @@ run_fn(export, Path("inputs"), Path("outputs/lora/captions.json"))
 ## Version History
 
 ### Unreleased
+- **Homebrew works from the macOS app** — an app opened from Finder or the Dock never saw Homebrew, so every Install button failed and brew-installed ffmpeg or pandoc read as missing; the app now looks where a Terminal would, and says to install Homebrew first when it is not there
 - **`av.join` audio joins fixed** — joining `.wav`, `.mp3` or `.flac` files reported success but wrote AAC into the container, which nothing could play; each now gets its own codec (PCM, MP3, FLAC)
 - **No source means the current folder** — run a script from a terminal without a source argument and it reads the folder you are in, on Windows, macOS and Linux; the web UI and the repo root of a checkout still read `inputs/`
 - **`av.trim` smart cut** — when a plain copy would miss the start, H.264 and HEVC cuts re-encode only up to the next keyframe and copy the rest, and are decoded once before they are kept
