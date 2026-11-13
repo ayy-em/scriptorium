@@ -992,6 +992,16 @@ Rules worth not rediscovering:
   answer it. After a successful install `refresh_environment()` re-reads PATH
   from the registry on Windows — a running process otherwise keeps the PATH it
   started with and would report the new binary missing until a restart.
+- **macOS needs its PATH completed first.** An app opened from Finder or the
+  Dock runs no shell profile and gets launchd's `/usr/bin:/bin:/usr/sbin:/sbin`,
+  without Homebrew (`/opt/homebrew/bin` on Apple Silicon, `/usr/local/bin` on
+  Intel). `ensure_search_path()` appends the Homebrew prefixes plus what
+  `path_helper` would read (`/etc/paths`, `/etc/paths.d/*`) — existing
+  directories only, after whatever is already there — when `webapp.app` is
+  imported and again in `refresh_environment()`, since brew's own installer is
+  what creates its prefix. Scripts the server spawns inherit it. When `brew`
+  still cannot be found, a brew command is dropped (no Install button) and the
+  hint says to install Homebrew first.
 - **The Install button appears in three places**, all driven by the same
   Alpine component: the sidebar banner (every missing required capability), a
   banner at the top of a detail page whose script needs something absent

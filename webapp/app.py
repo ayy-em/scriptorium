@@ -62,6 +62,8 @@ from webapp._icons import icon_for_category, icon_for_script
 _CREATION_FLAGS = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
 
 load_env()
+# A Finder-launched macOS app has no Homebrew on PATH; see ensure_search_path.
+capabilities.ensure_search_path()
 
 logger = logging.getLogger(__name__)
 

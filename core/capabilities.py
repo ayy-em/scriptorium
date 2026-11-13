@@ -188,6 +188,72 @@ def _command_for(commands: dict[str, tuple[str, ...]]) -> tuple[str, ...]:
     return commands.get(sys.platform, ())
 
 
+# Where Homebrew puts its binaries: /opt/homebrew on Apple Silicon, /usr/local
+# on Intel. A Terminal session has these on PATH because the user's shell
+# profile adds them; an app opened from Finder or the Dock does not run a shell
+# profile and gets launchd's bare /usr/bin:/bin:/usr/sbin:/sbin instead.
+_HOMEBREW_BIN_DIRS = ("/opt/homebrew/bin", "/opt/homebrew/sbin", "/usr/local/bin", "/usr/local/sbin")
+
+_HOMEBREW_MISSING_HINT = "Install Homebrew first (https://brew.sh), then run: "
+
+
+def _macos_search_dirs(etc: Path = Path("/etc")) -> list[str]:
+    """Return the directories a macOS login shell would have on PATH.
+
+    That is what ``/usr/libexec/path_helper`` builds — ``/etc/paths`` then each
+    file in ``/etc/paths.d`` — plus Homebrew's prefixes, which its installer
+    adds through the shell profile rather than ``/etc/paths.d``. Read directly
+    rather than by running path_helper or a login shell: no subprocess, no
+    dependence on what the user's shell profile does, and nothing to time out.
+
+    Args:
+        etc: Where to read ``paths`` and ``paths.d`` from; a parameter for tests.
+
+    Returns:
+        Candidate directories, in order, possibly including ones that do not exist.
+    """
+    sources = [etc / "paths"]
+    paths_d = etc / "paths.d"
+    if paths_d.is_dir():
+        sources += sorted(f for f in paths_d.iterdir() if f.is_file())
+    dirs: list[str] = []
+    for source in sources:
+        try:
+            dirs += [line.strip() for line in source.read_text(encoding="utf-8").splitlines() if line.strip()]
+        except OSError:
+            continue
+    return [*_HOMEBREW_BIN_DIRS, *dirs]
+
+
+def ensure_search_path() -> None:
+    """Give a Finder-launched macOS app the PATH a Terminal session would have.
+
+    Without it nothing installed with Homebrew is visible to the app: ``brew``
+    itself cannot be found, so every Install button fails, and an ffmpeg or
+    pandoc the user installed by hand is reported missing and cannot be run by
+    the scripts either. Directories are appended, never prepended, so a PATH a
+    terminal or launcher set up deliberately keeps its precedence; only ones
+    that exist and are not already present are added. Scripts the web UI starts
+    inherit the result. A no-op on every other platform.
+    """
+    if sys.platform != "darwin":
+        return
+    current = [entry for entry in os.environ.get("PATH", "").split(os.pathsep) if entry]
+    added = [d for d in dict.fromkeys(_macos_search_dirs()) if d not in current and os.path.isdir(d)]
+    if added:
+        os.environ["PATH"] = os.pathsep.join(current + added)
+        logger.info("Added to PATH: %s", ", ".join(added))
+
+
+def _brew_available() -> bool:
+    """Report whether Homebrew can be run.
+
+    Returns:
+        True when ``brew`` resolves on PATH.
+    """
+    return shutil.which("brew") is not None
+
+
 def _winget(package_id: str) -> tuple[str, ...]:
     """Build an unattended winget install for one package.
 
@@ -404,6 +470,13 @@ def _build(spec: _Spec) -> Capability:
     Returns:
         The capability, with ``present`` filled in.
     """
+    hint = _hint_for(spec.hints)
+    command = _command_for(spec.commands)
+    # An Install button that runs a brew which is not there is a control that
+    # lies: it can only fail. Say what has to come first instead.
+    if command[:1] == ("brew",) and not _brew_available():
+        command = ()
+        hint = _HOMEBREW_MISSING_HINT + hint
     return Capability(
         name=spec.name,
         label=spec.label,
@@ -411,8 +484,8 @@ def _build(spec: _Spec) -> Capability:
         remedy=spec.remedy,
         required=spec.required,
         needed_for=spec.needed_for,
-        hint=_hint_for(spec.hints),
-        command=_command_for(spec.commands),
+        hint=hint,
+        command=command,
         env_var=spec.env_var,
         secret=spec.secret,
     )
@@ -487,9 +560,12 @@ def refresh_environment() -> None:
 
     On Windows the process PATH is replaced with what the registry now says,
     keeping any entries the process already had so a launcher-injected path is
-    not lost. Elsewhere installers put binaries in directories already on PATH,
-    so there is nothing to do. Cached probe results are dropped either way.
+    not lost. On macOS the Homebrew and system directories are re-checked,
+    because the install that just ran may have been the one that created
+    ``/opt/homebrew/bin``. Elsewhere installers put binaries in directories
+    already on PATH. Cached probe results are dropped either way.
     """
+    ensure_search_path()
     if sys.platform == "win32":
         try:
             fresh = _windows_registry_path()
