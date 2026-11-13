@@ -32,6 +32,7 @@ scriptorium/
 │   ├── downloads.py         # pooch progress → ProgressReporter, for model weights
 │   ├── env.py               # .env loading, plus the user .env the app writes keys to
 │   ├── images.py            # registers the HEIF opener so Pillow reads .heic
+│   ├── instance.py          # one desktop app per user: lock, port record, show request
 │   ├── invocation.py        # who started this run — webapp or a human
 │   ├── native_libs.py       # cffi dlopen fallback for pango/cairo/glib
 │   ├── outputs.py           # standardized output path resolution
@@ -273,6 +274,7 @@ from an older build indefinitely. ETag revalidation makes the usual cost a 304.
 | `POST /api/reveal-run-outputs` | reveal the folders one run wrote into, by run id |
 | `POST /api/open-logs` | reveal the logs directory |
 | `POST /api/quit` | shut the server down (frozen mode only) |
+| `POST /api/show-window` | bring the desktop window forward for a second launch; 503 outside the desktop app |
 | `GET /api/update-check` | compare against the latest GitHub release |
 | `GET /api/capabilities/{name}/install` | run a missing dependency's install command, output streamed as SSE |
 | `GET /api/model-weights/{theme}/{script_name}` | which model weights the current form state would download; only for scripts exposing `models_for_args` |
@@ -610,6 +612,41 @@ Scripts run as subprocesses via the frozen binary's `--run-script` flag (same
 binary, different argv). The sidebar hides the CLI usage section and shows a
 Quit button when running in frozen mode. A `/api/quit` endpoint (frozen-only)
 allows the UI to signal the server to shut down.
+
+#### One instance per user
+
+A windowed launch first takes `core.instance.acquire()`: an exclusive OS lock
+on `~/scriptorium/instance.lock` (`msvcrt.locking` / `fcntl.flock`), held for
+the life of the process. It is a lock, not a marker file, so it goes away with
+the process however that ends; Windows frees a dead process's lock a moment
+later, which is why a launch that finds the lock retries it once before giving
+up. The owner writes its port to `instance.json` once the server is up.
+
+A launch that cannot take the lock calls `POST /api/show-window` on the
+recorded port (retrying for up to 10 s, since a double-click starts two at
+once), checks the answer names `scriptorium`, and exits. On Windows it first
+calls `AllowSetForegroundWindow(ASFW_ANY)`: the user just launched it, so it may
+grant the background owner the right to raise its window. Each GUI tier
+publishes `app.state.show_window`: pywebview shows and restores its window; the
+Chromium tier raises the browser process's visible top-level windows
+(`EnumWindows` → `SetForegroundWindow`), reopens the window when it is closed
+to the tray, and opens a second one only when there is nothing it can raise;
+the browser tier opens the URL again.
+
+Before this, every launch started its own server on the next free port and its
+own tray icon, and copies piled up whenever the app sat in the tray. A second
+Chromium launch made it worse. Chromium allows one browser process per
+`--user-data-dir`, so a launch on a profile already in use hands its window to
+that process and exits with 0 in about 0.1 s. The launcher read that exit as
+"window closed". `_handed_off` now recognises it — a quick, clean exit while the
+profile is still held (`lockfile` held exclusively on Windows, `SingletonLock`
+pointing at a live pid elsewhere) — and the launcher watches the profile
+instead of the process.
+
+The owner also holds the Windows named mutex `Scriptorium.SingleInstance`.
+Nothing in the app reads it: it is the `AppMutex` in `installer.iss`, which is
+how setup and uninstall know to ask the user to close the app first. CLI runs
+and `--run-script` subprocesses never touch any of this.
 
 #### CLI vs GUI dispatch
 

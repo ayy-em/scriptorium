@@ -25,6 +25,12 @@ _MACOS = sys.platform == "darwin"
 # probe in _start_gui already rules out for the common case.
 _TRAY_READY_TIMEOUT = 5.0
 
+# A Chromium launch that exits this quickly, cleanly, while its profile is
+# still held, did not run a window of its own: it handed the window to the
+# browser already using that profile and left.
+_HANDOFF_SECONDS = 3.0
+_PROFILE_POLL_SECONDS = 0.5
+
 
 def _find_free_port(start: int = 57200, end: int = 57300) -> int:
     """Find the first available TCP port in the given range.
@@ -253,7 +259,183 @@ def _find_chromium_windows() -> tuple[str, str] | None:
     return None
 
 
-def _chromium_app_window(url: str, uv_server, logger) -> None:  # noqa: ANN001
+def _chromium_profile_in_use(profile_dir: str) -> bool:
+    """Report whether a Chromium browser process is running on *profile_dir*.
+
+    Chromium allows one browser process per profile and marks it on disk: on
+    Windows it holds ``lockfile`` open exclusively; elsewhere ``SingletonLock``
+    is a symlink to ``<host>-<pid>``.
+
+    Args:
+        profile_dir: The ``--user-data-dir`` the window was launched with.
+
+    Returns:
+        True while a browser process holds the profile.
+    """
+    import os  # noqa: PLC0415
+
+    if sys.platform == "win32":
+        try:
+            fd = os.open(os.path.join(profile_dir, "lockfile"), os.O_RDWR)
+        except PermissionError:
+            return True
+        except OSError:
+            return False
+        os.close(fd)
+        return False
+    try:
+        target = os.readlink(os.path.join(profile_dir, "SingletonLock"))
+        pid = int(target.rsplit("-", 1)[-1])
+        os.kill(pid, 0)
+    except OSError, ValueError:
+        return False
+    return True
+
+
+def _handed_off(elapsed: float, returncode: int | None, profile_dir: str) -> bool:
+    """Report whether a Chromium launch passed its window to a running browser.
+
+    A second launch on a profile that is already in use does not open a window
+    of its own: it hands the request to the running browser and exits with 0
+    almost at once. Waiting on that process then says nothing about when the
+    window closes.
+
+    Args:
+        elapsed: Seconds the launched process lived.
+        returncode: Its exit code.
+        profile_dir: The profile it was launched with.
+
+    Returns:
+        True when the window lives in another process.
+    """
+    return elapsed < _HANDOFF_SECONDS and returncode == 0 and _chromium_profile_in_use(profile_dir)
+
+
+def _wait_for_profile_release(profile_dir: str, stop: threading.Event, poll: float = _PROFILE_POLL_SECONDS) -> None:
+    """Block until no browser holds *profile_dir*, or *stop* is set.
+
+    Args:
+        profile_dir: The ``--user-data-dir`` to watch.
+        stop: Set to give up waiting, e.g. when Quit is chosen from the tray.
+        poll: Seconds between checks.
+    """
+    while _chromium_profile_in_use(profile_dir):
+        if stop.wait(timeout=poll):
+            return
+
+
+def _focus_windows_of(pid: int) -> bool:
+    """Restore and raise the visible top-level windows a process owns (Windows).
+
+    Chromium's top-level windows belong to its browser process, which is the
+    one this launcher started unless the launch was handed off.
+
+    Args:
+        pid: The browser process id.
+
+    Returns:
+        True when at least one window was found.
+    """
+    if sys.platform != "win32":
+        return False
+    try:
+        import ctypes  # noqa: PLC0415
+        from ctypes import wintypes  # noqa: PLC0415
+
+        user32 = ctypes.windll.user32
+        found: list[int] = []
+
+        @ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+        def _visit(hwnd, _lparam):  # noqa: ANN001, ANN202
+            owner = wintypes.DWORD()
+            user32.GetWindowThreadProcessId(hwnd, ctypes.byref(owner))
+            if owner.value == pid and user32.IsWindowVisible(hwnd):
+                found.append(hwnd)
+            return True
+
+        user32.EnumWindows(_visit, 0)
+        for hwnd in found:
+            user32.ShowWindow(hwnd, 9)  # SW_RESTORE
+            user32.SetForegroundWindow(hwnd)
+        return bool(found)
+    except Exception:
+        return False
+
+
+class _ChromiumWindow:
+    """One Chromium ``--app`` window: launching it, raising it, waiting for it to close.
+
+    Waiting on the launched process is how this tier learns the window closed,
+    and that only holds when the launch started its own browser. When the
+    profile is already in use, the launch hands the window to that browser and
+    exits at once (see ``_handed_off``); the profile is watched instead.
+    """
+
+    def __init__(self, name: str, exe_path: str, url: str, profile_dir: str, logger) -> None:  # noqa: ANN001
+        self.name = name
+        self.profile_dir = profile_dir
+        self.logger = logger
+        self.cmd = [
+            exe_path,
+            f"--app={url}",
+            "--window-size=1200,800",
+            f"--user-data-dir={profile_dir}",
+            "--no-first-run",
+            "--disable-extensions",
+        ]
+        self.proc = None
+        self.started = 0.0
+        self.is_open = threading.Event()
+
+    def open(self) -> None:
+        """Launch the window."""
+        import subprocess  # noqa: PLC0415
+
+        self.logger.info("Launching %s in app mode: %s", self.name, self.cmd[0])
+        self.proc = subprocess.Popen(self.cmd)  # noqa: S603
+        self.started = time.monotonic()
+        self.is_open.set()
+
+    def wait_closed(self, quit_requested: threading.Event) -> bool:
+        """Block until the window has closed.
+
+        Args:
+            quit_requested: Set when Quit is chosen from the tray.
+
+        Returns:
+            False when interrupted from the terminal, True otherwise.
+        """
+        try:
+            self.proc.wait()
+        except KeyboardInterrupt:
+            self.proc.terminate()
+            return False
+        if _handed_off(time.monotonic() - self.started, self.proc.returncode, self.profile_dir):
+            self.logger.info("%s handed the window to its running browser; watching the profile", self.name)
+            _wait_for_profile_release(self.profile_dir, quit_requested)
+        self.is_open.clear()
+        return True
+
+    def show(self, reopen: threading.Event) -> None:
+        """Bring the window back for a later launch of the app.
+
+        Args:
+            reopen: Set to have the tray loop open a new window when none is open.
+        """
+        if not self.is_open.is_set():
+            reopen.set()
+            return
+        if self.proc is not None and _focus_windows_of(self.proc.pid):
+            return
+        # No window to raise: it lives in a browser this launcher did not
+        # start, or this platform cannot raise one. A second window is better
+        # than a launch that appears to do nothing.
+        import subprocess  # noqa: PLC0415
+
+        subprocess.Popen(self.cmd)  # noqa: S603
+
+
+def _chromium_app_window(url: str, uv_server, logger, app=None) -> None:  # noqa: ANN001
     """Open the app in a chromeless Chromium ``--app`` window.
 
     Blocks until the user closes the window. When ``close_behavior`` is ``"tray"``
@@ -265,12 +447,12 @@ def _chromium_app_window(url: str, uv_server, logger) -> None:  # noqa: ANN001
         url: The local URL the server is listening on.
         uv_server: A ``uvicorn.Server`` instance to shut down on exit.
         logger: Logger for diagnostic messages.
+        app: The FastAPI app, to publish ``show_window`` on for later launches.
 
     Raises:
         RuntimeError: If no Chromium-based browser is found.
     """
     from pathlib import Path  # noqa: PLC0415
-    import subprocess  # noqa: PLC0415
     import threading as _threading  # noqa: PLC0415
 
     browser = _find_chromium_browser()
@@ -280,21 +462,11 @@ def _chromium_app_window(url: str, uv_server, logger) -> None:  # noqa: ANN001
     name, exe_path = browser
     profile_dir = str(Path.home() / "scriptorium" / ".browser-profile")
 
-    cmd = [
-        exe_path,
-        f"--app={url}",
-        "--window-size=1200,800",
-        f"--user-data-dir={profile_dir}",
-        "--no-first-run",
-        "--disable-extensions",
-    ]
-
     reopen = _threading.Event()
     quit_requested = _threading.Event()
-
-    def _open() -> subprocess.Popen:
-        logger.info("Launching %s in app mode: %s", name, exe_path)
-        return subprocess.Popen(cmd)  # noqa: S603
+    window = _ChromiumWindow(name, exe_path, url, profile_dir, logger)
+    if app is not None:
+        app.state.show_window = lambda: window.show(reopen)
 
     # This tier has no GUI main loop of its own — it just waits on a browser
     # process — so on macOS there is nothing to service an NSStatusItem. A
@@ -312,12 +484,9 @@ def _chromium_app_window(url: str, uv_server, logger) -> None:  # noqa: ANN001
     # A failure here falls through to the browser tier, which has no tray of its
     # own — so the icon has to go with the window rather than outliving it.
     try:
-        proc = _open()
+        window.open()
         while True:
-            try:
-                proc.wait()
-            except KeyboardInterrupt:
-                proc.terminate()
+            if not window.wait_closed(quit_requested):
                 break
 
             if quit_requested.is_set() or tray_icon is None or not _close_to_tray():
@@ -332,7 +501,7 @@ def _chromium_app_window(url: str, uv_server, logger) -> None:  # noqa: ANN001
                     break
             if quit_requested.is_set():
                 break
-            proc = _open()
+            window.open()
     finally:
         _stop_tray(tray_icon)
 
@@ -547,6 +716,19 @@ def _create_tray_icon(window):  # noqa: ANN001, ANN201
     return _create_tray_icon_for(window.show, _quit, detached=_MACOS)
 
 
+def _show_webview(window) -> None:  # noqa: ANN001
+    """Show and un-minimise a pywebview window for a later launch of the app.
+
+    Args:
+        window: The pywebview window.
+    """
+    window.show()
+    try:
+        window.restore()
+    except Exception:  # noqa: S110 — older pywebview has no restore(); show() is enough there
+        pass
+
+
 def _make_closing_handler(window, tray_icon):  # noqa: ANN001, ANN201
     """Return a ``window.events.closing`` handler that respects close_behavior.
 
@@ -650,6 +832,8 @@ def _start_gui(logger, url: str, uv_server, server_thread: threading.Thread, app
 
             tray_icon = _create_tray_icon(window)
             window.events.closing += _make_closing_handler(window, tray_icon)
+            if app is not None:
+                app.state.show_window = lambda: _show_webview(window)
 
             webview.start()
 
@@ -670,12 +854,16 @@ def _start_gui(logger, url: str, uv_server, server_thread: threading.Thread, app
             logger.exception("pywebview failed — trying Chromium app mode")
 
     try:
-        _chromium_app_window(url, uv_server, logger)
+        _chromium_app_window(url, uv_server, logger, app)
         server_thread.join(timeout=5.0)
         return
     except Exception:
         logger.exception("Chromium app mode failed — falling back to browser")
 
+    if app is not None:
+        import webbrowser  # noqa: PLC0415
+
+        app.state.show_window = lambda: webbrowser.open(url)
     _browser_fallback(url, server_thread, logger)
     server_thread.join(timeout=5.0)
 
@@ -701,12 +889,28 @@ def main() -> None:
 
     import logging  # noqa: PLC0415
 
-    import uvicorn  # noqa: PLC0415
-
-    from webapp.app import app  # noqa: PLC0415
+    from core import instance  # noqa: PLC0415
 
     logging.basicConfig(level=logging.WARNING)
     logger = logging.getLogger("scriptorium.entrypoint")
+
+    # Before anything heavy: a second launch should hand over and leave, not
+    # import the whole web app first.
+    lock = instance.acquire()
+    if lock is None:
+        if instance.show_running_instance():
+            logger.info("Scriptorium is already running; asked it to show its window")
+            return
+        # Nobody answered for several seconds. The owner may have just died —
+        # Windows frees a dead process's locks a moment later — so try again
+        # before starting without the lock.
+        lock = instance.acquire()
+        if lock is None:
+            logger.warning("Another Scriptorium holds the instance lock but did not answer; starting anyway")
+
+    import uvicorn  # noqa: PLC0415
+
+    from webapp.app import app  # noqa: PLC0415
 
     port = _find_free_port()
     url = f"http://127.0.0.1:{port}"
@@ -723,7 +927,13 @@ def main() -> None:
         logger.error("Server failed to start within timeout")
         sys.exit(1)
 
-    _start_gui(logger, url, uv_server, server_thread, app)
+    if lock is not None:
+        lock.publish(port)
+    try:
+        _start_gui(logger, url, uv_server, server_thread, app)
+    finally:
+        if lock is not None:
+            lock.release()
 
 
 if __name__ == "__main__":

@@ -25,6 +25,7 @@ from core.config import UserConfig, clean_favourites, clean_notify_min_seconds, 
 from core.config import load as load_config
 from core.config import save as save_config
 from core.env import load_env, set_env_value
+from core.instance import APP_ID, SHOW_PATH
 from core.invocation import webapp_spawn_env
 from core.outputs import find_reported_outputs
 from core.paths import (
@@ -1008,6 +1009,29 @@ async def quit_server(request: Request) -> JSONResponse:
     logger.info("Quit requested via API — shutting down")
     uv_server.should_exit = True
     return JSONResponse({"ok": True})
+
+
+@app.post(SHOW_PATH)
+async def show_window(request: Request) -> JSONResponse:
+    """Bring the desktop window forward because the app was launched again.
+
+    A later launch of the packaged app finds this one holding the instance lock
+    (``core.instance``), calls this, and exits instead of starting a second
+    server and tray icon. The GUI tier that is running publishes how to show
+    its window on ``app.state.show_window``; outside the desktop app nothing
+    does, and there is no window to show.
+
+    Returns:
+        JSON naming the app, so the caller knows it reached Scriptorium.
+
+    Raises:
+        HTTPException: 503 when no desktop window is being managed.
+    """
+    show = getattr(request.app.state, "show_window", None)
+    if show is None:
+        raise HTTPException(status_code=503, detail="No desktop window to show")
+    await asyncio.to_thread(show)
+    return JSONResponse({"app": APP_ID, "ok": True})
 
 
 def _parse_version(version: str) -> tuple[int, ...]:
