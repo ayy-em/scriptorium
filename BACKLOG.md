@@ -187,6 +187,34 @@ appears.
   anywhere, plus Gatekeeper on the new copy. Do Windows first and see
   whether anyone asks.
 
+## Drop chooser logs an Alpine expression error
+
+**Status:** open (2026-11-13). Seen while capturing README screenshots.
+
+Loading the scripts page logs `Alpine Expression Error: i is not defined` for
+the expression `connectorDot(i).y`, followed by `<circle> attribute cx/cy:
+Unexpected end of attribute` errors. Something in the drop chooser's connector
+SVG evaluates `connectorDot(i)` outside the `x-for` that defines `i` (or before
+it runs). Nothing visibly breaks, but the console should be clean. Start in
+`webapp/templates/_drop_chooser.html`.
+
+## av.join does not accept AIFF
+
+**Status:** open (2026-11-13). `scripts.av._utils.MEDIA_EXTS` has no `.aif` /
+`.aiff`, so a folder of them is "No media files found". Add them, and map the
+container to `pcm_s16be` in `_CONTAINER_AUDIO_CODEC` (big-endian PCM; AIFF does
+not take little-endian), with an end-to-end test like the WAV one.
+
+## av.trim smart cut in strict players
+
+**Status:** open (2026-11-13). The smart cut (SPEC "Smart cut") switches
+parameter sets in-band at the seam. ffmpeg decodes it cleanly and that is what
+the verification step checks, but QuickTime and Safari trust only the
+container's `avcC`/`hvcC`. Test a smart-cut H.264 file from a phone recording
+in QuickTime; if it glitches, options are writing `avc3`/`hev1` sample entries
+(parameter sets in-band by declaration) or encoding the head with the source's
+SPS reproduced, which is harder.
+
 # Settled
 
 Closed, and kept only for the reasoning — either delivered, or considered and
@@ -719,6 +747,11 @@ And **a missing source argument still means `inputs/` for both callers**:
 `scriptorium photo.remove_bg` with no arguments meaning "every image in my cwd"
 is destructive in a way an explicit path is not.
 
+**Superseded 2026-11-13:** a missing source now means the cwd for a human CLI
+run, via `core.paths.default_source`; only the web UI and the repo root of a
+development checkout keep `inputs/`. What made it safe is that archiving never
+moves a file outside `inputs/`, so a cwd run reads and leaves.
+
 Original write-up follows.
 
 ---
@@ -944,6 +977,9 @@ The mechanism is general, not a remove_bg special case: `ui_advanced=True` on
 exactly as before. The presets deliberately skip `birefnet-general`: at ~950MB
 it is not something a one-click preset should start downloading. Someone who
 wants it can still ask for it by name.
+
+**Superseded 2026-11-13:** `hq` now uses `birefnet-general`, accepting the
+download for the better model; the lite one is the explicit `--model` choice.
 
 Original note follows.
 

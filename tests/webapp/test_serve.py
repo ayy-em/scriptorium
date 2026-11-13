@@ -536,7 +536,7 @@ class TestModelWeightsEndpoint:
         assert [d["model"] for d in response.json()["downloads"]] == [
             "u2net",
             "isnet-general-use",
-            "birefnet-general-lite",
+            "birefnet-general",
         ]
 
     def test_an_unparseable_form_says_nothing(self):

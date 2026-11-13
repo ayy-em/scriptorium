@@ -11,8 +11,7 @@ import zipfile
 
 from core.argparse import ScriptoriumParser
 from core.outputs import resolve_output
-from core.paths import inputs_dir as _core_inputs_dir
-from core.paths import move_to_past_inputs, resolve_input
+from core.paths import default_source, move_to_past_inputs, resolve_input
 from scripts.telegram._group_metrics import DEFAULT_MSG_SHARE_THRESHOLD
 from scripts.telegram._group_parsing import InvalidExportError
 
@@ -166,7 +165,10 @@ def get_parser() -> argparse.ArgumentParser:
         nargs="?",
         default=None,
         ui_label="Group chat export JSON",
-        help=f"Path to the Telegram group-chat export result.json (default: inputs/{_DEFAULT_SOURCE}).",
+        help=(
+            f"Path to the Telegram group-chat export result.json "
+            f"(default: {_DEFAULT_SOURCE} in the current folder; inputs/ in the web UI)."
+        ),
     )
     parser.add_argument(
         "--output",
@@ -199,7 +201,7 @@ def run() -> None:
     args = get_parser().parse_args()
     source: Path = args.source
     if source is None:
-        source = _core_inputs_dir("telegram") / _DEFAULT_SOURCE
+        source = default_source("telegram") / _DEFAULT_SOURCE
     else:
         source = resolve_input(source, "telegram")
     output = resolve_output(args.output, theme="telegram", ext=".zip")

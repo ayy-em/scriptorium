@@ -375,9 +375,12 @@ class TestPresets:
         with pytest.raises(ValueError, match="unknown preset"):
             settings_for("turbo")
 
-    def test_no_preset_pulls_the_950mb_model(self):
-        """A one-click preset should not start a ~1GB download."""
-        assert all(p.model != "birefnet-general" for p in PRESETS.values())
+    def test_hq_uses_the_full_birefnet(self):
+        assert PRESETS["hq"].model == "birefnet-general"
+
+    def test_only_hq_pulls_the_950mb_model(self):
+        """The default and balanced runs must not start a ~1GB download."""
+        assert [name for name, p in PRESETS.items() if p.model == "birefnet-general"] == ["hq"]
 
 
 class TestAllPresets:
@@ -387,9 +390,12 @@ class TestAllPresets:
     def test_otherwise_only_the_chosen_one(self):
         assert presets_for_run("hq", all_presets=False) == ("hq",)
 
+    def test_multi_is_the_short_spelling(self):
+        assert get_parser().parse_args(["x.jpg", "--multi"]).all_presets is True
+
     def test_models_for_args_ignores_the_override_when_comparing(self):
         args = get_parser().parse_args(["x.jpg", "--all-presets", "--model", "silueta"])
-        assert models_for_args(args) == ["u2net", "isnet-general-use", "birefnet-general-lite"]
+        assert models_for_args(args) == ["u2net", "isnet-general-use", "birefnet-general"]
 
     def test_models_for_args_honours_the_override_otherwise(self):
         args = get_parser().parse_args(["x.jpg", "--preset", "hq", "--model", "silueta"])

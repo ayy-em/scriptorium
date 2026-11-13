@@ -12,7 +12,7 @@ from core.argparse import ScriptoriumParser
 from core.downloads import reporting_downloads
 from core.images import ensure_image_formats
 from core.outputs import deduplicate, default_stem, resolve_output, resolve_output_dir
-from core.paths import inputs_dir, move_to_past_inputs
+from core.paths import default_source, move_to_past_inputs
 from scripts.formats._utils import IMAGE_EXTS, find_files, single_source
 
 TITLE = "Remove background"
@@ -74,12 +74,14 @@ class Preset:
 #: some photos — which is why they are named for cost, not quality, and why
 #: there is a flag to run all three side by side. ``fast`` is the historical
 #: default, so a bare run is unchanged. Every model downloads its weights on
-#: first use; ``hq`` uses the lite BiRefNet (~215MB) rather than the full one
-#: (~950MB), which stays an explicit ``--model`` choice.
+#: first use; ``hq`` uses the full BiRefNet (~950MB), the best general-purpose
+#: model rembg ships, so its first run is a large download and every run is the
+#: slowest of the three. The lite variant (~215MB) is still there via
+#: ``--model birefnet-general-lite``.
 PRESETS: dict[str, Preset] = {
     "fast": Preset(DEFAULT_MODEL),
     "balanced": Preset("isnet-general-use", post_process_mask=True),
-    "hq": Preset("birefnet-general-lite", alpha_matting=True, post_process_mask=True),
+    "hq": Preset("birefnet-general", alpha_matting=True, post_process_mask=True),
 }
 
 DEFAULT_PRESET = "fast"
@@ -387,7 +389,7 @@ def get_parser() -> argparse.ArgumentParser:
         "source",
         type=Path,
         nargs="?",
-        help="Source image file or directory of images (default: inputs/)",
+        help="Source image file or directory of images (default: current folder; inputs/ in the web UI)",
     )
     parser.add_argument(
         "--output",
@@ -403,20 +405,21 @@ def get_parser() -> argparse.ArgumentParser:
         ui_label="Preset",
         help=(
             f"Shorthand for a model and its edge treatment: fast ({DEFAULT_MODEL}, the default), "
-            "balanced (isnet-general-use with mask clean-up), or hq (birefnet-general-lite with "
-            "alpha matting and mask clean-up, slowest). No preset wins on every image — when in "
-            "doubt, --all-presets. Explicit --model, --alpha-matting and --post-process-mask "
-            "add to whatever the preset sets."
+            "balanced (isnet-general-use with mask clean-up), or hq (birefnet-general with "
+            "alpha matting and mask clean-up; slowest, ~950MB download on first use). No preset "
+            "wins on every image — when in doubt, --all-presets. Explicit --model, --alpha-matting "
+            "and --post-process-mask add to whatever the preset sets."
         ),
     )
     parser.add_argument(
         "--all-presets",
+        "--multi",
         action="store_true",
         ui_label="Run all presets",
         help=(
             "Run fast, balanced and hq one after another on the same inputs, into the same "
             "output location, with the preset name prepended to each filename — for picking "
-            "the best result by eye. Ignores --preset and --model."
+            "the best result by eye. --multi is the short spelling. Ignores --preset and --model."
         ),
     )
     parser.add_argument(
@@ -573,7 +576,7 @@ def run() -> None:
     """CLI entrypoint. Parse arguments and run each requested preset in turn."""
     args = get_parser().parse_args()
 
-    source = args.source if args.source is not None else inputs_dir(_THEME)
+    source = args.source if args.source is not None else default_source(_THEME)
 
     # The web UI uploads even a single file into a per-batch directory, so a
     # directory holding exactly one image is a one-file job. Collapsing it here

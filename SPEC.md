@@ -371,7 +371,7 @@ something indistinguishable from the original.
 
 | Mode | Behaviour |
 |---|---|
-| `auto` (default) | Probe where a copy would actually land. Within `KEYFRAME_TOLERANCE` (0.1 s) of the request → stream copy, as before. Further than that → re-encode, and say so on stdout. |
+| `auto` (default) | Probe where a copy would actually land. Within `KEYFRAME_TOLERANCE` (0.1 s) of the request → stream copy, as before. Further than that → smart cut (below), falling back to a full re-encode; stdout says which, and why. |
 | `fast` | Always stream-copy, accepting the keyframe snap. The old behaviour, kept as an opt-out. |
 | `precise` | Always re-encode. |
 
@@ -394,17 +394,50 @@ codec is muxable by definition. No video encoder is named, for the same reason
 `formats.convert_video` names none — ffmpeg's default for a container is
 muxable into it, which `libx264` is not for every container.
 
+#### Smart cut
+
+Most of a cut lies after the first keyframe past its start, so only the stretch
+before that keyframe needs encoding. `_smart_cut` in `scripts/av/trim.py`:
+
+1. `_plan_smart_cut` probes the streams and finds the next keyframe
+   (`scripts.av._utils.keyframe_after`, packets only, a bounded 120 s window).
+   It declines — returning a reason, never raising — for a codec outside
+   `_SMART_CUT_CODECS` (H.264 → `libx264`, HEVC → `libx265`), when no keyframe
+   follows, or when the cut ends before the next keyframe.
+2. The **head** — exact start to that keyframe — is re-encoded in the source's
+   own codec and pixel format, CRF 18, timestamps passed through, into MPEG-TS.
+3. The **tail** is stream-copied from the keyframe through the
+   `*_mp4toannexb` bitstream filter, also into MPEG-TS, so its parameter sets
+   travel in-band and a decoder can switch from the head's to the tail's.
+4. The **audio** is copied in one piece with an *output-side* seek. An
+   input-side seek on a copy starts at the video keyframe and carries seconds
+   of audio from before the cut.
+5. The concat demuxer joins head and tail, the audio is muxed over them, and
+   the result is **decoded once** (`-f null`) and its length checked against
+   the request (±0.25 s, since a copied tail ends on a packet boundary).
+
+Any failure at any step deletes the output and falls back to the full
+re-encode. Known limit: the in-band parameter-set switch decodes cleanly in
+ffmpeg, Chromium and VLC, but strict players that trust only the container's
+`avcC`/`hvcC` record (QuickTime is the usual suspect) may glitch at the seam.
+`--mode precise` is the guaranteed-safe path.
+
 ### `av.join` and the output container
 
 `av.join` takes the output extension from the first input and re-encodes audio
 during preprocessing, so the container has a say in three places
 (`_resolve_profile` in `scripts/av/join.py`): the audio codec follows it (Opus
-for `.webm`/`.ogg`/`.opus`, AAC otherwise); a copied video codec the container
+for `.webm`/`.ogg`/`.opus`, PCM for `.wav`, FLAC for `.flac`, MP3 for `.mp3`,
+AAC otherwise — WAV *accepts* AAC and nothing can then decode it, which is how a
+join of `.wav` files once reported success and returned noise); a copied video codec the container
 will not hold (`_CONTAINER_VIDEO_CODECS`) forces a re-encode even when the
 inputs agree with each other; and a re-encode — always H.264 + AAC — bound for a
 container that cannot hold that pair is written as `.mp4` instead, with a line on
 stdout saying so. `join()` returns the path actually written. Intermediates go to
-`.mp4` when AAC and an MP4-friendly codec allow it, `.mkv` otherwise.
+`.mp4` when AAC and an MP4-friendly codec allow it, `.mkv` otherwise. Lossless
+codecs (PCM, FLAC) are given no bitrate, and FLAC is re-encoded at the final
+concat step rather than copied: copied FLAC packets under the first file's
+STREAMINFO header decode only as far as the first segment.
 
 ### Progress reporting
 
@@ -815,6 +848,13 @@ being inside that tree is what puts the file in the UI's results list.
 `core.paths.resolve_input` applies the same rules to inputs, except that a bare
 name means a file staged in `inputs/` rather than one in the outputs tree.
 
+A *missing* source argument is `core.paths.default_source(theme)`: `inputs/`
+for a web UI run and for the repo root of a development checkout, the current
+directory everywhere else — the frozen binary included, even at its own bundle
+root. Every script whose source is optional calls it; none decides for itself.
+It is safe because archiving only ever moves files inside `inputs/` (below), so
+a no-argument run in someone's own folder reads their files and leaves them be.
+
 Scripts must not hand-roll this. `core.paths.resolve_input(source, theme)` is
 the single implementation — 18 hand-written copies of a
 `if source.parent == Path("."):` check is how the inconsistency arose in the
@@ -1216,14 +1256,15 @@ still submit; only visibility changes.
 `photo.remove_bg` is the worked example. A `--preset` (`fast`/`balanced`/`hq`)
 bundles a model with its edge treatment, and the expert arguments — including
 `--model`, `--alpha-matting` and `--post-process-mask`, which only ever add to
-what the preset set — sit behind the disclosure. Prefer this shape when a
+what the preset set — sit behind the disclosure. `hq` uses the full
+`birefnet-general` (~950MB); the lite variant is an explicit `--model` choice. Prefer this shape when a
 script has one obvious decision and a long tail: a preset that covers the
 common case, with the full controls one click away. `fast` resolves to the
 previous default, so no-argument behaviour is unchanged.
 
 The presets are named for cost, not quality, because no model wins on every
 image — u2net regularly beats the larger models on some photos. That is also
-why `--all-presets` exists: it runs the three in sequence over the same inputs
+why `--all-presets` (alias `--multi`) exists: it runs the three in sequence over the same inputs
 into the same output location, prefixing each filename with the preset name,
 and archives the inputs only after the last pass so every pass can see them.
 One failing preset does not stop the others.

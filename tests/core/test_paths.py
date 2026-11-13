@@ -229,3 +229,44 @@ class TestReadBuildSha:
     def test_empty_when_the_file_is_missing(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.setattr(paths, "_bundle_dir", lambda: tmp_path)
         assert paths.read_build_sha() == ""
+
+
+class TestDefaultSource:
+    """Where a script reads from when it was given no source argument."""
+
+    @pytest.fixture
+    def layout(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Path]:
+        """A checkout, its inputs directory and an unrelated folder, with the caller unset."""
+        from core.invocation import CALLER_ENV_VAR  # noqa: PLC0415
+
+        monkeypatch.delenv(CALLER_ENV_VAR, raising=False)
+        repo = tmp_path / "repo"
+        staged = repo / "inputs"
+        elsewhere = tmp_path / "Movies"
+        for d in (staged, elsewhere):
+            d.mkdir(parents=True)
+        monkeypatch.setattr(paths, "_bundle_dir", lambda: repo)
+        monkeypatch.setattr(paths, "inputs_dir", lambda _theme: staged)
+        monkeypatch.setattr(paths, "FROZEN", False)
+        return {"repo": repo, "inputs": staged, "elsewhere": elsewhere}
+
+    def test_terminal_in_any_folder_reads_that_folder(self, layout, monkeypatch):
+        monkeypatch.chdir(layout["elsewhere"])
+        assert paths.default_source("av") == layout["elsewhere"]
+
+    def test_repo_root_of_a_checkout_keeps_reading_inputs(self, layout, monkeypatch):
+        monkeypatch.chdir(layout["repo"])
+        assert paths.default_source("av") == layout["inputs"]
+
+    def test_web_ui_always_reads_inputs(self, layout, monkeypatch):
+        from core.invocation import CALLER_ENV_VAR  # noqa: PLC0415
+
+        monkeypatch.setenv(CALLER_ENV_VAR, "webapp")
+        monkeypatch.chdir(layout["elsewhere"])
+        assert paths.default_source("av") == layout["inputs"]
+
+    def test_packaged_binary_reads_the_current_folder_even_at_the_bundle_root(self, layout, monkeypatch):
+        """A frozen bundle's root is not a checkout; standing in it means nothing special."""
+        monkeypatch.setattr(paths, "FROZEN", True)
+        monkeypatch.chdir(layout["repo"])
+        assert paths.default_source("av") == layout["repo"]
