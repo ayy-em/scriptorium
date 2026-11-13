@@ -88,6 +88,36 @@ def resolve_input(source: Path, theme: str) -> Path:
     return source
 
 
+def default_source(theme: str) -> Path:
+    """Return where a script reads from when it was given no source argument.
+
+    The web UI stages everything in the shared inputs directory, so a run it
+    started reads from there. A human in a terminal means the folder they are
+    standing in, as with any other command-line tool — on every platform, from
+    the packaged binary or from a checkout.
+
+    The one exception is the repository root of a development checkout:
+    ``uv run main.py av.join`` from there has always meant "join what is in
+    ``inputs/``", and the root itself holds source code, not media.
+
+    Nothing is archived from a folder outside the inputs root (see
+    ``move_to_past_inputs``), so a no-argument run in someone's own folder reads
+    their files and leaves them where they are.
+
+    Args:
+        theme: Script theme slug, for the inputs directory lookup.
+
+    Returns:
+        The directory to read from.
+    """
+    if is_webapp_run():
+        return inputs_dir(theme)
+    cwd = Path.cwd()
+    if not FROZEN and cwd.resolve() == _bundle_dir().resolve():
+        return inputs_dir(theme)
+    return cwd
+
+
 def drop_session_dir(session_id: str) -> Path:
     """Return an isolated directory for one drag-drop or paste session.
 

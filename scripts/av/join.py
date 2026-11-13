@@ -10,10 +10,9 @@ import tempfile
 
 from core.argparse import ScriptoriumParser
 from core.outputs import resolve_output
-from core.paths import move_to_past_inputs
+from core.paths import default_source, move_to_past_inputs
 from core.progress import ProgressReporter
 from scripts.av._utils import (
-    av_inputs_dir,
     find_media_files,
     probe_streams,
     run_ffmpeg,
@@ -676,7 +675,7 @@ def get_parser() -> argparse.ArgumentParser:
         type=Path,
         default=None,
         metavar="DIR",
-        help="Input directory (default: av/inputs/)",
+        help="Input directory (default: current folder; inputs/ in the web UI)",
     )
     parser.add_argument(
         "--order",
@@ -711,7 +710,7 @@ def run() -> None:
     """CLI entrypoint. Parse arguments and dispatch to join()."""
     args = get_parser().parse_args()
 
-    src_dir = args.inputs or av_inputs_dir()
+    src_dir = args.inputs or default_source("av")
     src_files = find_media_files(src_dir)
     ext = src_files[0].suffix if src_files else ".mp4"
     output = resolve_output(args.output, theme="av", ext=ext)

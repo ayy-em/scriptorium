@@ -5,7 +5,7 @@ from pathlib import Path
 import sys
 
 from core.argparse import ScriptoriumParser
-from core.paths import inputs_dir, resolve_input
+from core.paths import default_source, resolve_input
 from scripts.lora._dataset import IMG_NAME_RE, find_captions, find_images
 
 TITLE = "Validate a LoRA training dataset"
@@ -13,7 +13,7 @@ DESCRIPTION = "Check that images follow img_NNN naming and each has a matching c
 
 
 def _inputs() -> Path:
-    return inputs_dir("lora")
+    return default_source("lora")
 
 
 def validate(directory: Path) -> bool:
@@ -73,7 +73,7 @@ def get_parser() -> argparse.ArgumentParser:
         type=Path,
         default=None,
         metavar="DIR",
-        help="dataset directory (default: lora/inputs/; bare name resolves to lora/inputs/)",
+        help="dataset directory (default: current folder; inputs/ in the web UI)",
     )
     return parser
 

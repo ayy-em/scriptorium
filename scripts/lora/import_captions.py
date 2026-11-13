@@ -8,14 +8,14 @@ import sys
 
 from core.argparse import ScriptoriumParser
 from core.outputs import resolve_output_dir
-from core.paths import inputs_dir, resolve_input
+from core.paths import default_source, resolve_input
 
 TITLE = "Import captions from JSON"
 DESCRIPTION = "Read a captions.json and write individual img_NNN.txt files to outputs/generated_captions/."
 
 
 def _inputs() -> Path:
-    return inputs_dir("lora")
+    return default_source("lora")
 
 
 _KEY_RE = re.compile(r"^img_(\d+)\.txt$")
@@ -98,7 +98,7 @@ def get_parser() -> argparse.ArgumentParser:
         type=Path,
         default=None,
         metavar="FILE",
-        help="source JSON file (default: lora/inputs/captions.json; bare name resolves to lora/inputs/)",
+        help="source JSON file (default: captions.json in the current folder; inputs/ in the web UI)",
     )
     parser.add_argument(
         "--output",

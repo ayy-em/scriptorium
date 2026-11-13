@@ -9,9 +9,9 @@ import sys
 
 from core.argparse import ScriptoriumParser
 from core.outputs import resolve_output_dir, resolve_single_output
+from core.paths import default_source
 from scripts.formats._utils import (
     BatchConvertError,
-    formats_inputs_dir,
     run_convert,
 )
 
@@ -133,7 +133,7 @@ def get_parser() -> argparse.ArgumentParser:
         "source",
         type=Path,
         nargs="?",
-        help="Source file or directory (default: formats/inputs/)",
+        help="Source file or directory (default: current folder; inputs/ in the web UI)",
     )
     parser.add_argument(
         "--to",
@@ -156,7 +156,7 @@ def get_parser() -> argparse.ArgumentParser:
 def run() -> None:
     """CLI entrypoint. Parse arguments and dispatch to convert()."""
     args = get_parser().parse_args()
-    source = args.source or formats_inputs_dir()
+    source = args.source or default_source("formats")
     out_dir = resolve_output_dir(args.output, theme="formats")
     # An explicit filename only makes sense for a one-file job; run_convert
     # ignores it for a real batch.

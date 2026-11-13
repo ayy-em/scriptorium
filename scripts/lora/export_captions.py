@@ -7,7 +7,7 @@ import sys
 
 from core.argparse import ScriptoriumParser
 from core.outputs import resolve_output
-from core.paths import inputs_dir, resolve_input
+from core.paths import default_source, resolve_input
 from scripts.lora._dataset import find_captions
 
 TITLE = "Export captions to JSON"
@@ -15,7 +15,7 @@ DESCRIPTION = "Collect all .txt caption files in the dataset and write {filename
 
 
 def _inputs() -> Path:
-    return inputs_dir("lora")
+    return default_source("lora")
 
 
 def export(directory: Path, output: Path | None) -> None:
@@ -57,7 +57,7 @@ def get_parser() -> argparse.ArgumentParser:
         type=Path,
         default=None,
         metavar="DIR",
-        help="dataset directory (default: lora/inputs/; bare name resolves to lora/inputs/)",
+        help="dataset directory (default: current folder; inputs/ in the web UI)",
     )
     parser.add_argument(
         "--output",
