@@ -307,6 +307,42 @@ class TestKeyframeAtOrBefore:
             assert _utils.keyframe_at_or_before(Path("in.mp4"), 3.0) is None
 
 
+class TestKeyframeAfter:
+    """Where the next GOP begins: the earliest point a copy can take over."""
+
+    def test_returns_the_first_keyframe_strictly_after_the_request(self):
+        packets = {
+            "packets": [
+                {"pts_time": "0.000", "flags": "K__"},
+                {"pts_time": "3.000", "flags": "K__"},
+                {"pts_time": "8.000", "flags": "K__"},
+                {"pts_time": "16.000", "flags": "K__"},
+            ]
+        }
+        with patch("scripts.av._utils.run_ffprobe", return_value=packets):
+            assert _utils.keyframe_after(Path("in.mp4"), 3.0) == 8.0
+
+    def test_ignores_non_keyframe_packets(self):
+        packets = {"packets": [{"pts_time": "4.000", "flags": "___"}, {"pts_time": "9.000", "flags": "K_"}]}
+        with patch("scripts.av._utils.run_ffprobe", return_value=packets):
+            assert _utils.keyframe_after(Path("in.mp4"), 3.0) == 9.0
+
+    def test_reads_a_bounded_window_from_the_request(self):
+        with patch("scripts.av._utils.run_ffprobe", return_value={"packets": []}) as probe:
+            _utils.keyframe_after(Path("in.mp4"), 12.0, horizon=30.0)
+        args = probe.call_args[0][0]
+        assert args[args.index("-read_intervals") + 1] == "12.000%+30.000"
+
+    def test_none_when_no_keyframe_follows(self):
+        packets = {"packets": [{"pts_time": "1.000", "flags": "K_"}]}
+        with patch("scripts.av._utils.run_ffprobe", return_value=packets):
+            assert _utils.keyframe_after(Path("in.mp4"), 3.0) is None
+
+    def test_none_when_ffprobe_cannot_be_asked(self):
+        with patch("scripts.av._utils.run_ffprobe", side_effect=FileNotFoundError):
+            assert _utils.keyframe_after(Path("in.mp4"), 3.0) is None
+
+
 class TestCopyWouldLandOn:
     """The decision av.trim hangs its default behaviour on."""
 

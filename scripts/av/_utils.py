@@ -447,6 +447,52 @@ def keyframe_at_or_before(file: Path, timestamp: float) -> float | None:
     return best
 
 
+def keyframe_after(file: Path, timestamp: float, horizon: float = 120.0) -> float | None:
+    """Return the presentation time of the first video keyframe after *timestamp*.
+
+    The counterpart of ``keyframe_at_or_before``: where the next GOP begins,
+    which is the earliest point a stream copy could take over from a re-encode.
+    Only *horizon* seconds past *timestamp* are read, so a pathological file
+    with no keyframe in sight costs a bounded probe rather than a full scan.
+
+    Args:
+        file: Media file to probe.
+        timestamp: Position in seconds to search forward from.
+        horizon: How far past *timestamp* to look, in seconds.
+
+    Returns:
+        Keyframe position in seconds, or None when there is none within the
+        horizon or ffprobe could not be asked.
+    """
+    try:
+        data = run_ffprobe(
+            [
+                "-select_streams",
+                "v:0",
+                "-show_packets",
+                "-show_entries",
+                "packet=pts_time,flags",
+                "-read_intervals",
+                f"{max(0.0, timestamp):.3f}%+{horizon:.3f}",
+                str(file),
+            ]
+        )
+    except Exception:
+        return None
+
+    best: float | None = None
+    for packet in data.get("packets", []):
+        if "K" not in packet.get("flags", ""):
+            continue
+        try:
+            pts = float(packet["pts_time"])
+        except KeyError, TypeError, ValueError:
+            continue
+        if pts > timestamp + _PTS_EPSILON and (best is None or pts < best):
+            best = pts
+    return best
+
+
 def copy_would_land_on(file: Path, start: float) -> tuple[bool, float | None]:
     """Report whether a stream copy can start exactly at *start*.
 

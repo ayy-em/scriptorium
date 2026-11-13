@@ -2,17 +2,25 @@
 
 import argparse
 from pathlib import Path
+import subprocess
 import sys
+import tempfile
 
 from core.argparse import ScriptoriumParser
 from core.outputs import resolve_output
 from core.paths import move_to_past_inputs, resolve_input
+from core.progress import ProgressReporter
 from scripts.av._utils import (
+    KEYFRAME_TOLERANCE,
     copy_would_land_on,
     format_time,
     has_video_stream,
+    keyframe_after,
     parse_time,
     probe_duration_or_none,
+    probe_streams,
+    run_ffmpeg,
+    run_ffmpeg_stderr,
     run_ffmpeg_with_progress,
 )
 
@@ -31,6 +39,24 @@ TRIM_MODES = (MODE_AUTO, MODE_FAST, MODE_PRECISE)
 # visually lossless for x264 and matches what formats.convert_video calls
 # "high" — a trim should not be the step that costs you quality you notice.
 _REENCODE_CRF = "18"
+
+# What trim() reports having done.
+STRATEGY_COPY = "copy"
+STRATEGY_REENCODE = "reencode"
+STRATEGY_SMART = "smart"
+
+# Source codecs a smart cut can splice: the encoder that re-creates the head,
+# and the bitstream filter that puts parameter sets in-band so the copied tail
+# does not depend on the head's. Anything else gets a full re-encode.
+_SMART_CUT_CODECS = {
+    "h264": ("libx264", "h264_mp4toannexb"),
+    "hevc": ("libx265", "hevc_mp4toannexb"),
+}
+
+# How far a smart cut's duration may stray from the requested one before it is
+# distrusted. A copied tail ends on a packet boundary, which can add a frame or
+# two; anything beyond that means the splice went wrong.
+_SMART_CUT_DURATION_SLACK = 0.25
 
 
 def _should_reencode(input: Path, start_seconds: float, mode: str) -> tuple[bool, float | None]:
@@ -58,6 +84,136 @@ def _should_reencode(input: Path, start_seconds: float, mode: str) -> tuple[bool
     return not accurate, keyframe
 
 
+def _plan_smart_cut(input: Path, start_seconds: float, end_seconds: float | None) -> tuple[dict, bool, float] | str:
+    """Check whether a smart cut is possible and find where the copy can take over.
+
+    Args:
+        input: Source media file.
+        start_seconds: Requested start position in seconds.
+        end_seconds: Requested end position in seconds, or None for end of file.
+
+    Returns:
+        ``(video_stream, has_audio, keyframe)`` when it is, or a short reason
+        when it is not.
+    """
+    try:
+        streams = probe_streams(input)
+    except Exception:
+        return "the source could not be probed"
+    video = next((st for st in streams if st.get("codec_type") == "video"), None)
+    codec = None if video is None else video.get("codec_name")
+    if codec not in _SMART_CUT_CODECS:
+        return f"{codec or 'this'} video cannot be spliced"
+    keyframe = keyframe_after(input, start_seconds)
+    if keyframe is None:
+        return "no keyframe follows the start"
+    if end_seconds is not None and keyframe >= end_seconds - KEYFRAME_TOLERANCE:
+        return "the cut ends before the next keyframe"
+    return video, any(st.get("codec_type") == "audio" for st in streams), keyframe
+
+
+def _smart_cut(input: Path, output: Path, start_seconds: float, end_seconds: float | None) -> str | None:
+    """Re-encode only up to the next keyframe and stream-copy the rest.
+
+    A full re-encode is exact but slow and costs quality over the whole range;
+    a stream copy is lossless but can only begin on a keyframe. Most of a cut
+    lies after the first keyframe past the start, so only the stretch before it
+    needs encoding: the head is re-encoded from the exact start to that
+    keyframe in the source's own codec, the tail is copied from it, and the
+    audio, which has no GOP to round to, is copied whole and muxed over both.
+
+    Splicing a re-encoded head onto copied frames is fragile: the two halves
+    carry different parameter sets. They are put in-band so a decoder can
+    switch at the seam, and the result is decoded once before it is accepted.
+    Any failure, at any step, returns a reason and leaves nothing at *output*,
+    so the caller falls back to a full re-encode rather than delivering a file
+    that might not play.
+
+    Args:
+        input: Source media file.
+        output: Destination file path.
+        start_seconds: Requested start position in seconds.
+        end_seconds: Requested end position in seconds, or None for end of file.
+
+    Returns:
+        None on success, or a short reason the smart cut was not possible.
+    """
+    plan = _plan_smart_cut(input, start_seconds, end_seconds)
+    if isinstance(plan, str):
+        return plan
+    video, has_audio, keyframe = plan
+    encoder, bsf = _SMART_CUT_CODECS[video["codec_name"]]
+
+    stop = end_seconds if end_seconds is not None else probe_duration_or_none(input)
+    reporter = ProgressReporter()
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            work = Path(tmp)
+            head, tail, audio = work / "head.ts", work / "tail.ts", work / "audio.mka"
+
+            reporter.update(0.1, f"re-encoding {keyframe - start_seconds:.2f}s up to the next keyframe", force=True)
+            head_args = ["-ss", format_time(start_seconds), "-i", str(input)]
+            head_args += ["-t", format_time(keyframe - start_seconds), "-map", "0:v:0", "-an"]
+            head_args += ["-c:v", encoder, "-crf", _REENCODE_CRF, "-fps_mode", "passthrough"]
+            if video.get("pix_fmt"):
+                head_args += ["-pix_fmt", video["pix_fmt"]]
+            run_ffmpeg([*head_args, str(head)])
+
+            reporter.update(0.5, "copying the rest", force=True)
+            tail_args = ["-ss", format_time(keyframe), "-i", str(input)]
+            if end_seconds is not None:
+                tail_args += ["-t", format_time(end_seconds - keyframe)]
+            run_ffmpeg([*tail_args, "-map", "0:v:0", "-an", "-c:v", "copy", "-bsf:v", bsf, str(tail)])
+
+            if has_audio:
+                # Output-side seek: an input-side one on a copy starts at the
+                # video keyframe and carries seconds of audio from before the cut.
+                audio_args = ["-i", str(input), "-ss", format_time(start_seconds)]
+                if end_seconds is not None:
+                    audio_args += ["-t", format_time(end_seconds - start_seconds)]
+                run_ffmpeg([*audio_args, "-map", "0:a", "-vn", "-c:a", "copy", str(audio)])
+
+            concat_list = work / "concat.txt"
+            concat_list.write_text(f"file '{head.as_posix()}'\nfile '{tail.as_posix()}'\n", encoding="utf-8")
+            mux = ["-f", "concat", "-safe", "0", "-i", str(concat_list)]
+            if has_audio:
+                mux += ["-i", str(audio), "-map", "0:v", "-map", "1:a"]
+            run_ffmpeg([*mux, "-c", "copy", "-avoid_negative_ts", "make_zero", str(output)])
+
+        reporter.update(0.9, "checking the result", force=True)
+        problem = _verify_cut(output, None if stop is None else stop - start_seconds)
+    except (subprocess.CalledProcessError, OSError) as e:
+        problem = f"ffmpeg failed ({e})"
+    if problem:
+        output.unlink(missing_ok=True)
+        return problem
+    reporter.finish()
+    print(
+        f"Smart cut: re-encoded {keyframe - start_seconds:.2f}s up to the keyframe at {keyframe:.2f}s, copied the rest."
+    )
+    return None
+
+
+def _verify_cut(output: Path, expected: float | None) -> str | None:
+    """Decode a smart cut once and check its length.
+
+    Args:
+        output: The spliced file.
+        expected: Length the cut should have, in seconds, or None if unknown.
+
+    Returns:
+        None when the file decodes cleanly at the expected length, else why not.
+    """
+    errors = run_ffmpeg_stderr(["-v", "error", "-i", str(output), "-f", "null", "-"]).strip()
+    if errors:
+        return "the spliced file did not decode cleanly"
+    if expected is not None:
+        actual = probe_duration_or_none(output)
+        if actual is None or abs(actual - expected) > _SMART_CUT_DURATION_SLACK:
+            return "the spliced file came out the wrong length"
+    return None
+
+
 def trim(
     input: Path,
     output: Path,
@@ -81,12 +237,14 @@ def trim(
         start: Start time (HH:MM:SS, MM:SS, or seconds). Output begins here.
         end: Optional end time in the same formats; when omitted, the output
             runs to the source's end.
-        mode: ``"auto"`` (default) re-encodes only when a copy would miss the
-            requested start; ``"fast"`` always stream-copies, accepting the
-            keyframe snap; ``"precise"`` always re-encodes.
+        mode: ``"auto"`` (default) stream-copies when a keyframe lands on the
+            start, and otherwise smart-cuts (re-encoding only up to the next
+            keyframe), falling back to a full re-encode when that is not
+            possible; ``"fast"`` always stream-copies, accepting the keyframe
+            snap; ``"precise"`` always re-encodes.
 
     Returns:
-        ``"copy"`` or ``"reencode"`` — the strategy actually used.
+        ``"copy"``, ``"smart"`` or ``"reencode"``: the strategy actually used.
 
     Raises:
         ValueError: If *mode* is unrecognised or a timestamp cannot be parsed.
@@ -94,6 +252,13 @@ def trim(
     """
     start_seconds = parse_time(start)
     reencode, keyframe = _should_reencode(input, start_seconds, mode)
+
+    if reencode and mode == MODE_AUTO and has_video_stream(input):
+        end_seconds = None if end is None else parse_time(end)
+        why_not = _smart_cut(input, output, start_seconds, end_seconds)
+        if why_not is None:
+            return STRATEGY_SMART
+        print(f"Smart cut not possible: {why_not}. Re-encoding the whole range instead.")
 
     args = ["-ss", start, "-i", str(input)]
     if end is not None:
@@ -125,7 +290,7 @@ def trim(
     # ffmpeg reports its position within the output, which for a trim is the
     # length of the kept range rather than of the source.
     run_ffmpeg_with_progress(args, total_seconds=duration)
-    return "reencode" if reencode else "copy"
+    return STRATEGY_REENCODE if reencode else STRATEGY_COPY
 
 
 _EXAMPLES = """
@@ -167,9 +332,10 @@ def get_parser() -> argparse.ArgumentParser:
         choices=TRIM_MODES,
         default=MODE_AUTO,
         help=(
-            "auto: re-encode only when a stream copy would miss the requested start "
-            "(default); fast: always stream-copy, snapping to the nearest keyframe; "
-            "precise: always re-encode"
+            "auto (default): stream-copy when a keyframe lands on the start, otherwise "
+            "re-encode only up to the next keyframe and copy the rest (H.264/HEVC), "
+            "or the whole range for other codecs; fast: always stream-copy, snapping "
+            "to the nearest keyframe; precise: always re-encode"
         ),
     )
     parser.add_argument(

@@ -8,11 +8,15 @@ is not where the user asked, the cut is re-encoded instead of silently rounded.
 """
 
 from pathlib import Path
+import shutil
+import subprocess
 from unittest.mock import patch
 
 import pytest
 
-from scripts.av.trim import MODE_FAST, MODE_PRECISE, trim
+from scripts.av import _utils
+from scripts.av import trim as trim_module
+from scripts.av.trim import MODE_FAST, MODE_PRECISE, STRATEGY_SMART, trim
 
 
 @pytest.fixture(autouse=True)
@@ -115,6 +119,7 @@ class TestKeyframeAccuracy:
         with (
             patch("scripts.av.trim.copy_would_land_on", return_value=(False, 0.0)),
             patch("scripts.av.trim.has_video_stream", return_value=True),
+            patch("scripts.av.trim._smart_cut", return_value="vp9 video cannot be spliced"),
             patch("scripts.av.trim.run_ffmpeg_with_progress") as mock_ff,
         ):
             strategy = trim(Path("in.mp4"), out, start="00:01")
@@ -166,6 +171,7 @@ class TestKeyframeAccuracy:
         with (
             patch("scripts.av.trim.copy_would_land_on", return_value=(False, 0.0)),
             patch("scripts.av.trim.has_video_stream", return_value=True),
+            patch("scripts.av.trim._smart_cut", return_value="no keyframe follows the start"),
             patch("scripts.av.trim.run_ffmpeg_with_progress") as mock_ff,
         ):
             trim(Path("in.mp4"), out, start="00:01")
@@ -175,3 +181,104 @@ class TestKeyframeAccuracy:
     def test_unknown_mode_is_rejected(self, tmp_path):
         with pytest.raises(ValueError, match="Unknown trim mode"):
             trim(Path("in.mp4"), tmp_path / "out.mp4", start="00:01", mode="sloppy")
+
+
+class TestSmartCut:
+    """auto re-encodes only up to the next keyframe when a plain copy would miss."""
+
+    def test_auto_prefers_a_smart_cut_over_a_full_reencode(self, tmp_path):
+        out = tmp_path / "out.mp4"
+        with (
+            patch("scripts.av.trim.copy_would_land_on", return_value=(False, 0.0)),
+            patch("scripts.av.trim.has_video_stream", return_value=True),
+            patch("scripts.av.trim._smart_cut", return_value=None) as smart,
+            patch("scripts.av.trim.run_ffmpeg_with_progress") as full,
+        ):
+            strategy = trim(Path("in.mp4"), out, start="3.3", end="20")
+        assert strategy == STRATEGY_SMART
+        smart.assert_called_once_with(Path("in.mp4"), out, 3.3, 20.0)
+        full.assert_not_called()
+
+    def test_falls_back_to_a_full_reencode_and_says_why(self, tmp_path, capsys):
+        out = tmp_path / "out.mp4"
+        with (
+            patch("scripts.av.trim.copy_would_land_on", return_value=(False, 0.0)),
+            patch("scripts.av.trim.has_video_stream", return_value=True),
+            patch("scripts.av.trim._smart_cut", return_value="the cut ends before the next keyframe"),
+            patch("scripts.av.trim.run_ffmpeg_with_progress") as full,
+        ):
+            assert trim(Path("in.mp4"), out, start="00:03") == "reencode"
+        full.assert_called_once()
+        assert "the cut ends before the next keyframe" in capsys.readouterr().out
+
+    @pytest.mark.parametrize("mode", [MODE_FAST, MODE_PRECISE])
+    def test_explicit_modes_never_smart_cut(self, tmp_path, mode):
+        with (
+            patch("scripts.av.trim.copy_would_land_on", return_value=(False, 0.0)),
+            patch("scripts.av.trim.has_video_stream", return_value=True),
+            patch("scripts.av.trim._smart_cut") as smart,
+            patch("scripts.av.trim.run_ffmpeg_with_progress"),
+        ):
+            trim(Path("in.mp4"), tmp_path / "out.mp4", start="00:03", mode=mode)
+        smart.assert_not_called()
+
+    def test_unsupported_codec_is_not_spliced(self):
+        with patch("scripts.av.trim.probe_streams", return_value=[{"codec_type": "video", "codec_name": "vp9"}]):
+            assert trim_module._plan_smart_cut(Path("in.webm"), 3.0, None) == "vp9 video cannot be spliced"
+
+    def test_a_cut_ending_before_the_next_keyframe_is_not_spliced(self):
+        with (
+            patch("scripts.av.trim.probe_streams", return_value=[{"codec_type": "video", "codec_name": "h264"}]),
+            patch("scripts.av.trim.keyframe_after", return_value=8.0),
+        ):
+            assert "ends before" in trim_module._plan_smart_cut(Path("in.mp4"), 3.0, 6.0)
+
+    def test_a_splice_that_fails_verification_leaves_no_file(self, tmp_path):
+        out = tmp_path / "out.mp4"
+
+        def fake_ffmpeg(args):
+            Path(args[-1]).write_bytes(b"x")
+
+        with (
+            patch(
+                "scripts.av.trim.probe_streams",
+                return_value=[{"codec_type": "video", "codec_name": "h264", "pix_fmt": "yuv420p"}],
+            ),
+            patch("scripts.av.trim.keyframe_after", return_value=8.0),
+            patch("scripts.av.trim.run_ffmpeg", side_effect=fake_ffmpeg),
+            patch("scripts.av.trim.run_ffmpeg_stderr", return_value="Invalid NAL unit size"),
+        ):
+            reason = trim_module._smart_cut(Path("in.mp4"), out, 3.0, 20.0)
+        assert reason == "the spliced file did not decode cleanly"
+        assert not out.exists()
+
+
+@pytest.mark.skipif(not shutil.which("ffmpeg") or not shutil.which("ffprobe"), reason="needs ffmpeg")
+def test_smart_cut_end_to_end_is_exact_and_decodes_cleanly(tmp_path):
+    """Real ffmpeg on a source with one keyframe every eight seconds."""
+    src = tmp_path / "sparse.mp4"
+    subprocess.run(
+        ["ffmpeg", "-y", "-v", "error",
+         "-f", "lavfi", "-i", "testsrc2=size=320x180:rate=30:duration=20",
+         "-f", "lavfi", "-i", "sine=frequency=300:duration=20",
+         "-c:v", "libx264", "-preset", "ultrafast", "-g", "240", "-keyint_min", "240", "-sc_threshold", "0",
+         "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest", str(src)],
+        check=True,
+    )  # fmt: skip
+    out = tmp_path / "cut.mp4"
+
+    # The module-wide stub would hide the length check this test is partly about.
+    with patch("scripts.av.trim.probe_duration_or_none", _utils.probe_duration_or_none):
+        assert trim_module._smart_cut(src, out, 3.3, 15.0) is None
+
+    decode = subprocess.run(
+        ["ffmpeg", "-v", "error", "-i", str(out), "-f", "null", "-"], capture_output=True, text=True, check=False
+    )
+    assert decode.stderr == ""
+    duration = subprocess.run(
+        ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", str(out)],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+    assert float(duration) == pytest.approx(11.7, abs=0.2)
