@@ -40,7 +40,8 @@ scriptorium/
 │   ├── paths.py             # centralized path resolution (frozen vs dev)
 │   ├── progress.py          # the ::progress:: reporting contract
 │   ├── registry.py          # auto-discovers scripts and themes
-│   └── runner.py            # dispatch + middleware (run, run_fn)
+│   ├── runner.py            # dispatch + middleware (run, run_fn)
+│   └── stdio.py             # stdout/stderr that no printed character can crash
 ├── scripts/
 │   └── <theme>/
 │       ├── __init__.py      # LABEL, DESCRIPTION
@@ -1439,6 +1440,19 @@ stdlib `ArgumentParser` so they inherit the startup banner automatically.
 
 To add cross-cutting behaviour (logging, metrics, retries, …): edit `_timed` in
 `core/runner.py`. It is the single place.
+
+### Output encoding
+
+`main.main()` calls `core.stdio.configure()` before anything prints. Python
+gives a pipe or a file the ANSI code page on Windows (cp1252), strict, so any
+character outside it — `→`, `−`, a Cyrillic filename — raised
+`UnicodeEncodeError` the moment output was piped. Every web UI run is piped,
+so a script printing an arrow failed its run part-way through.
+A run the webapp spawned (see `core.invocation`) now writes UTF-8, which is
+what `_stream_script` decodes; a human's pipe or redirect keeps its encoding,
+and what it cannot hold prints as `?`. A console is unaffected: Python
+already writes UTF-8 to it. The frozen `--run-script` path reaches the same
+call through `main.main()`.
 
 ---
 
