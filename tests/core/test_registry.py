@@ -106,8 +106,8 @@ class TestDiscoverThemes:
 
 
 class TestIsUiOnly:
-    def test_no_shipped_script_is_ui_only_yet(self):
-        assert not any(is_ui_only(mod) for mod in discover().values())
+    def test_photo_crop_is_the_shipped_ui_only_script(self):
+        assert sorted(key for key, mod in discover().items() if is_ui_only(mod)) == ["photo.crop"]
 
     def test_reads_the_flag(self):
         mod = types.ModuleType("stub")

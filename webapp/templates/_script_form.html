@@ -175,6 +175,12 @@
   </div>
   {% endfor %}
 
+  {# A script's own template can extend script.html and name an editor to sit
+     between the file and its fields — photo.crop's box editor. The editor
+     writes into the same `values` the fields below are bound to, so the run,
+     History and re-run need nothing special. #}
+  {% if form_editor is defined %}{% include form_editor %}{% endif %}
+
   {% set basic_specs = param_specs | rejectattr("advanced") | list %}
   {% set advanced_specs = param_specs | selectattr("advanced") | list %}
 

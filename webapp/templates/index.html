@@ -580,7 +580,12 @@
       /* ── Cards ──────────────────────────────────────────────────────── */
       truncate(text, limit) { return _truncate(text, limit); },
 
+      /* A UI-only script's interface is its own page, which edits one file.
+         The inline runner would only ask for the numbers that page draws. */
+      oneFileOnly(s) { return !!s.ui_only && this.batchCount > 1; },
+
       selectScript(s, i) {
+        if (this.oneFileOnly(s)) return;
         this.expandingIndex = i;
         var delay = _reducedMotion() ? 0 : 500;
         setTimeout(() => this._openScript(s), delay);

@@ -15,7 +15,7 @@ import urllib.request
 import uuid
 
 from fastapi import FastAPI, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -48,7 +48,7 @@ from core.registry import (
     theme_descriptions,
     theme_labels,
 )
-from webapp import _runs, _waveform
+from webapp import _image_preview, _runs, _waveform
 from webapp._badges import badges_for
 from webapp._form import (
     accepts_directory,
@@ -649,6 +649,47 @@ async def staged_input(path: str) -> FileResponse:
     except _waveform.StagedInputError as e:
         raise HTTPException(status_code=e.status, detail=str(e))
     return FileResponse(target, headers={"Cache-Control": "no-store"})
+
+
+@app.get("/api/image-preview")
+async def image_preview(path: str) -> Response:
+    """Return a staged image upright and size-capped, for the crop editor.
+
+    The browser cannot draw HEIC, and the box the user draws has to be in the
+    pixels ``photo.crop`` will cut — EXIF orientation applied. So the page
+    draws on this rather than on the file itself. The full upright size rides
+    along in ``X-Image-Width`` / ``X-Image-Height``; the page measures its box
+    against that, not against the scaled preview. Same containment rule as
+    ``/api/staged-input``.
+
+    Args:
+        path: Server-side path of a staged input file.
+
+    Returns:
+        A JPEG (or PNG, for an image with transparency) no larger than
+        ``_image_preview.MAX_SIDE`` on its longest side.
+
+    Raises:
+        HTTPException: 400/403/404 when the path is not a staged input, 422
+            when it is not an image.
+    """
+    try:
+        target = _waveform.resolve_staged_input(path, inputs_dir("photo"))
+    except _waveform.StagedInputError as e:
+        raise HTTPException(status_code=e.status, detail=str(e))
+    try:
+        preview = await asyncio.to_thread(_image_preview.render_preview, target)
+    except _image_preview.PreviewError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    return Response(
+        content=preview.data,
+        media_type=preview.media_type,
+        headers={
+            "Cache-Control": "no-store",
+            "X-Image-Width": str(preview.width),
+            "X-Image-Height": str(preview.height),
+        },
+    )
 
 
 def _webview_window(request: Request):  # noqa: ANN201

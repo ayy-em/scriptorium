@@ -1566,3 +1566,20 @@ class TestBatchFanOut:
         monkeypatch.setattr("core.history._HISTORY_PATH", tmp_path / "history.json")
         self._fake_run({"inputs": "/tmp/fake"})
         assert history.load()[0].batch_id == ""
+
+
+class TestPhotoCropPage:
+    """photo.crop is the ordinary script page with the box editor slotted in."""
+
+    def test_renders_the_editor_under_the_file_field(self):
+        body = client.get("/scripts/photo/crop").text
+        assert 'x-data="cropEditor()"' in body
+        assert body.index('id="f_input"') < body.index("cropEditor()") < body.index('id="f_x"')
+
+    def test_keeps_the_shared_console_and_drops_the_cli_button(self):
+        body = client.get("/scripts/photo/crop").text
+        assert "scriptRunner(" in body
+        assert "Copy CLI command" not in body
+
+    def test_other_pages_get_no_editor(self):
+        assert "cropEditor" not in client.get("/scripts/av/filmstrip").text

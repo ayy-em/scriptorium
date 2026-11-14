@@ -13,6 +13,15 @@ lives in EXIF far more often than for JPEG, so callers that write to a format
 without EXIF (PNG, WebP) must bake it in with ``ImageOps.exif_transpose``.
 """
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from PIL import Image
+
 _REGISTERED = False
 
 
@@ -32,3 +41,23 @@ def ensure_image_formats() -> None:
         return
     register_heif_opener()
     _REGISTERED = True
+
+
+def open_upright(path: Path) -> Image.Image:
+    """Open an image with its EXIF orientation applied.
+
+    A portrait phone photo is stored on its side with an orientation tag.
+    Anything that shows an image and then acts on coordinates picked on it —
+    ``photo.crop`` and the preview the crop page draws on — must use the same
+    upright pixels, or a box drawn on the picture lands somewhere else.
+
+    Args:
+        path: Image file.
+
+    Returns:
+        The image, rotated and flipped as its EXIF says.
+    """
+    from PIL import Image, ImageOps  # noqa: PLC0415
+
+    ensure_image_formats()
+    return ImageOps.exif_transpose(Image.open(path))

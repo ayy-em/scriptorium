@@ -51,7 +51,7 @@
 | | Theme | Highlights |
 |---|---|---|
 | 🎬 | **Video & audio** | Trim on a waveform, join, split, crop, fix volume and fades, filmstrip contact sheets, video-to-GIF/WebP, frame dumps, metadata tags |
-| 🖼️ | **Photos** | AI background removal with fast, balanced and high-quality presets; HEIC/HEIF from iPhones and Android phones |
+| 🖼️ | **Photos** | Crop by dragging a box over the picture; AI background removal with fast, balanced and high-quality presets; HEIC/HEIF from iPhones and Android phones |
 | 🔄 | **File formats** | Convert audio, video, images, documents (docx, md, html, pdf) and spreadsheets (csv, json, xlsx, ods, tsv) |
 | ⬇️ | **Downloads** | Save media from YouTube, Vimeo and hundreds of other sites |
 | 🗣️ | **Speech** | Transcribe recordings to text |
@@ -359,7 +359,7 @@ settings.
 
 ## Scripts Available
 
-27 scripts across 9 categories. Titles are the scripts' own `TITLE` values.
+28 scripts across 9 categories. Titles are the scripts' own `TITLE` values.
 
 | Script | What it does |
 |--------|--------------|
@@ -383,6 +383,7 @@ settings.
 | `lora.import_captions` | Import captions from JSON |
 | `lora.renumber` | Renumber LoRA dataset images |
 | `lora.validate` | Validate a LoRA training dataset |
+| `photo.crop` | Crop a photo — drag a box over it, with aspect presets (web UI only) |
 | `photo.remove_bg` | Remove background |
 | `sitemaps.status_check` | Sitemap Status Check |
 | `speech.transcribe` | Transcribe audio to text |
@@ -445,6 +446,9 @@ run_fn(export, Path("inputs"), Path("outputs/lora/captions.json"))
 ```
 
 ## Version History
+
+### Unreleased
+- **`photo.crop`** — drag a box over a photo and keep that part: free-form or 1:1, 4:3, 3:2 and 16:9, portrait or landscape, with the box also editable as numbers. Phone photos crop the region you see, HEIC included; the photo stays put so you can crop it again. Web UI only
 
 ### v0.6.1
 - **No more encoding crashes on Windows** — scripts printing arrows or non-Latin filenames no longer fail in the web UI, and piped CLI output no longer crashes

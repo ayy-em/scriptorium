@@ -2100,6 +2100,103 @@ input[type=checkbox] {
 
 .context-summary-row dd.is-default { color: var(--text-faint); font-style: italic; }
 
+/* photo.crop's box editor (scripts/photo/_crop_editor.html). The box and the
+   shades are positioned in percentages of the frame, which is exactly the
+   image's size, so page zoom never changes what the box covers. */
+.crop-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.crop-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.crop-toolbar .path-toggle { margin-bottom: 0; }
+
+.crop-readout {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: var(--fs-helper);
+  color: var(--text-muted);
+}
+
+.crop-stage {
+  display: flex;
+  justify-content: center;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--bg-input);
+}
+
+.crop-frame {
+  position: relative;
+  max-width: 100%;
+  line-height: 0;
+  user-select: none;
+  touch-action: none;
+  cursor: crosshair;
+}
+
+.crop-image {
+  display: block;
+  max-width: 100%;
+  max-height: 60vh;
+  pointer-events: none;
+}
+
+.crop-shade {
+  position: absolute;
+  background: color-mix(in oklch, black 52%, transparent);
+  pointer-events: none;
+}
+
+.crop-box {
+  position: absolute;
+  box-sizing: border-box;
+  border: 1.5px solid var(--accent);
+  outline: 1px solid color-mix(in oklch, black 40%, transparent);
+  cursor: move;
+}
+
+.crop-box:focus-visible { box-shadow: var(--focus-ring); }
+
+.crop-handle {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border: 1.5px solid var(--accent);
+  border-radius: 3px;
+  background: var(--bg-elevated);
+  transform: translate(-50%, -50%);
+}
+
+.crop-handle--nw { left: 0;    top: 0;    cursor: nwse-resize; }
+.crop-handle--ne { left: 100%; top: 0;    cursor: nesw-resize; }
+.crop-handle--se { left: 100%; top: 100%; cursor: nwse-resize; }
+.crop-handle--sw { left: 0;    top: 100%; cursor: nesw-resize; }
+.crop-handle--n  { left: 50%;  top: 0;    cursor: ns-resize; }
+.crop-handle--s  { left: 50%;  top: 100%; cursor: ns-resize; }
+.crop-handle--e  { left: 100%; top: 50%;  cursor: ew-resize; }
+.crop-handle--w  { left: 0;    top: 50%;  cursor: ew-resize; }
+
+/* Bigger targets where the pointer is a finger. */
+@media (pointer: coarse) {
+  .crop-handle { width: 22px; height: 22px; }
+}
+
+.crop-message {
+  margin: 0;
+  font-size: var(--fs-helper);
+  color: var(--text-muted);
+}
+
 /* ─── 12. Run status strip + terminal ────────────────────────────────────── */
 .status-strip {
   position: relative;
