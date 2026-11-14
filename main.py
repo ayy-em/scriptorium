@@ -2,6 +2,7 @@
 
 import sys
 
+from core import stdio
 from core.env import load_env
 from core.registry import discover, discover_themes, is_ui_only, theme_descriptions
 from core.runner import run
@@ -11,6 +12,7 @@ _MIN_ARGS = 2
 
 def main() -> None:
     """Parse the script key from argv and dispatch, or list all available scripts."""
+    stdio.configure()
     load_env()
     if len(sys.argv) < _MIN_ARGS:
         _list()
