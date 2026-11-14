@@ -28,6 +28,23 @@ def discover() -> dict[str, ModuleType]:
     return result
 
 
+def is_ui_only(mod: ModuleType) -> bool:
+    """Report whether a script exists only in the web UI.
+
+    A script sets ``UI_ONLY = True`` when its interface is an interactive page
+    rather than a form — an image crop drawn with the mouse has no sensible
+    command line. It is still discovered, listed and searched like any other;
+    only running it from a terminal is refused, by ``core.runner``.
+
+    Args:
+        mod: A discovered script module.
+
+    Returns:
+        True when the module declares itself UI-only.
+    """
+    return getattr(mod, "UI_ONLY", False) is True
+
+
 def _is_hidden(theme_name: str) -> bool:
     """Check if a theme is marked as hidden via its HIDDEN module attribute."""
     mod = importlib.import_module(f"scripts.{theme_name}")

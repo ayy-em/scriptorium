@@ -236,7 +236,9 @@
     </button>
 
     {# One control, not two: it reveals the command and copies it in the same
-       click, so there is no separate "CLI equivalent" panel to explain. #}
+       click, so there is no separate "CLI equivalent" panel to explain.
+       A UI-only script has no command line, so it gets no button. #}
+    {% if not ui_only %}
     <button type="button" class="btn btn--secondary"
             @click="showAndCopyCommand()"
             :aria-expanded="previewOpen.toString()"
@@ -245,6 +247,7 @@
       <span x-show="copied" x-cloak class="is-success">{{ icon('check', 15) }}</span>
       <span x-text="copied ? 'Copied to clipboard' : 'Copy CLI command'">Copy CLI command</span>
     </button>
+    {% endif %}
 
     <button type="button" class="btn btn--ghost" @click="reset()">
       {{ icon('reset', 15) }}

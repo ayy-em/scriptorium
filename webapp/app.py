@@ -43,6 +43,7 @@ from core.progress import parse as parse_progress
 from core.registry import (
     discover,
     discover_themes,
+    is_ui_only,
     scripts_for_file,
     theme_descriptions,
     theme_labels,
@@ -345,6 +346,9 @@ async def script_detail(theme: str, script_name: str, request: Request):
             # Only a script that can say which models a form state loads gets
             # the pre-run download notice; see /api/model-weights.
             "reports_model_weights": hasattr(mod, "models_for_args"),
+            # No command line exists for a UI-only script, so the form drops
+            # its Copy CLI command button rather than showing one that lies.
+            "ui_only": is_ui_only(mod),
         },
     )
 
@@ -1112,6 +1116,7 @@ def _script_summary(key: str, mod) -> dict:
         "description": mod.DESCRIPTION,
         "has_extra_fields": _has_extra_fields(mod),
         "has_template": bool(getattr(mod, "TEMPLATE", None)),
+        "ui_only": is_ui_only(mod),
         "batch_mode": batch_mode_for(specs),
         "accepts_directory": accepts_directory(file_input),
         "file_dest": file_input.dest if file_input else None,
@@ -1261,6 +1266,8 @@ async def preview_command(theme: str, script_name: str, request: Request) -> JSO
         raise HTTPException(status_code=404, detail=f"Script {key!r} not found")
 
     mod = scripts[key]
+    if is_ui_only(mod):
+        raise HTTPException(status_code=404, detail=f"Script {key!r} has no command line; it runs in the web UI only")
     parser = mod.get_parser() if hasattr(mod, "get_parser") else None
     field_specs = fields_from_parser(parser) if parser else []
     argv = build_argv(dict(request.query_params), field_specs)

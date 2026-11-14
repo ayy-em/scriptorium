@@ -3,7 +3,7 @@
 import sys
 
 from core.env import load_env
-from core.registry import discover, discover_themes, theme_descriptions
+from core.registry import discover, discover_themes, is_ui_only, theme_descriptions
 from core.runner import run
 
 _MIN_ARGS = 2
@@ -32,7 +32,19 @@ def _list() -> None:
         print("No scripts found.")
         return
     for key, mod in sorted(scripts.items()):
-        print(f"  {key:<40}  {mod.TITLE}")
+        print(f"  {key:<40}  {mod.TITLE}{_ui_only_marker(mod)}")
+
+
+def _ui_only_marker(mod) -> str:
+    """Return the suffix a listing appends to a script that only runs in the web UI.
+
+    Args:
+        mod: A discovered script module.
+
+    Returns:
+        ``" (web UI only)"`` or an empty string.
+    """
+    return " (web UI only)" if is_ui_only(mod) else ""
 
 
 def _list_theme(theme: str) -> None:
@@ -49,7 +61,7 @@ def _list_theme(theme: str) -> None:
     print(f"Theme '{theme}' ({len(scripts)} script(s)):\n")
     for name, mod in sorted(scripts.items()):
         key = f"{theme}.{name}"
-        print(f"  {key:<40}  {mod.TITLE}")
+        print(f"  {key:<40}  {mod.TITLE}{_ui_only_marker(mod)}")
         print(f"  {'':40}  {mod.DESCRIPTION}")
         print()
     print(f"Run 'uv run main.py {theme}.<script> --help' for usage details.")

@@ -1,8 +1,11 @@
 """Tests for core.registry — verifies the real on-disk scripts/ tree is discovered."""
 
+import types
+
 from core.registry import (
     discover,
     discover_themes,
+    is_ui_only,
     scripts_for_category,
     scripts_for_file,
     theme_descriptions,
@@ -100,3 +103,19 @@ class TestDiscoverThemes:
     def test_no_empty_themes(self):
         for theme, scripts in discover_themes().items():
             assert scripts, f"theme {theme!r} has no scripts"
+
+
+class TestIsUiOnly:
+    def test_no_shipped_script_is_ui_only_yet(self):
+        assert not any(is_ui_only(mod) for mod in discover().values())
+
+    def test_reads_the_flag(self):
+        mod = types.ModuleType("stub")
+        assert is_ui_only(mod) is False
+        mod.UI_ONLY = True
+        assert is_ui_only(mod) is True
+
+    def test_only_a_literal_true_counts(self):
+        mod = types.ModuleType("stub")
+        mod.UI_ONLY = "yes"
+        assert is_ui_only(mod) is False

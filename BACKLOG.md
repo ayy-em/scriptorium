@@ -10,31 +10,6 @@ need it after. They come from a scoping session on 2026-09-17 against a
 hand-written list; the decisions recorded in each entry were made then and
 are not up for re-litigation unless something has changed.
 
-## UI-only scripts
-
-**Status:** open (2026-09-26). Foundation for `photo.crop` below.
-
-`photo.crop` is an interactive editor — drag a box over a picture — and the
-decision on 2026-09-17 was that it is **UI-only**, with no CLI equivalent.
-That breaks the "anything the UI does, the CLI can too" line in PRODUCT.md,
-deliberately, and needs a mechanism rather than a special case:
-
-- A module flag, `UI_ONLY = True`, next to `TITLE` and `DESCRIPTION`.
-  Discovery in `core.registry` is unchanged.
-- `uv run main.py <theme>` lists the script with a "(web UI only)" marker,
-  so a CLI user learns it exists. `uv run main.py <theme>.<script>` and
-  `--help` print one line saying it is available in the web UI only, exit 2,
-  and run nothing.
-- The web UI renders it through a custom `TEMPLATE`, the way `av/trim.html`
-  already replaces the generated form for `av.trim`. Look at how
-  `webapp/app.py` picks that template before inventing a second way.
-- The sidebar, wheel and search treat it as any other script. The CLI
-  command preview on the detail page is hidden, since there is none.
-
-Tests: registry discovers it, `main.py` refuses it politely, the detail page
-renders the custom template, and the preview-command endpoint returns
-nothing for it.
-
 ## docs theme: pdf_merge and pdf_separate
 
 **Status:** open (2026-09-26). No dependency on anything else here.
@@ -77,7 +52,8 @@ native optimiser is a third dependency graph to bundle for a marginal gain.
 
 ## photo.crop
 
-**Status:** open (2026-09-26). Needs "UI-only scripts" above.
+**Status:** open (2026-09-26). Needs the UI-only script mechanism (delivered
+2026-11-14, see Settled).
 
 An interactive crop: the page shows the picture, the user drags a box, picks
 an output format and presses Run. UI-only, by the 2026-09-17 decision.
@@ -219,6 +195,34 @@ SPS reproduced, which is harder.
 
 Closed, and kept only for the reasoning — either delivered, or considered and
 deliberately not built. Nothing here is queued work.
+
+## UI-only scripts
+
+**Status:** delivered 2026-11-14. See SPEC.md "Optional: `UI_ONLY`". Built as
+written below, with one placement decision: the guard is in `core.runner.run`,
+not `main.py`, because the frozen build's `--run-script` path never goes
+through `main.py`. `--help` gets the refusal too. Original entry follows.
+
+`photo.crop` is an interactive editor — drag a box over a picture — and the
+decision on 2026-09-17 was that it is **UI-only**, with no CLI equivalent.
+That breaks the "anything the UI does, the CLI can too" line in PRODUCT.md,
+deliberately, and needs a mechanism rather than a special case:
+
+- A module flag, `UI_ONLY = True`, next to `TITLE` and `DESCRIPTION`.
+  Discovery in `core.registry` is unchanged.
+- `uv run main.py <theme>` lists the script with a "(web UI only)" marker,
+  so a CLI user learns it exists. `uv run main.py <theme>.<script>` and
+  `--help` print one line saying it is available in the web UI only, exit 2,
+  and run nothing.
+- The web UI renders it through a custom `TEMPLATE`, the way `av/trim.html`
+  already replaces the generated form for `av.trim`. Look at how
+  `webapp/app.py` picks that template before inventing a second way.
+- The sidebar, wheel and search treat it as any other script. The CLI
+  command preview on the detail page is hidden, since there is none.
+
+Tests: registry discovers it, `main.py` refuses it politely, the detail page
+renders the custom template, and the preview-command endpoint returns
+nothing for it.
 
 ## One provider registry for every LLM call
 

@@ -308,6 +308,7 @@ attaches them to a GitHub Release.
 ```sh
 uv run main.py                          # list all scripts
 uv run main.py <theme>.<script> --help  # usage for a specific script
+                                        # (a script marked "web UI only" refuses here and lives in the web UI)
 uv run main.py <theme>.<script> [args]  # run it
 ```
 
@@ -444,6 +445,9 @@ run_fn(export, Path("inputs"), Path("outputs/lora/captions.json"))
 ```
 
 ## Version History
+
+### Unreleased
+- **UI-only scripts** — a script can declare `UI_ONLY` when its interface is an interactive page; the CLI lists it with a marker and refuses to run it, the web UI runs it as usual
 
 ### v0.6.0
 - **Install what's missing from the app** — ffmpeg and pandoc get one-click installs, every dependency is detected the same way, and the macOS app now finds Homebrew

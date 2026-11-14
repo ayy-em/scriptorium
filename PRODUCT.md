@@ -14,7 +14,7 @@ register: product
 
 **Strategic principles**:
 - Access speed over discoverability friction — the primary user knows what they want
-- CLI equivalence: anything the UI does, `uv run main.py <key>` can too. The script page proves it with a live command preview.
+- CLI equivalence: anything the UI does, `uv run main.py <key>` can too. The script page proves it with a live command preview. The one exception is a script that declares `UI_ONLY` because its interface is an interactive page (see SPEC.md); the CLI still lists it and says where it lives.
 - Self-contained: the packaged app works without Python, uv, CLI knowledge, or an internet connection
 - Personal tool aesthetics: precise, quiet, no empty ceremony
 
