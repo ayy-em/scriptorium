@@ -446,9 +446,9 @@ run_fn(export, Path("inputs"), Path("outputs/lora/captions.json"))
 
 ## Version History
 
-### Unreleased
-- **No more encoding crashes on Windows** — a script that printed an arrow or a non-Latin filename failed when run from the web UI, and piping `main.py` output crashed; web UI runs now write UTF-8, and a terminal pipe shows `?` for what its encoding cannot hold
-- **UI-only scripts** — a script can declare `UI_ONLY` when its interface is an interactive page; the CLI lists it with a marker and refuses to run it, the web UI runs it as usual
+### v0.6.1
+- **No more encoding crashes on Windows** — scripts printing arrows or non-Latin filenames no longer fail in the web UI, and piped CLI output no longer crashes
+- **UI-only scripts** — groundwork for interactive-page scripts such as the upcoming `photo.crop`
 
 ### v0.6.0
 - **Install what's missing from the app** — ffmpeg and pandoc get one-click installs, every dependency is detected the same way, and the macOS app now finds Homebrew
