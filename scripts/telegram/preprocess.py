@@ -11,7 +11,7 @@ import ijson
 
 from core.argparse import ScriptoriumParser
 from core.outputs import resolve_output
-from core.paths import inputs_dir, resolve_input
+from core.paths import resolve_input
 
 TITLE = "Preprocess Telegram export for embeddings"
 DESCRIPTION = "Strip the fat, rename keys, split by year, and emit a single zip ready for embedding."
@@ -28,10 +28,6 @@ _FIELD_MAP: dict[str, str] = {
     "fwd": "forwarded_from",
     "m": "media_type",
 }
-
-
-def _inputs() -> Path:
-    return inputs_dir("telegram")
 
 
 def _sha256(path: Path) -> str:

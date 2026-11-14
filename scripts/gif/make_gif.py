@@ -6,17 +6,13 @@ import sys
 
 from core.argparse import ScriptoriumParser
 from core.outputs import resolve_output
-from core.paths import inputs_dir, resolve_input
+from core.paths import resolve_input
 
 TITLE = "Make a gif"
 DESCRIPTION = "Takes a folder full of sequentially named pics, creates a gif."
 ACCEPTS: set[str] = {"image"}
 
 _IMAGE_EXTS = frozenset({".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tiff", ".gif"})
-
-
-def _inputs() -> Path:
-    return inputs_dir("gif")
 
 
 def _find_frames(directory: Path) -> list[Path]:

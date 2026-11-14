@@ -10,7 +10,7 @@ import zipfile
 from core import providers
 from core.argparse import ScriptoriumParser
 from core.outputs import resolve_output_dir
-from core.paths import inputs_dir, resolve_input
+from core.paths import resolve_input
 from core.providers import MissingCredentialsError
 
 TITLE = "Embed preprocessed Telegram messages"
@@ -19,10 +19,6 @@ DESCRIPTION = "Embed every message with sliding-window context; write embeddings
 DEFAULT_MODEL = "text-embedding-3-small"
 DEFAULT_WINDOW = 4
 DEFAULT_BATCH = 256
-
-
-def _inputs() -> Path:
-    return inputs_dir("telegram")
 
 
 def _sha256(path: Path) -> str:

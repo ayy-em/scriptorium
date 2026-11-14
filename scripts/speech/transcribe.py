@@ -6,7 +6,7 @@ import sys
 
 from core.argparse import ScriptoriumParser
 from core.outputs import resolve_output
-from core.paths import inputs_dir, move_to_past_inputs, resolve_input
+from core.paths import move_to_past_inputs, resolve_input
 from core.providers import UnsupportedFeatureError
 from scripts.speech._providers import (
     DEFAULT_PROVIDER,
@@ -22,10 +22,6 @@ ACCEPTS: set[str] = {"audio"}
 
 _FORMATS = ("txt", "md", "rtf")
 _DEFAULT_FORMAT = "txt"
-
-
-def _inputs() -> Path:
-    return inputs_dir("speech")
 
 
 def _render(text: str, fmt: str, source_name: str) -> str:
