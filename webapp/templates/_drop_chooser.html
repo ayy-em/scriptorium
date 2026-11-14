@@ -106,8 +106,9 @@
                 type="button"
                 role="option"
                 :style="cardStyle(i)"
-                :class="{ 'is-expanding': expandingIndex === i }"
+                :class="{ 'is-expanding': expandingIndex === i, 'is-disabled': oneFileOnly(s) }"
                 :aria-selected="expandingIndex === i"
+                :aria-disabled="oneFileOnly(s)"
                 tabindex="0"
                 @click="selectScript(s, i)"
                 @focus="bringIntoView(i)">
@@ -125,10 +126,11 @@
             <span class="wheel-card-title" x-text="truncate(s.title, 24)" :title="s.title"></span>
             <span class="wheel-card-desc" x-text="truncate(s.description, 46)" :title="s.description"></span>
             {# A single-file script is run once per dropped file, so say how
-               many times rather than refusing the drop. #}
+               many times rather than refusing the drop. A UI-only script is
+               the exception: its page is the interface, and it holds one file. #}
             <span class="wheel-card-note"
                   x-show="batchCount > 1 && s.batch_mode !== 'directory'"
-                  x-text="'Runs ' + batchCount + ' times, once per file'"></span>
+                  x-text="oneFileOnly(s) ? 'One file at a time' : 'Runs ' + batchCount + ' times, once per file'"></span>
           </span>
           <svg class="wheel-card-chev" width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
             <path d="M6 3.5 10.5 8 6 12.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>

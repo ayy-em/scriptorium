@@ -1,0 +1,362 @@
+{# photo.crop's box editor, included by _script_form.html under the file field.
+
+   It lives inside scriptRunner's scope, so `values` and `fileDest` are the
+   page's own: the box *is* values.x / y / width / height, and the number
+   fields below the editor stay bound to the same values. Dragging moves the
+   fields; typing in a field moves the box. Everything here is named crop*
+   so nothing shadows a scriptRunner property.
+
+   The box is kept in pixels of the full upright image and drawn in
+   percentages of the preview, so neither page zoom nor the preview being
+   scaled down changes what gets cut. #}
+{% from "_icons.html" import icon %}
+
+<div class="crop-editor" x-data="cropEditor()" x-show="cropPath" x-cloak>
+  <div class="crop-toolbar">
+    <div class="path-toggle" role="group" aria-label="Aspect ratio">
+      <template x-for="opt in cropAspects" :key="opt.id">
+        <button type="button" class="path-toggle-opt"
+                :class="{ 'is-active': cropAspect === opt.id }"
+                :aria-pressed="(cropAspect === opt.id).toString()"
+                @click="setAspect(opt.id)"
+                x-text="opt.label"></button>
+      </template>
+    </div>
+    <button type="button" class="btn btn--ghost crop-flip"
+            x-show="cropAspect !== 'free'"
+            @click="flipBox()"
+            :title="cropPortrait ? 'Switch to landscape' : 'Switch to portrait'">
+      <span x-text="cropPortrait ? 'Portrait' : 'Landscape'"></span>
+    </button>
+    <span class="crop-readout" x-show="cropReady" x-text="readout()"></span>
+  </div>
+
+  <div class="crop-stage" x-show="cropReady">
+    <div class="crop-frame" x-ref="frame"
+         @pointerdown="startDraw($event)">
+      <img class="crop-image" :src="cropSrc" alt="" draggable="false">
+      {# The four shades darken what the crop throws away. #}
+      <div class="crop-shade" :style="shadeStyle('top')"></div>
+      <div class="crop-shade" :style="shadeStyle('bottom')"></div>
+      <div class="crop-shade" :style="shadeStyle('left')"></div>
+      <div class="crop-shade" :style="shadeStyle('right')"></div>
+      <div class="crop-box" :style="boxStyle()" tabindex="0"
+           role="group" aria-label="Crop box. Arrow keys move it; Shift moves faster."
+           @pointerdown.stop="startDrag($event, 'move')"
+           @keydown="nudge($event)">
+        <template x-for="h in handles()" :key="h">
+          <span class="crop-handle" :class="'crop-handle--' + h"
+                @pointerdown.stop="startDrag($event, h)"></span>
+        </template>
+      </div>
+    </div>
+  </div>
+
+  <p class="crop-message" x-show="!cropReady" x-text="cropMessage"></p>
+</div>
+
+<script>
+  function cropEditor() {
+    /* Ratio as width / height, landscape. Portrait inverts it. */
+    var ASPECTS = [
+      { id: 'free', label: 'Free', ratio: null },
+      { id: '1:1', label: '1:1', ratio: 1 },
+      { id: '4:3', label: '4:3', ratio: 4 / 3 },
+      { id: '3:2', label: '3:2', ratio: 3 / 2 },
+      { id: '16:9', label: '16:9', ratio: 16 / 9 }
+    ];
+    var EDGE_HANDLES = ['n', 'e', 's', 'w'];
+    var CORNER_HANDLES = ['nw', 'ne', 'se', 'sw'];
+    /* Smallest box, in screen pixels, that can still be grabbed. */
+    var MIN_SCREEN = 16;
+
+    return {
+      cropAspects: ASPECTS,
+      cropAspect: 'free',
+      cropPortrait: false,
+      cropPath: '',
+      cropSrc: '',
+      cropW: 0,
+      cropH: 0,
+      cropReady: false,
+      cropMessage: '',
+      _cropDrag: null,
+      _cropKeepBox: false,
+      _cropLoads: 0,
+
+      init() {
+        /* A box already in the values when the page opens came from a
+           History re-run or a prefill; keep it if it fits the image. Any
+           later file is a new picture and gets a fresh box. */
+        this._cropKeepBox = this._hasBox();
+        this.$watch('values', () => this._syncFile());
+        this._syncFile();
+      },
+
+      /* ── Loading the picture ────────────────────────────────────────── */
+
+      _syncFile() {
+        var path = this.fileDest ? String(this.values[this.fileDest] || '') : '';
+        if (path === this.cropPath) return;
+        this.cropPath = path;
+        if (path) this._loadPreview(path);
+        else this._clearPreview();
+      },
+
+      _clearPreview() {
+        if (this.cropSrc) URL.revokeObjectURL(this.cropSrc);
+        this.cropSrc = '';
+        this.cropReady = false;
+        this.cropW = this.cropH = 0;
+      },
+
+      /* The server sends the picture upright and scaled down, with the full
+         upright size in headers: the box is measured against that size, so
+         a scaled preview still crops at full resolution. */
+      async _loadPreview(path) {
+        var load = ++this._cropLoads;
+        this._clearPreview();
+        this.cropMessage = 'Loading preview…';
+        try {
+          var res = await fetch('/api/image-preview?path=' + encodeURIComponent(path));
+          if (!res.ok) {
+            var detail = '';
+            try { detail = (await res.json()).detail; } catch (ignore) { /* not JSON */ }
+            throw new Error(detail || res.statusText || 'preview failed');
+          }
+          var w = parseInt(res.headers.get('X-Image-Width'), 10);
+          var h = parseInt(res.headers.get('X-Image-Height'), 10);
+          var blob = await res.blob();
+          if (load !== this._cropLoads) return;
+          this.cropW = w;
+          this.cropH = h;
+          this.cropSrc = URL.createObjectURL(blob);
+          if (!(this._cropKeepBox && this._boxFits())) this._defaultBox();
+          this._cropKeepBox = false;
+          this.cropReady = true;
+        } catch (e) {
+          if (load !== this._cropLoads) return;
+          this.cropMessage = 'No preview for this file — ' + e.message +
+            '. The fields below still set the box.';
+        }
+      },
+
+      /* ── The box, read from and written to the form values ─────────── */
+
+      _num(dest) { var n = parseInt(this.values[dest], 10); return isNaN(n) ? null : n; },
+
+      _hasBox() {
+        return ['x', 'y', 'width', 'height'].every((d) => this._num(d) !== null);
+      },
+
+      box() {
+        return { x: this._num('x') || 0, y: this._num('y') || 0,
+                 w: this._num('width') || 0, h: this._num('height') || 0 };
+      },
+
+      _boxFits() {
+        var b = this.box();
+        return this._hasBox() && b.w > 0 && b.h > 0 && b.x >= 0 && b.y >= 0 &&
+               b.x + b.w <= this.cropW && b.y + b.h <= this.cropH;
+      },
+
+      _setBox(b) {
+        var x = Math.round(Math.max(0, Math.min(b.x, this.cropW - 1)));
+        var y = Math.round(Math.max(0, Math.min(b.y, this.cropH - 1)));
+        this.values.x = String(x);
+        this.values.y = String(y);
+        this.values.width = String(Math.round(Math.max(1, Math.min(b.w, this.cropW - x))));
+        this.values.height = String(Math.round(Math.max(1, Math.min(b.h, this.cropH - y))));
+      },
+
+      _defaultBox() {
+        var ratio = this._ratio();
+        var w = this.cropW * 0.8, h = this.cropH * 0.8;
+        if (ratio) { var fit = this._fit(w, h, ratio); w = fit.w; h = fit.h; }
+        this._setBox({ x: (this.cropW - w) / 2, y: (this.cropH - h) / 2, w: w, h: h });
+      },
+
+      /* ── Aspect ratio ──────────────────────────────────────────────── */
+
+      _ratio() {
+        var a = ASPECTS.find((o) => o.id === this.cropAspect);
+        if (!a || !a.ratio) return null;
+        return this.cropPortrait ? 1 / a.ratio : a.ratio;
+      },
+
+      /* Largest w×h of the ratio that fits inside maxW×maxH. */
+      _fit(maxW, maxH, ratio) {
+        return maxW / maxH > ratio ? { w: maxH * ratio, h: maxH } : { w: maxW, h: maxW / ratio };
+      },
+
+      setAspect(id) {
+        this.cropAspect = id;
+        var ratio = this._ratio();
+        if (!ratio || !this.cropReady) return;
+        var b = this.box();
+        var fit = this._fit(b.w, b.h, ratio);
+        this._setBox({ x: b.x + (b.w - fit.w) / 2, y: b.y + (b.h - fit.h) / 2, w: fit.w, h: fit.h });
+      },
+
+      /* Turn the box a quarter around its centre, shrinking it only if the
+         turned box would not fit the picture. */
+      flipBox() {
+        this.cropPortrait = !this.cropPortrait;
+        if (!this.cropReady) return;
+        var b = this.box();
+        var cx = b.x + b.w / 2, cy = b.y + b.h / 2;
+        var w = b.h, h = b.w;
+        var scale = Math.min(1, this.cropW / w, this.cropH / h);
+        w *= scale; h *= scale;
+        var x = Math.max(0, Math.min(cx - w / 2, this.cropW - w));
+        var y = Math.max(0, Math.min(cy - h / 2, this.cropH - h));
+        this._setBox({ x: x, y: y, w: w, h: h });
+      },
+
+      handles() { return this._ratio() ? CORNER_HANDLES : CORNER_HANDLES.concat(EDGE_HANDLES); },
+
+      readout() {
+        var b = this.box();
+        return b.w + ' × ' + b.h + ' px';
+      },
+
+      /* ── Drawing ───────────────────────────────────────────────────── */
+
+      _pct(v, total) { return (total ? (v / total) * 100 : 0) + '%'; },
+
+      boxStyle() {
+        var b = this.box();
+        return 'left:' + this._pct(b.x, this.cropW) + ';top:' + this._pct(b.y, this.cropH) +
+               ';width:' + this._pct(b.w, this.cropW) + ';height:' + this._pct(b.h, this.cropH);
+      },
+
+      shadeStyle(side) {
+        var b = this.box();
+        var W = this.cropW, H = this.cropH;
+        if (side === 'top') return 'left:0;top:0;width:100%;height:' + this._pct(b.y, H);
+        if (side === 'bottom') return 'left:0;top:' + this._pct(b.y + b.h, H) + ';width:100%;bottom:0';
+        if (side === 'left') return 'left:0;top:' + this._pct(b.y, H) + ';width:' + this._pct(b.x, W) + ';height:' + this._pct(b.h, H);
+        return 'left:' + this._pct(b.x + b.w, W) + ';top:' + this._pct(b.y, H) + ';right:0;height:' + this._pct(b.h, H);
+      },
+
+      /* ── Pointer interaction ───────────────────────────────────────── */
+
+      /* Image pixels per screen pixel, measured now, so zoom and resizing
+         between drags are always accounted for. */
+      _scale() {
+        var rect = this.$refs.frame.getBoundingClientRect();
+        return { rect: rect, sx: this.cropW / rect.width, sy: this.cropH / rect.height };
+      },
+
+      _toImage(event) {
+        var s = this._scale();
+        return {
+          x: Math.max(0, Math.min(this.cropW, (event.clientX - s.rect.left) * s.sx)),
+          y: Math.max(0, Math.min(this.cropH, (event.clientY - s.rect.top) * s.sy))
+        };
+      },
+
+      _capture(event) {
+        event.preventDefault();
+        var el = this.$refs.frame;
+        el.setPointerCapture(event.pointerId);
+        var move = (e) => this._onDrag(e);
+        var end = () => {
+          el.removeEventListener('pointermove', move);
+          el.removeEventListener('pointerup', end);
+          el.removeEventListener('pointercancel', end);
+          this._cropDrag = null;
+        };
+        el.addEventListener('pointermove', move);
+        el.addEventListener('pointerup', end);
+        el.addEventListener('pointercancel', end);
+      },
+
+      /* Pressing on the picture outside the box draws a new one from there. */
+      startDraw(event) {
+        if (!this.cropReady || event.button > 0) return;
+        var p = this._toImage(event);
+        this._cropDrag = { mode: 'draw', origin: p, start: this.box() };
+        this._capture(event);
+      },
+
+      startDrag(event, mode) {
+        if (!this.cropReady || event.button > 0) return;
+        this._cropDrag = { mode: mode, origin: this._toImage(event), start: this.box() };
+        this._capture(event);
+      },
+
+      _onDrag(event) {
+        var d = this._cropDrag;
+        if (!d) return;
+        var p = this._toImage(event);
+        var s = this._scale();
+        var minW = MIN_SCREEN * s.sx, minH = MIN_SCREEN * s.sy;
+        var ratio = this._ratio();
+        var b = d.start;
+
+        if (d.mode === 'move') {
+          var x = Math.max(0, Math.min(b.x + p.x - d.origin.x, this.cropW - b.w));
+          var y = Math.max(0, Math.min(b.y + p.y - d.origin.y, this.cropH - b.h));
+          this._setBox({ x: x, y: y, w: b.w, h: b.h });
+          return;
+        }
+
+        if (d.mode === 'draw') {
+          this._resizeFrom(d.origin, p, ratio, minW, minH);
+          return;
+        }
+
+        /* A handle: the opposite edges stay put. */
+        var left = b.x, top = b.y, right = b.x + b.w, bottom = b.y + b.h;
+        if (d.mode.indexOf('w') !== -1) left = Math.min(p.x, right - minW);
+        if (d.mode.indexOf('e') !== -1) right = Math.max(p.x, left + minW);
+        if (d.mode.indexOf('n') !== -1) top = Math.min(p.y, bottom - minH);
+        if (d.mode.indexOf('s') !== -1) bottom = Math.max(p.y, top + minH);
+
+        if (ratio) {
+          /* Corners only: anchor the opposite corner, follow the pointer. */
+          var anchor = {
+            x: d.mode.indexOf('w') !== -1 ? b.x + b.w : b.x,
+            y: d.mode.indexOf('n') !== -1 ? b.y + b.h : b.y
+          };
+          this._resizeFrom(anchor, p, ratio, minW, minH);
+          return;
+        }
+        this._setBox({ x: Math.max(0, left), y: Math.max(0, top),
+                       w: Math.min(this.cropW, right) - Math.max(0, left),
+                       h: Math.min(this.cropH, bottom) - Math.max(0, top) });
+      },
+
+      /* A box with one corner at `anchor` and the other towards `p`, held to
+         `ratio` when there is one and kept inside the picture. */
+      _resizeFrom(anchor, p, ratio, minW, minH) {
+        var dirX = p.x >= anchor.x ? 1 : -1, dirY = p.y >= anchor.y ? 1 : -1;
+        var roomW = dirX > 0 ? this.cropW - anchor.x : anchor.x;
+        var roomH = dirY > 0 ? this.cropH - anchor.y : anchor.y;
+        var w = Math.min(Math.max(Math.abs(p.x - anchor.x), minW), roomW);
+        var h = Math.min(Math.max(Math.abs(p.y - anchor.y), minH), roomH);
+        if (ratio) {
+          /* Follow whichever side the pointer pulled further, then fit. */
+          if (w / h > ratio) h = w / ratio; else w = h * ratio;
+          var fit = this._fit(Math.min(w, roomW), Math.min(h, roomH), ratio);
+          w = fit.w; h = fit.h;
+        }
+        this._setBox({ x: dirX > 0 ? anchor.x : anchor.x - w, y: dirY > 0 ? anchor.y : anchor.y - h, w: w, h: h });
+      },
+
+      /* Arrow keys move the box one pixel, ten with Shift. */
+      nudge(event) {
+        var step = event.shiftKey ? 10 : 1;
+        var delta = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }[event.key];
+        if (!delta || !this.cropReady) return;
+        event.preventDefault();
+        var b = this.box();
+        this._setBox({ x: Math.max(0, Math.min(b.x + delta[0], this.cropW - b.w)),
+                       y: Math.max(0, Math.min(b.y + delta[1], this.cropH - b.h)), w: b.w, h: b.h });
+      },
+
+      destroy() { this._clearPreview(); }
+    };
+  }
+</script>

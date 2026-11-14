@@ -59,6 +59,7 @@ NOT_ARCHIVING = {
     "telegram.preprocess": "first step of a chain; embed_messages reads what it was given",
     "telegram.embed_messages": "middle of a chain; the export is read again by the analyses",
     "telegram.chat_analysis": "re-reads the same export on every run",
+    "photo.crop": "an interactive editor; cropping the same photo again with another box is the next step",
 }
 
 # The guarded helper. Anything else moving an input is the bug this test exists

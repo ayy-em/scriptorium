@@ -50,28 +50,6 @@ native optimiser is a third dependency graph to bundle for a marginal gain.
   see whether it was worth it. `photo.remove_bg` shows the tone.
 - Batch: file or directory, per-file output naming from `core.outputs`.
 
-## photo.crop
-
-**Status:** open (2026-09-26). Needs the UI-only script mechanism (delivered
-2026-11-14, see Settled).
-
-An interactive crop: the page shows the picture, the user drags a box, picks
-an output format and presses Run. UI-only, by the 2026-09-17 decision.
-
-- The template is the work. Start from `av/trim.html` for the pattern of a
-  custom page that still posts to the ordinary run endpoint, and from
-  `_script_drop.html` for the prefilled-file path. Draw the crop box in CSS
-  on top of an `<img>` served through `/api/staged-input`; keep it in image
-  pixels, not screen pixels, so a zoomed page still crops correctly.
-- The page posts `--x --y --width --height --format` to a normal Pillow
-  crop. Those flags exist so the run is reproducible from History; they are
-  not a CLI promise, because the script is `UI_ONLY`.
-- Aspect presets (free, 1:1, 4:3, 16:9) are a nice-to-have; ship free-form
-  first.
-- EXIF orientation must be applied before the box is drawn, or a portrait
-  phone photo crops the wrong region. `core.images` already bakes it in for
-  the other Pillow scripts.
-
 ## photo.ocr
 
 **Status:** open (2026-09-26). Needs `core.providers` (delivered
@@ -195,6 +173,33 @@ SPS reproduced, which is harder.
 
 Closed, and kept only for the reasoning — either delivered, or considered and
 deliberately not built. Nothing here is queued work.
+
+## photo.crop
+
+**Status:** delivered 2026-11-14. See SPEC.md "A form editor instead of a whole
+page". Two decisions differ from the entry below: the page extends
+`script.html` through a `form_editor` partial instead of copying `av/trim.html`,
+whose console is the one waiting to be replaced; and the picture comes from a
+new `/api/image-preview` rather than `/api/staged-input`, because no browser
+draws HEIC. Aspect presets shipped too. The input is not archived. Original
+entry follows.
+
+An interactive crop: the page shows the picture, the user drags a box, picks
+an output format and presses Run. UI-only, by the 2026-09-17 decision.
+
+- The template is the work. Start from `av/trim.html` for the pattern of a
+  custom page that still posts to the ordinary run endpoint, and from
+  `_script_drop.html` for the prefilled-file path. Draw the crop box in CSS
+  on top of an `<img>` served through `/api/staged-input`; keep it in image
+  pixels, not screen pixels, so a zoomed page still crops correctly.
+- The page posts `--x --y --width --height --format` to a normal Pillow
+  crop. Those flags exist so the run is reproducible from History; they are
+  not a CLI promise, because the script is `UI_ONLY`.
+- Aspect presets (free, 1:1, 4:3, 16:9) are a nice-to-have; ship free-form
+  first.
+- EXIF orientation must be applied before the box is drawn, or a portrait
+  phone photo crops the wrong region. `core.images` already bakes it in for
+  the other Pillow scripts.
 
 ## UI-only scripts
 
@@ -674,6 +679,12 @@ browser process from a background thread instead.
 ## Unify the trim.html console
 
 **Status:** deferred (2026-07-28), during the UI prettification pass.
+
+**Easier since 2026-11-14.** `photo.crop` showed the shape the port can take:
+a `TEMPLATE` that extends `script.html` and sets `form_editor` to a partial
+holding just the editor (SPEC.md, "A form editor instead of a whole page").
+For trim that partial is the waveform canvas and its time fields; the console,
+run submission, progress and window drop then come from `scriptRunner`.
 
 `scripts/av/trim.html` is a hand-written template with its own ~600 lines of
 vanilla JS, streaming into `#output` / `#run-result` rather than the new

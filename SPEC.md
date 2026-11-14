@@ -54,6 +54,7 @@ scriptorium/
 │   ├── _icons.py            # glyph-name lookup for scripts and file categories
 │   ├── _runs.py             # live run registry + process-tree termination
 │   ├── _waveform.py         # ffmpeg-decoded peak envelope + staged-input containment
+│   ├── _image_preview.py    # upright, size-capped image preview for photo.crop's editor
 │   ├── static/
 │   │   ├── style.css        # the entire stylesheet, sectioned (see below)
 │   │   ├── fonts/           # self-hosted Inter + JetBrains Mono (OFL 1.1)
@@ -179,7 +180,9 @@ templates/
 ├── _drop_{overlay,chooser,runner}.html   # browser-side drop: hint, wheel, runner
 ├── _drop_hint.html        # drop_hover()/drop_reject() macros, shared by both pages
 ├── _script_drop.html      # detail-page window-level drop target
-└── scripts/av/trim.html   # hand-written override via a script's TEMPLATE attr
+├── scripts/av/trim.html   # hand-written override via a script's TEMPLATE attr
+├── scripts/photo/crop.html          # extends script.html, names the editor below
+└── scripts/photo/_crop_editor.html  # cropEditor(): the box over the picture
 ```
 
 `webapp/static/style.css` is one file, sectioned with a table of contents at the
@@ -282,6 +285,7 @@ from an older build indefinitely. ETag revalidation makes the usual cost a 304.
 | `GET`/`POST /api/settings` | user settings; the response also carries `providers` (id, label, whether its key is set) and `preferred_provider` for the AI provider picker |
 | `GET`/`POST /api/keys` | list the keys the app manages (set / not set; a secret's value is never returned, a plain identifier such as the Telegram chat id is) and store or clear one in `~/scriptorium/.env` |
 | `POST /api/notify-test` | send one test message to the configured Telegram chat, so the settings modal can prove the token and chat id pair up |
+| `GET /api/image-preview?path=` | a staged image upright (EXIF applied) and capped at 2048 px, as JPEG or PNG, with the full upright size in `X-Image-Width` / `X-Image-Height`; same containment rule; 422 for a non-image |
 | `GET /api/staged-input` | stream a staged input back to the page, for `av.trim` playback of a prefilled file; same containment rule as `/api/waveform` |
 
 `preview-command` shares `webapp._form.build_argv` with the run endpoint, so the
@@ -935,6 +939,7 @@ to fail a run that already produced its output.
 | `av.tag` (only when writing a *new* file) | `av.tag` in read mode and `--in-place` | nothing is consumed; `--in-place` rewrites the input itself |
 | `formats.convert_*` (via `_utils.run_convert`) | `gif.make_gif` | reads a *directory* of frames; flattening a frame set into the archive root collides on every `frame_001.png`, and frames get re-rendered at other settings |
 | `photo.remove_bg` | `lora.*` | operate on a dataset directory in place — archiving it would destroy the dataset |
+| | `photo.crop` | an interactive editor: cropping the same photo again with another box is the usual next step, and the page still holds the file |
 | `speech.transcribe` | `telegram.preprocess`, `telegram.embed_messages`, `telegram.chat_analysis` | chained or repeat-read: a later step needs the file the earlier one was given |
 | `telegram.group_analysis` | | |
 
@@ -1120,6 +1125,10 @@ to a format without EXIF must bake it in with `ImageOps.exif_transpose`. Both
 scripts do, for every input format — which also fixed sideways JPEG-to-PNG
 conversions that predate HEIC.
 
+`core.images.open_upright(path)` is that open-plus-transpose as one call. It is
+what `photo.crop` cuts from and what `/api/image-preview` shows, so a box drawn
+on the preview names the same pixels the script crops.
+
 ### `core.outputs` — standardized output path resolution
 
 All scripts use `core.outputs` for output file naming and placement. The four
@@ -1265,6 +1274,34 @@ History like any other. What changes:
 
 `core.registry.is_ui_only(mod)` is the one reader of the flag; a literal
 `True` counts, nothing else does.
+
+In the Drop-to-Discover wheel a UI-only script is offered for a single file
+only: with several files dropped its card is disabled and reads "One file at
+a time", since the inline runner would only ask for the numbers its page draws.
+
+#### A form editor instead of a whole page
+
+`photo.crop`, the first UI-only script, does not hand-write its page the way
+`av.trim` does. Its `TEMPLATE` extends `script.html` and sets one variable:
+
+```jinja
+{% extends "script.html" %}
+{% set form_editor = "scripts/photo/_crop_editor.html" %}
+```
+
+`_script_form.html` includes `form_editor`, when defined, between the file
+dropzone and the other fields. The editor is an Alpine component nested in
+`scriptRunner`, so it reads and writes the page's own `values`: the crop box
+*is* `values.x/y/width/height`, and the number fields stay bound to the same
+values. The page therefore keeps everything `scriptRunner` gives the generated
+form — console, progress, window-level drop, prefill, History re-run, recent
+outputs — with nothing duplicated. The editor's own state is prefixed `crop*`
+so it cannot shadow a `scriptRunner` property.
+
+The box is held in pixels of the full upright image and drawn in percentages
+of the preview, so page zoom and the 2048 px preview cap change nothing about
+what is cut. A box already in `values` when the page opens (a re-run) is kept
+if it fits the picture; any later file gets a fresh one.
 
 ### Optional: `get_parser()`
 
