@@ -263,7 +263,7 @@ from an older build indefinitely. ETag revalidation makes the usual cost a 304.
 | `POST /api/preferences` | write favourites and sort order into `UserConfig` |
 | `GET /api/recent-outputs/{theme}/{script_name}?limit=` | files earlier runs of this script wrote and that still exist, for the detail page's recent-outputs panel |
 | `GET /api/script-fields/{theme}/{script_name}` | field specs, minus the file input |
-| `GET /api/preview-command/{theme}/{script_name}` | CLI equivalent of the current form state |
+| `GET /api/preview-command/{theme}/{script_name}` | CLI equivalent of the current form state; 404 for a UI-only script |
 | `POST /upload/{theme}` | single-file upload |
 | `GET /api/waveform` | peak envelope for a staged media file, for the `av.trim` editor |
 | `POST /api/drop-upload` | multi-file drop; returns matching scripts |
@@ -1233,6 +1233,38 @@ server-side it now draws for a prefilled file too; what is missing is dropping
 onto the detail page itself. See the "Unify the trim.html console" entry in
 BACKLOG.md.
 
+### Optional: `UI_ONLY`
+
+```python
+UI_ONLY = True
+```
+
+For a script whose interface is an interactive page rather than a form — an
+image crop drawn with the mouse — and which therefore has no sensible command
+line. It is the one deliberate exception to PRODUCT.md's CLI-equivalence
+principle, and it is declared per script, never inferred. Nothing about
+discovery changes: the script is in the sidebar, the search, the wheel and
+History like any other. What changes:
+
+- `core.runner.run` refuses it from a terminal, before anything is logged:
+  one line on stderr saying it is available in the web UI only and how to
+  get there (`uv run webapp` in a checkout, open the app in a packaged
+  build), exit code 2. That includes `--help`. The guard sits in the runner rather than `main.py`
+  because the frozen build dispatches through `entrypoint.py --run-script`,
+  which never touches `main.py`. A run the webapp spawned is marked by
+  `core.invocation` and passes through, which is how the UI runs it at all.
+- `uv run main.py` and `uv run main.py <theme>` append "(web UI only)" to
+  its title, so a terminal user learns it exists and where.
+- `/api/preview-command` returns 404 for it, and the generated form omits
+  the Copy CLI command button (`ui_only` in the detail-page context and in
+  `_script_summary`). A custom `TEMPLATE` simply never renders one.
+- It still exposes `get_parser()`: the page posts ordinary flags to the
+  ordinary run endpoint, and History re-run reopens the form. The flags are
+  for reproducibility, not a CLI promise.
+
+`core.registry.is_ui_only(mod)` is the one reader of the flag; a literal
+`True` counts, nothing else does.
+
 ### Optional: `get_parser()`
 
 Scripts may also expose:
@@ -1453,10 +1485,13 @@ from scripts.lora._dataset import find_images
    bare filenames inside `run()` before passing to public functions
 8. If the script processes user-supplied files, add `ACCEPTS: set[str]` with the
    applicable categories (see `core/categories.py`) so it appears in Drop-to-Discover
-9. Verify it appears in `uv run main.py`
-9. Verify `uv run main.py <theme>` lists the script with its title and description
-10. Verify `uv run main.py <theme>.<script> --help` shows the correct usage line,
-    arguments, and examples
+9. If the script only makes sense as an interactive page, set `UI_ONLY = True`
+   and give it a `TEMPLATE`; see "Optional: `UI_ONLY`"
+10. Verify it appears in `uv run main.py`
+11. Verify `uv run main.py <theme>` lists the script with its title and description
+    (and the "(web UI only)" marker if it is one)
+12. Verify `uv run main.py <theme>.<script> --help` shows the correct usage line,
+    arguments, and examples — or, for a UI-only script, the one-line refusal
 
 ---
 

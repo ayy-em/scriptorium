@@ -3,6 +3,7 @@
 import json
 import re
 import sys
+import types
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from fastapi.testclient import TestClient
@@ -12,7 +13,7 @@ from core import capabilities, history
 from core.paths import outputs_root, read_version
 from core.progress import SENTINEL, ProgressEvent, encode
 from core.registry import discover, discover_themes
-from webapp.app import _parse_version, _read_git_hash, _themes_meta_json, _themes_search_json, app
+from webapp.app import _parse_version, _read_git_hash, _script_summary, _themes_meta_json, _themes_search_json, app
 
 client = TestClient(app)
 
@@ -927,6 +928,47 @@ class TestUpdateCheckEndpoint:
             assert response.status_code == 200
             data = response.json()
             assert data["update_available"] is False
+
+
+def _ui_only_stub() -> types.ModuleType:
+    """A script that exists only in the web UI, injected without touching scripts/."""
+    mod = types.ModuleType("scripts.photo.crop")
+    mod.TITLE = "Crop"
+    mod.DESCRIPTION = "Drag a box"
+    mod.UI_ONLY = True
+    mod.run = lambda: None
+    return mod
+
+
+class TestUiOnlyScripts:
+    def test_preview_command_has_nothing_to_show(self):
+        with patch("webapp.app.discover", return_value={"photo.crop": _ui_only_stub()}):
+            response = client.get("/api/preview-command/photo/crop")
+        assert response.status_code == 404
+        assert "web UI only" in response.json()["detail"]
+
+    def test_detail_page_drops_the_cli_button(self):
+        with patch("webapp.app.discover", return_value={"photo.crop": _ui_only_stub()}):
+            body = client.get("/scripts/photo/crop").text
+        assert "Copy CLI command" not in body
+
+    def test_detail_page_renders_the_scripts_own_template(self):
+        """A UI-only script's page is its TEMPLATE, the same mechanism av.trim uses."""
+        mod = _ui_only_stub()
+        mod.TEMPLATE = "scripts/av/trim.html"
+        mod.get_parser = discover()["av.trim"].get_parser
+        with patch("webapp.app.discover", return_value={"photo.crop": mod}):
+            response = client.get("/scripts/photo/crop")
+        assert response.status_code == 200
+        assert "trimApp(" in response.text
+        assert "Copy CLI command" not in response.text
+
+    def test_ordinary_detail_page_keeps_the_cli_button(self):
+        assert "Copy CLI command" in client.get("/scripts/av/filmstrip").text
+
+    def test_summary_carries_the_flag(self):
+        assert _script_summary("photo.crop", _ui_only_stub())["ui_only"] is True
+        assert _script_summary("av.filmstrip", discover()["av.filmstrip"])["ui_only"] is False
 
 
 class TestPreviewCommand:

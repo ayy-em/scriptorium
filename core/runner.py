@@ -8,8 +8,10 @@ import sys
 import time
 from typing import Any
 
+from core import paths
+from core.invocation import is_webapp_run
 from core.paths import logs_dir
-from core.registry import discover
+from core.registry import discover, is_ui_only
 
 _RUNS_LOG_NAME = "runs.jsonl"
 _NOTIFY_ENV_VAR = "SCRIPTORIUM_NOTIFY"
@@ -94,12 +96,48 @@ def _timed[T](label: str, fn: Callable[..., T], /, *args: Any, **kwargs: Any) ->
     return result  # type: ignore[return-value]
 
 
+UI_ONLY_EXIT_CODE = 2
+
+
+def _ui_only_refusal(script_key: str) -> str:
+    """Return the line a terminal user sees for a UI-only script.
+
+    Where the web UI lives depends on how Scriptorium was installed: a checkout
+    starts it with ``uv run webapp``, the packaged app by opening the app.
+
+    Args:
+        script_key: Dotted key such as ``"photo.crop"``.
+
+    Returns:
+        One line naming the script and where to run it.
+    """
+    where = "Open the Scriptorium app" if paths.FROZEN else "Start it with `uv run webapp`"
+    return f"{script_key} is available in the web UI only. {where}."
+
+
 def run(script_key: str) -> None:
-    """Dispatch a script by key, applying timing middleware."""
+    """Dispatch a script by key, applying timing middleware.
+
+    A UI-only script (``UI_ONLY = True``) is refused when a human invokes it
+    from a terminal, before anything is logged: there is no command line for
+    it, so ``--help`` would be a lie. The webapp marks its subprocesses via
+    ``core.invocation`` and passes through.
+
+    Args:
+        script_key: Dotted key such as ``"av.trim"``.
+
+    Raises:
+        KeyError: When no script has that key.
+        SystemExit: With ``UI_ONLY_EXIT_CODE`` for a UI-only script run from
+            a terminal.
+    """
     scripts = discover()
     if script_key not in scripts:
         available = ", ".join(sorted(scripts)) or "none"
         raise KeyError(f"Unknown script {script_key!r}. Available: {available}")
+    if is_ui_only(scripts[script_key]) and not is_webapp_run():
+        print(_ui_only_refusal(script_key), file=sys.stderr)
+        sys.exit(UI_ONLY_EXIT_CODE)
     sys.argv.pop(1)  # consumed by dispatcher; script's argparse sees only its own args
     _timed(script_key, scripts[script_key].run)
 

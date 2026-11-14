@@ -2,6 +2,8 @@
 
 import json
 from pathlib import Path
+import sys
+import types
 from unittest.mock import patch
 
 import pytest
@@ -171,3 +173,55 @@ class TestNotifyHook:
         monkeypatch.setenv("SCRIPTORIUM_NOTIFY", "1")
         with patch("scripts.util.notify.send", side_effect=RuntimeError("network down")):
             assert _timed("x", lambda: 42) == 42
+
+
+def _ui_only_module(called: list[str]) -> types.ModuleType:
+    mod = types.ModuleType("scripts.stub.crop")
+    mod.TITLE = "Crop"
+    mod.DESCRIPTION = "stub"
+    mod.UI_ONLY = True
+    mod.run = lambda: called.append("ran")
+    return mod
+
+
+class TestUiOnlyGuard:
+    """A UI-only script is refused from a terminal and passes for the webapp."""
+
+    def test_terminal_run_is_refused_before_anything_is_logged(
+        self, log_dir: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ):
+        called: list[str] = []
+        monkeypatch.delenv("SCRIPTORIUM_CALLER", raising=False)
+        monkeypatch.setattr(sys, "argv", ["main.py", "stub.crop", "--help"])
+        with patch.object(runner, "discover", return_value={"stub.crop": _ui_only_module(called)}):
+            with pytest.raises(SystemExit) as excinfo:
+                runner.run("stub.crop")
+        assert excinfo.value.code == runner.UI_ONLY_EXIT_CODE
+        assert "web UI only" in capsys.readouterr().err
+        assert called == []
+        assert not (log_dir / "runs.jsonl").exists()
+
+    @pytest.mark.parametrize(
+        ("frozen", "hint"), [(False, "uv run webapp"), (True, "Open the Scriptorium app")], ids=["checkout", "packaged"]
+    )
+    def test_refusal_says_where_the_web_ui_is(self, monkeypatch: pytest.MonkeyPatch, frozen: bool, hint: str):
+        monkeypatch.setattr(runner.paths, "FROZEN", frozen)
+        assert hint in runner._ui_only_refusal("photo.crop")
+
+    def test_webapp_run_passes_through(self, log_dir: Path, monkeypatch: pytest.MonkeyPatch):
+        called: list[str] = []
+        monkeypatch.setenv("SCRIPTORIUM_CALLER", "webapp")
+        monkeypatch.setattr(sys, "argv", ["main.py", "stub.crop"])
+        with patch.object(runner, "discover", return_value={"stub.crop": _ui_only_module(called)}):
+            runner.run("stub.crop")
+        assert called == ["ran"]
+
+    def test_ordinary_script_is_unaffected(self, log_dir: Path, monkeypatch: pytest.MonkeyPatch):
+        called: list[str] = []
+        monkeypatch.delenv("SCRIPTORIUM_CALLER", raising=False)
+        monkeypatch.setattr(sys, "argv", ["main.py", "stub.plain"])
+        mod = _ui_only_module(called)
+        mod.UI_ONLY = False
+        with patch.object(runner, "discover", return_value={"stub.plain": mod}):
+            runner.run("stub.plain")
+        assert called == ["ran"]
