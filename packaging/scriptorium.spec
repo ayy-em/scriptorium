@@ -169,7 +169,7 @@ app = BUNDLE(
     bundle_identifier="com.somethingreally.scriptorium",
     info_plist={
         "CFBundleDisplayName": "Scriptorium",
-        "CFBundleShortVersionString": "0.5.3",
+        "CFBundleShortVersionString": "0.6.0",
         "NSHighResolutionCapable": True,
         "LSBackgroundOnly": False,
     },

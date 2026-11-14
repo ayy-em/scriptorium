@@ -445,24 +445,12 @@ run_fn(export, Path("inputs"), Path("outputs/lora/captions.json"))
 
 ## Version History
 
-### Unreleased
-- **One app, one window** — launching Scriptorium while it is already running brings its window forward instead of starting another copy with its own tray icon; the Windows installer asks you to close a running app before upgrading
-- **Homebrew works from the macOS app** — an app opened from Finder or the Dock never saw Homebrew, so every Install button failed and brew-installed ffmpeg or pandoc read as missing; the app now looks where a Terminal would, and says to install Homebrew first when it is not there
-- **`av.join` audio joins fixed** — joining `.wav`, `.mp3` or `.flac` files reported success but wrote AAC into the container, which nothing could play; each now gets its own codec (PCM, MP3, FLAC)
-- **No source means the current folder** — run a script from a terminal without a source argument and it reads the folder you are in, on Windows, macOS and Linux; the web UI and the repo root of a checkout still read `inputs/`
-- **`av.trim` smart cut** — when a plain copy would miss the start, H.264 and HEVC cuts re-encode only up to the next keyframe and copy the rest, and are decoded once before they are kept
-- **`photo.remove_bg` `hq` uses the full BiRefNet** — `birefnet-general` (~950MB) replaces the lite model; `--multi` is the short spelling of `--all-presets`
-- **Install missing dependencies from the app** — ffmpeg and pandoc get an Install button in the sidebar, on the script pages that need them, and on a first-run tour slide; winget or brew runs with output streamed into the UI, no restart needed
-- **`photo.remove_bg` presets** — `--quality` is now `--preset fast|balanced|hq`, named for cost rather than quality because no model wins on every image; `--all-presets` runs all three over the same inputs for side-by-side comparison
-- **Model downloads are visible** — the form says which weights a run will fetch and how big they are; the status bar shows the download instead of a run that looks hung
-- **`av.join` respects the output container** — WebM output gets Opus audio, a copied codec the container cannot hold forces a re-encode, and a re-encode that WebM cannot hold is written as MP4 with a note
-- **API keys in Settings** — paste the OpenAI key under Settings → Keys instead of editing a `.env` file; it is stored per user, never shown again, and the sidebar clears at once
-- **Telegram notifications for long runs** — Settings → Notifications turns them on, sets how long a run must be to earn a message, and sends a test; the bot token and chat id go under Settings → Keys
-- **One provider registry** — `core.providers` declares OpenAI and Anthropic once; Settings → Keys gains a field per provider, Settings → AI provider picks the default, and `speech.transcribe` takes `--provider auto|openai` (the old `--tts-provider` still works)
-- **Commit hash in packaged builds** — the sidebar's build identifier is recorded at build time instead of reading "—" in every installed app
-- **HEIC in, PNG/JPEG out** — `formats.convert_image` and `photo.remove_bg` read iPhone and Android HEIC/HEIF photos; a Live Photo converts to its still frame, and EXIF orientation is baked in so portraits stay upright
-- **`av.trim` plays a dropped file** — the play button now works for a file that arrived through the drop overlay, not only one picked on the page
-- **UI** — thin scrollbars that appear only while scrolling, more contrast between dark-mode surfaces, search icon no longer overlaps its placeholder, the shortcut badge reads Ctrl K off macOS, and static assets revalidate so a new build never shows an old stylesheet
+### v0.6.0
+- **Install what's missing from the app** — ffmpeg and pandoc get one-click installs, every dependency is detected the same way, and the macOS app now finds Homebrew
+- **Progress and results** — progress bars for ffmpeg work and model downloads, the files a run wrote listed under the console, and multi-file drops on single-file scripts run once per file
+- **Sharper media tools** — `av.trim` cuts where you asked (smart cut for H.264/HEVC), `av.join` handles mismatched inputs and audio-only WAV/MP3/FLAC, `photo.remove_bg` gets presets with `hq` on the full BiRefNet, and HEIC photos are read
+- **Settings** — API keys, an AI provider picker and Telegram notifications for long runs
+- **One app, one window** — relaunching brings the running window forward; CLI runs with no source read the current folder
 
 ### v0.5.3
 - **Background removal works in the packaged app** — `photo.remove_bg` failed to start in every built release; two separate packaging faults, both now guarded by tests

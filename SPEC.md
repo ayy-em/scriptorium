@@ -596,23 +596,6 @@ without needing a build.
   `_metadata("rembg")` uses `copy_metadata(..., recursive=True)` to cover the
   whole graph rather than one package at a time.
 
-### macOS app
-
-```sh
-bash packaging/build.sh                 # → dist/Scriptorium.app
-```
-
-The `.app` bundle uses PyInstaller. On launch it finds a free port, starts
-uvicorn, and tries three display tiers in order:
-1. **pywebview** native window (WKWebView on macOS, GTK/Qt on Linux; not attempted on Windows)
-2. **Chromium `--app` mode** — chromeless window via Chrome/Edge/Chromium
-3. **Default browser** fallback — user quits via the sidebar Quit button
-
-Scripts run as subprocesses via the frozen binary's `--run-script` flag (same
-binary, different argv). The sidebar hides the CLI usage section and shows a
-Quit button when running in frozen mode. A `/api/quit` endpoint (frozen-only)
-allows the UI to signal the server to shut down.
-
 #### One instance per user
 
 A windowed launch first takes `core.instance.acquire()`: an exclusive OS lock
@@ -647,6 +630,23 @@ The owner also holds the Windows named mutex `Scriptorium.SingleInstance`.
 Nothing in the app reads it: it is the `AppMutex` in `installer.iss`, which is
 how setup and uninstall know to ask the user to close the app first. CLI runs
 and `--run-script` subprocesses never touch any of this.
+
+### macOS app
+
+```sh
+bash packaging/build.sh                 # → dist/Scriptorium.app
+```
+
+The `.app` bundle uses PyInstaller. On launch it finds a free port, starts
+uvicorn, and tries three display tiers in order:
+1. **pywebview** native window (WKWebView on macOS, GTK/Qt on Linux; not attempted on Windows)
+2. **Chromium `--app` mode** — chromeless window via Chrome/Edge/Chromium
+3. **Default browser** fallback — user quits via the sidebar Quit button
+
+Scripts run as subprocesses via the frozen binary's `--run-script` flag (same
+binary, different argv). The sidebar hides the CLI usage section and shows a
+Quit button when running in frozen mode. A `/api/quit` endpoint (frozen-only)
+allows the UI to signal the server to shut down.
 
 #### CLI vs GUI dispatch
 
